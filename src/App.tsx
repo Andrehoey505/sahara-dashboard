@@ -194,7 +194,7 @@ export default function App() {
         await fetch(apiUrl + "/api/violation/" + encodeURIComponent(msg.id) + "/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, user: msg.user, server: msg.server, channel: msg.channel || "", type: msg.type, words: msg.words || [], message: msg.full_message || msg.message || "" }),
         });
         setViolations((v) => v.map((x) => x.id === msg.id ? { ...x, status: action === "approve" ? "resolved" : "denied" } : x));
         notify(action === "approve" ? "Approved" : "Denied", action === "approve" ? "success" : "error");
