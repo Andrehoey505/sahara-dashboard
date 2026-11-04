@@ -387,8 +387,9 @@ export default function App() {
               <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Settings</h3>
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">Bot API URL (tunnel)</label>
-                  <input placeholder="https://your-tunnel-url.com" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
+                  <label className="text-xs text-slate-400 block mb-1">Bot API URL</label>
+                  <input placeholder="http://192.168.1.128:8080" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
+                  <p className="text-xs text-slate-500 mt-1">Local IP for same-network, or tunnel URL for remote access.</p>
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-1">Theme</label>
