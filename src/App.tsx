@@ -27,7 +27,10 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [dmTarget, setDmTarget] = useState("");
   const [dmMessage, setDmMessage] = useState("");
-  const [showDmModal, setShowDmModal] = useState(false);
+  const [channelTarget, setChannelTarget] = useState("");
+  const [channelMessage, setChannelMessage] = useState("");
+  const [showContext, setShowContext] = useState(false);
+  const [contextViolation, setContextViolation] = useState(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("sahara_user");
@@ -126,6 +129,34 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden">
+      {contextViolation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setContextViolation(null)}>
+          <div className="glass rounded-2xl p-6 w-[500px] max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">Violation Context</h3>
+              <button onClick={() => setContextViolation(null)} className="text-slate-400 hover:text-slate-200"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-slate-800/30">
+                <p className="text-xs text-slate-500 mb-1">Flagged message by {contextViolation.user} in {contextViolation.server}</p>
+                <p className="text-sm">Words: {contextViolation.words?.join(", ")}</p>
+              </div>
+              <div className="text-xs text-slate-500">
+                <p className="mb-1">Before:</p>
+                <div className="p-2 rounded bg-slate-800/20 text-slate-400">... previous messages in channel ...</div>
+              </div>
+              <div className="text-xs text-slate-500">
+                <p className="mb-1">After:</p>
+                <div className="p-2 rounded bg-slate-800/20 text-slate-400">... following messages in channel ...</div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => { handleContextAction("approve", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-sm hover:bg-emerald-500/30">Approve</button>
+                <button onClick={() => { handleContextAction("deny", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30">Deny</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         <AnimatePresence>
           {notifications.map((n) => (
@@ -288,9 +319,14 @@ export default function App() {
                       </div>
                       <p className="text-sm text-slate-300 truncate">{m.content}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-1">
                       <span className="text-xs text-slate-500">{m.time}</span>
                       {m.flagged && <div className="text-xs text-rose-400 mt-1">flagged</div>}
+                      <div className="flex gap-1 mt-1">
+                        <button onClick={() => handleContextAction("approve", m)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20">✓</button>
+                        <button onClick={() => handleContextAction("deny", m)} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20">✗</button>
+                        <button onClick={() => handleContextAction("delete", m)} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 hover:bg-slate-600/50">🗑</button>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -327,6 +363,7 @@ export default function App() {
                     <p className="text-xs text-slate-400">{v.type} - words: {v.words.join(", ")} - {v.time}</p>
                   </div>
                   <div className="flex gap-2">
+                    <button onClick={() => { setContextViolation(v); }} className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 text-xs hover:bg-slate-600/50 transition">View Context</button>
                     {v.status === "pending" && (
                       <>
                         <button onClick={() => handleContextAction("approve", v)} className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-300 text-xs hover:bg-emerald-500/20 transition">Approve</button>
@@ -384,6 +421,12 @@ export default function App() {
                   <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} placeholder="Message (sent as SocialLink.io Staff)" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
                   <button onClick={() => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } notify("DM sent to " + dmTarget, "success"); setDmTarget(""); setDmMessage(""); }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
                   <p className="text-xs text-slate-500 mt-2">Bot will look up username + avatar from SocialLink.io Staff server and send DM on behalf of staff team.</p>
+                </div>
+                <div className="border-t border-slate-700/50 pt-4">
+                  <h4 className="font-semibold mb-2 text-sm">Send Message to Channel</h4>
+                  <input value={channelTarget} onChange={(e) => setChannelTarget(e.target.value)} placeholder="Server/Channel (e.g. Babble Playpen / general)" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
+                  <textarea value={channelMessage} onChange={(e) => setChannelMessage(e.target.value)} placeholder="Message to send to channel" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
+                  <button onClick={() => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } notify("Message sent to " + channelTarget, "success"); setChannelTarget(""); setChannelMessage(""); }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition">Send to Channel</button>
                 </div>
               </div>
             )}
