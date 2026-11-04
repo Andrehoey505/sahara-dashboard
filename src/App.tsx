@@ -16,6 +16,15 @@ export default function App() {
     { id: 3, user: "glacy6832", avatar: "🌴", server: "Glacy's Tropical", channel: "chat", content: "welcome back!", time: "3m ago", flagged: false },
     { id: 4, user: "stitchy_gw", avatar: "🧵", server: "SocialLink.io Staff", channel: "main-chat", content: "bb!status", time: "5m ago", flagged: false },
   ]);
+  const [selectedServer, setSelectedServer] = useState("");
+  const [selectedChannel, setSelectedChannel] = useState("");
+  const [servers, setServers] = useState<any[]>([]);
+  const [channels, setChannels] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [staffOnly, setStaffOnly] = useState(false);
+  const [moreOptionsMsg, setMoreOptionsMsg] = useState<any>(null);
+  const [moreOptionsAction, setMoreOptionsAction] = useState("warn");
+  const [moreOptionsReason, setMoreOptionsReason] = useState("");
   const [violations, setViolations] = useState<any[]>([
     { id: 1, user: "wolfman_4328", server: "Bear Café", type: "profanity", severity: "medium", words: ["fuck"], time: "2m ago", status: "pending" },
     { id: 2, user: "spammer99", server: "Babble Playpen", type: "spam", severity: "high", words: ["buy now"], time: "15m ago", status: "pending" },
