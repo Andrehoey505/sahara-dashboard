@@ -16,6 +16,7 @@ export default function App() {
     { id: 3, user: "glacy6832", avatar: "🌴", server: "Glacy's Tropical", channel: "chat", content: "welcome back!", time: "3m ago", flagged: false },
     { id: 4, user: "stitchy_gw", avatar: "🧵", server: "SocialLink.io Staff", channel: "main-chat", content: "bb!status", time: "5m ago", flagged: false },
   ]);
+  const [messagesToday, setMessagesToday] = useState(0);
   const [selectedServer, setSelectedServer] = useState("");
   const [selectedChannel, setSelectedChannel] = useState("");
   const [servers, setServers] = useState<any[]>([]);
@@ -75,14 +76,16 @@ export default function App() {
       if (!healthRes.ok) throw new Error("not ok");
       setConnected(true);
       setConnectionError("");
-      const [msgRes, violRes, srvRes] = await Promise.all([
+      const [msgRes, violRes, srvRes, statsRes] = await Promise.all([
         fetch(apiUrl + "/api/messages?limit=50"),
         fetch(apiUrl + "/api/violations?limit=50"),
         fetch(apiUrl + "/api/servers"),
+        fetch(apiUrl + "/api/stats"),
       ]);
       if (msgRes.ok) setMessages(await msgRes.json());
       if (violRes.ok) setViolations(await violRes.json());
       if (srvRes.ok) setServers(await srvRes.json());
+      if (statsRes.ok) { const d = await statsRes.json(); setMessagesToday(d.messages_today ?? 0); }
     } catch (e) {
       setConnected(false);
       setConnectionError("Cannot reach bot API at " + apiUrl);
@@ -392,7 +395,7 @@ export default function App() {
               {[
                 { label: "Servers", value: "6", color: "from-indigo-500 to-purple-500" },
                 { label: "Members", value: "1,247", color: "from-cyan-500 to-blue-500" },
-                { label: "Messages Today", value: "8,432", color: "from-emerald-500 to-teal-500" },
+                { label: "Messages Today", value: messagesToday.toLocaleString(), color: "from-emerald-500 to-teal-500" },
                 { label: "Violations", value: violations.filter(v => v.status === "pending").length, color: "from-rose-500 to-orange-500" },
               ].map((s) => (
                 <div key={s.label} className="glass rounded-xl p-4">
