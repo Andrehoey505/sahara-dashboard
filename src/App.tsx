@@ -101,12 +101,24 @@ export default function App() {
 
   const clearFeed = () => { setMessages([]); notify("Feed cleared", "info"); };
 
-  const handleContextAction = (action: any, msg: any) => {
+  const handleContextAction = async (action, msg) => {
     setContextMenu(null);
-    if (action === "approve") { setViolations((v) => v.map((x) => x.id === msg.id ? { ...x, status: "resolved" } : x)); notify("Approved", "success"); }
-    else if (action === "deny") { setViolations((v) => v.map((x) => x.id === msg.id ? { ...x, status: "denied" } : x)); notify("Denied", "error"); }
-    else if (action === "delete") { setMessages((m) => m.filter((x) => x.id !== msg.id)); notify("Deleted", "info"); }
-    else { notify(action + " " + msg.user, "info"); }
+    if (action === "approve" || action === "deny") {
+      try {
+        await fetch(apiUrl + "/api/violation/" + encodeURIComponent(msg.id) + "/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        setViolations((v) => v.map((x) => x.id === msg.id ? { ...x, status: action === "approve" ? "resolved" : "denied" } : x));
+        notify(action === "approve" ? "Approved" : "Denied", action === "approve" ? "success" : "error");
+      } catch (e) { notify("Failed", "error"); }
+    } else if (action === "delete") {
+      setMessages((m) => m.filter((x) => x.id !== msg.id));
+      notify("Deleted", "info");
+    } else {
+      notify(action + " " + msg.user, "info");
+    }
   };
 
   const filteredMessages = messages.filter((m) =>
@@ -167,7 +179,8 @@ export default function App() {
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-slate-800/30">
                 <p className="text-xs text-slate-500 mb-1">Flagged message by {contextViolation.user} in {contextViolation.server}</p>
-                <p className="text-sm">Words: {contextViolation.words?.join(", ")}</p>
+                <p className="text-sm font-medium mb-2">"{contextViolation.full_message || contextViolation.message}"</p>
+                <p className="text-xs text-slate-400">Flagged words: {contextViolation.words?.join(", ")}</p>
               </div>
               <div className="text-xs text-slate-500">
                 <p className="mb-1">Before:</p>
@@ -389,6 +402,7 @@ export default function App() {
                       <span className={"text-xs px-1.5 py-0.5 rounded " + (v.severity === "critical" ? "bg-rose-500/20 text-rose-300" : v.severity === "high" ? "bg-orange-500/20 text-orange-300" : "bg-amber-500/20 text-amber-300")}>{v.severity}</span>
                     </div>
                     <p className="text-xs text-slate-400">{v.type} - words: {v.words.join(", ")} - {v.time}</p>
+                    {v.full_message && <p className="text-xs text-slate-300 mt-1 italic">"{v.full_message}"</p>}
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => { setContextViolation(v); }} className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 text-xs hover:bg-slate-600/50 transition">View Context</button>
