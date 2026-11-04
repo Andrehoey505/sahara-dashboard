@@ -31,7 +31,8 @@ export default function App() {
   const [channelTarget, setChannelTarget] = useState("");
   const [channelMessage, setChannelMessage] = useState("");
   const [showContext, setShowContext] = useState(false);
-  const [contextViolation, setContextViolation] = useState(null);
+  const [contextViolation, setContextViolation] = useState<any>(null);
+  const [violationFilter, setViolationFilter] = useState("all");
 
   useEffect(() => {
     const saved = localStorage.getItem("sahara_user");
