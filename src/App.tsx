@@ -94,9 +94,6 @@ export default function App() {
     fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(selectedServer)).then(r => r.json()).then(setChannels).catch(() => {});
     fetch(apiUrl + "/api/members?server=" + encodeURIComponent(selectedServer) + "&staff_only=" + staffOnly).then(r => r.json()).then(setMembers).catch(() => {});
   }, [selectedServer, staffOnly, connected, apiUrl]);
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
-  }, []);
 
   const handleLogin = async () => {
     if (!userId.trim()) { notify("Enter your Discord User ID", "error"); return; }
@@ -126,6 +123,14 @@ export default function App() {
   };
 
   const clearFeed = () => { setMessages([]); notify("Feed cleared", "info"); };
+
+  const fmtTime = (ts: string) => {
+    if (!ts) return "";
+    try {
+      const d = new Date(ts);
+      return d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return ts; }
+  };
 
   const handleContextAction = async (action: any, msg: any) => {
     setContextMenu(null);
