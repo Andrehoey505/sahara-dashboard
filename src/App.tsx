@@ -20,8 +20,8 @@ export default function App() {
     { id: 1, user: "wolfman_4328", server: "Bear Café", type: "profanity", severity: "medium", words: ["fuck"], time: "2m ago", status: "pending" },
     { id: 2, user: "spammer99", server: "Babble Playpen", type: "spam", severity: "high", words: ["buy now"], time: "15m ago", status: "pending" },
   ]);
-  const [contextMenu, setContextMenu] = useState(null);
-  const [notifications, setNotifications] = useState([]);
+  const [contextMenu, setContextMenu] = useState<any>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [violationFilter, setViolationFilter] = useState("all");
@@ -39,7 +39,7 @@ export default function App() {
     return () => document.removeEventListener("click", handler);
   }, []);
 
-  const notify = (msg, type = "info") => {
+  const notify = (msg: any, type = "info") => {
     const id = Date.now();
     setNotifications((n) => [...n, { id, msg, type }]);
     setTimeout(() => setNotifications((n) => n.filter((x) => x.id !== id)), 3000);
@@ -66,7 +66,7 @@ export default function App() {
 
   const clearFeed = () => { setMessages([]); notify("Feed cleared", "info"); };
 
-  const handleContextAction = (action, msg) => {
+  const handleContextAction = (action: any, msg: any) => {
     setContextMenu(null);
     if (action === "approve") { setViolations((v) => v.map((x) => x.id === msg.id ? { ...x, status: "resolved" } : x)); notify("Approved", "success"); }
     else if (action === "deny") { setViolations((v) => v.map((x) => x.id === msg.id ? { ...x, status: "denied" } : x)); notify("Denied", "error"); }
@@ -419,4 +419,3 @@ export default function App() {
     </div>
   );
 }
-EOF
