@@ -16,7 +16,7 @@ export default function App() {
     { id: 3, user: "glacy6832", avatar: "🌴", server: "Glacy's Tropical", channel: "chat", content: "welcome back!", time: "3m ago", flagged: false },
     { id: 4, user: "stitchy_gw", avatar: "🧵", server: "SocialLink.io Staff", channel: "main-chat", content: "bb!status", time: "5m ago", flagged: false },
   ]);
-  const [violations, setViolations] = useState([
+  const [violations, setViolations] = useState<any[]>([
     { id: 1, user: "wolfman_4328", server: "Bear Café", type: "profanity", severity: "medium", words: ["fuck"], time: "2m ago", status: "pending" },
     { id: 2, user: "spammer99", server: "Babble Playpen", type: "spam", severity: "high", words: ["buy now"], time: "15m ago", status: "pending" },
   ]);
@@ -101,7 +101,7 @@ export default function App() {
 
   const clearFeed = () => { setMessages([]); notify("Feed cleared", "info"); };
 
-  const handleContextAction = async (action, msg) => {
+  const handleContextAction = async (action: any, msg: any) => {
     setContextMenu(null);
     if (action === "approve" || action === "deny") {
       try {
