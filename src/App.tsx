@@ -478,17 +478,47 @@ export default function App() {
             {active === "moderation" && (
               <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Moderation Controls</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {["Ban User", "Kick User", "Mute User", "Warn User", "Clear Channel", "Lock Channel"].map((a) => (
-                    <button key={a} onClick={() => notify(a + " (simulated)", "info")} className="px-4 py-3 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-sm transition text-left">{a}</button>
-                  ))}
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">User ID</label>
+                    <input value={modTarget} onChange={(e) => setModTarget(e.target.value)} placeholder="Discord User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Server</label>
+                    <select value={modServer} onChange={(e) => setModServer(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
+                      <option value="">Select server...</option>
+                      {["Babble Playpen", "Bear Café", "Glacy's Tropical", "SocialLink.io Staff"].map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Action</label>
+                    <select value={modAction} onChange={(e) => setModAction(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
+                      <option value="warn">Warn</option>
+                      <option value="mute">Mute</option>
+                      <option value="timeout">Timeout (10 min)</option>
+                      <option value="kick">Kick</option>
+                      <option value="ban">Ban</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Reason</label>
+                    <textarea value={modReason} onChange={(e) => setModReason(e.target.value)} placeholder="Reason for action..." rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 resize-none" />
+                  </div>
+                  <button onClick={async () => {
+                    if (!modTarget || !modServer || !modReason) { notify("Fill in user ID, server, and reason", "error"); return; }
+                    try {
+                      const res = await fetch(apiUrl + "/api/moderation-action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: modAction, target_id: modTarget, server: modServer, reason: modReason, duration: modDuration }) });
+                      const data = await res.json();
+                      if (data.success) { notify(data.action + " applied to " + data.user, "success"); setModTarget(""); setModReason(""); }
+                      else { notify(data.error || "Failed", "error"); }
+                    } catch (e) { notify("Connection failed", "error"); }
+                  }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition">Execute Action</button>
                 </div>
                 <div className="border-t border-slate-700/50 pt-4">
                   <h4 className="font-semibold mb-2 text-sm">Send DM to User</h4>
                   <input value={dmTarget} onChange={(e) => setDmTarget(e.target.value)} placeholder="User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
                   <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} placeholder="Message (sent as SocialLink.io Staff)" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
                   <button onClick={async () => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } try { const res = await fetch(apiUrl + "/api/dm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: dmTarget, message: dmMessage }) }); const data = await res.json(); if (data.success) { notify("DM sent to " + data.sent_to, "success"); setDmTarget(""); setDmMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
-                  <p className="text-xs text-slate-500 mt-2">Bot will look up username + avatar from SocialLink.io Staff server and send DM on behalf of staff team.</p>
                 </div>
                 <div className="border-t border-slate-700/50 pt-4">
                   <h4 className="font-semibold mb-2 text-sm">Send Message to Channel</h4>
