@@ -4,9 +4,12 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 antialiased;
+    @apply antialiased;
     font-family: "Inter", system-ui, sans-serif;
   }
+  [data-theme="dark"] body { @apply bg-slate-950 text-slate-100; }
+  [data-theme="light"] body { @apply bg-slate-100 text-slate-900; }
+  [data-theme="midnight"] body { @apply bg-indigo-950 text-indigo-100; }
 }
 
 .glass {
