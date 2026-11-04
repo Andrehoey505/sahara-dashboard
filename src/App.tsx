@@ -24,7 +24,14 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [modTarget, setModTarget] = useState("");
+  const [modServer, setModServer] = useState("");
+  const [modAction, setModAction] = useState("warn");
+  const [modReason, setModReason] = useState("");
   const [apiUrl, setApiUrl] = useState(localStorage.getItem("sahara_api_url") || "http://localhost:8080");
+  const [modDuration, setModDuration] = useState(10);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [dmTarget, setDmTarget] = useState("");
   const [dmMessage, setDmMessage] = useState("");
@@ -43,6 +50,10 @@ export default function App() {
 
   const fetchData = async () => {
     try {
+      const healthRes = await fetch(apiUrl + "/api/health");
+      if (!healthRes.ok) throw new Error("not ok");
+      setConnected(true);
+      setConnectionError("");
       const [msgRes, violRes] = await Promise.all([
         fetch(apiUrl + "/api/messages?limit=50"),
         fetch(apiUrl + "/api/violations?limit=50"),
@@ -50,7 +61,8 @@ export default function App() {
       if (msgRes.ok) setMessages(await msgRes.json());
       if (violRes.ok) setViolations(await violRes.json());
     } catch (e) {
-      notify("Failed to connect to bot API", "error");
+      setConnected(false);
+      setConnectionError("Cannot reach bot API at " + apiUrl);
     }
   };
 
@@ -136,6 +148,20 @@ export default function App() {
           <h2 className="text-xl font-bold mb-2">Locked</h2>
           <input type="password" value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleUnlock()} placeholder="PIN" className="w-full px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-center text-2xl tracking-widest focus:outline-none focus:border-indigo-500 mb-4" />
           <button onClick={handleUnlock} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Unlock</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!connected) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
+        <div className="w-full max-w-md p-8 rounded-2xl bg-slate-900/50 border border-slate-800">
+          <h1 className="text-2xl font-bold mb-2 text-center">🐦 Sahara Dashboard</h1>
+          <p className="text-sm text-slate-400 text-center mb-6">Connect to your Discord bot to continue</p>
+          <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder="http://192.168.1.131:8080" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-3 focus:outline-none focus:border-indigo-500" />
+          {connectionError && <p className="text-xs text-rose-400 mb-3">{connectionError}</p>}
+          <button onClick={() => { localStorage.setItem("sahara_api_url", apiUrl); fetchData(); }} className="w-full px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Connect</button>
         </div>
       </div>
     );
