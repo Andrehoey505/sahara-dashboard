@@ -63,12 +63,14 @@ export default function App() {
       if (!healthRes.ok) throw new Error("not ok");
       setConnected(true);
       setConnectionError("");
-      const [msgRes, violRes] = await Promise.all([
+      const [msgRes, violRes, srvRes] = await Promise.all([
         fetch(apiUrl + "/api/messages?limit=50"),
         fetch(apiUrl + "/api/violations?limit=50"),
+        fetch(apiUrl + "/api/servers"),
       ]);
       if (msgRes.ok) setMessages(await msgRes.json());
       if (violRes.ok) setViolations(await violRes.json());
+      if (srvRes.ok) setServers(await srvRes.json());
     } catch (e) {
       setConnected(false);
       setConnectionError("Cannot reach bot API at " + apiUrl);
@@ -88,7 +90,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    const handler = () => setContextMenu(null);
+    if (!selectedServer || !connected) return;
+    fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(selectedServer)).then(r => r.json()).then(setChannels).catch(() => {});
+    fetch(apiUrl + "/api/members?server=" + encodeURIComponent(selectedServer) + "&staff_only=" + staffOnly).then(r => r.json()).then(setMembers).catch(() => {});
+  }, [selectedServer, staffOnly, connected, apiUrl]);
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
