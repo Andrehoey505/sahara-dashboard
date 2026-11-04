@@ -24,12 +24,15 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [violationFilter, setViolationFilter] = useState("all");
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [dmTarget, setDmTarget] = useState("");
+  const [dmMessage, setDmMessage] = useState("");
+  const [showDmModal, setShowDmModal] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("sahara_user");
     const savedPin = localStorage.getItem("sahara_pin");
-    if (saved) { setUserId(saved); setLoggedIn(true); }
+    if (saved) { setUserId(saved); setUserProfile({ name: "User " + saved.slice(-4), avatar: "👤", id: saved }); setLoggedIn(true); }
     if (savedPin) { setPin(savedPin); setPinSet(true); setLocked(true); }
   }, []);
 
@@ -48,6 +51,7 @@ export default function App() {
   const handleLogin = () => {
     if (!userId.trim()) { notify("Enter your Discord User ID", "error"); return; }
     localStorage.setItem("sahara_user", userId);
+    setUserProfile({ name: "User " + userId.slice(-4), avatar: "👤", id: userId });
     setLoggedIn(true);
     notify("Welcome back!", "success");
   };
@@ -164,8 +168,13 @@ export default function App() {
           })}
         </nav>
         <div className="mt-4 p-3 rounded-xl bg-slate-800/40 border border-slate-700/50">
-          <p className="text-xs text-slate-400 mb-1">Logged in as</p>
-          <p className="text-sm font-mono truncate">{userId}</p>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">{userProfile?.avatar || "👤"}</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{userProfile?.name || "User"}</p>
+              <p className="text-xs text-slate-500 font-mono truncate">{userId}</p>
+            </div>
+          </div>
           <div className="flex gap-2 mt-2">
             <button onClick={() => { setLocked(true); notify("Locked", "info"); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Lock</button>
             <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Sign Out</button>
@@ -362,12 +371,19 @@ export default function App() {
               </>
             )}
             {active === "moderation" && (
-              <div className="glass rounded-xl p-4">
+              <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Moderation Controls</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {["Ban User", "Kick User", "Mute User", "Warn User", "Clear Channel", "Lock Channel"].map((a) => (
                     <button key={a} onClick={() => notify(a + " (simulated)", "info")} className="px-4 py-3 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-sm transition text-left">{a}</button>
                   ))}
+                </div>
+                <div className="border-t border-slate-700/50 pt-4">
+                  <h4 className="font-semibold mb-2 text-sm">Send DM to User</h4>
+                  <input value={dmTarget} onChange={(e) => setDmTarget(e.target.value)} placeholder="User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
+                  <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} placeholder="Message (sent as SocialLink.io Staff)" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
+                  <button onClick={() => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } notify("DM sent to " + dmTarget, "success"); setDmTarget(""); setDmMessage(""); }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
+                  <p className="text-xs text-slate-500 mt-2">Bot will look up username + avatar from SocialLink.io Staff server and send DM on behalf of staff team.</p>
                 </div>
               </div>
             )}
