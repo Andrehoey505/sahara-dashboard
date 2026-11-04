@@ -24,6 +24,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [apiUrl, setApiUrl] = useState(localStorage.getItem("sahara_api_url") || "http://localhost:8080");
   const [userProfile, setUserProfile] = useState<any>(null);
   const [dmTarget, setDmTarget] = useState("");
   const [dmMessage, setDmMessage] = useState("");
@@ -39,11 +40,24 @@ export default function App() {
     if (savedPin) { setPin(savedPin); setPinSet(true); setLocked(true); }
   }, []);
 
+  const fetchData = async () => {
+    try {
+      const [msgRes, violRes] = await Promise.all([
+        fetch(apiUrl + "/api/messages?limit=50"),
+        fetch(apiUrl + "/api/violations?limit=50"),
+      ]);
+      if (msgRes.ok) setMessages(await msgRes.json());
+      if (violRes.ok) setViolations(await violRes.json());
+    } catch (e) {
+      notify("Failed to connect to bot API", "error");
+    }
+  };
+
   useEffect(() => {
-    const handler = () => setContextMenu(null);
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
-  }, []);
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, [apiUrl]);
 
   const notify = (msg: any, type = "info") => {
     const id = Date.now();
@@ -51,10 +65,23 @@ export default function App() {
     setTimeout(() => setNotifications((n) => n.filter((x) => x.id !== id)), 3000);
   };
 
-  const handleLogin = () => {
+  useEffect(() => {
+    const handler = () => setContextMenu(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
+  const handleLogin = async () => {
     if (!userId.trim()) { notify("Enter your Discord User ID", "error"); return; }
     localStorage.setItem("sahara_user", userId);
-    setUserProfile({ name: "User " + userId.slice(-4), avatar: "👤", id: userId });
+    try {
+      const res = await fetch(apiUrl + "/api/user/" + userId);
+      const data = await res.json();
+      if (data.name) setUserProfile({ name: data.name, avatar: "👤", id: userId, avatarUrl: data.avatar });
+      else setUserProfile({ name: "User " + userId.slice(-4), avatar: "👤", id: userId });
+    } catch (e) {
+      setUserProfile({ name: "User " + userId.slice(-4), avatar: "👤", id: userId });
+    }
     setLoggedIn(true);
     notify("Welcome back!", "success");
   };
@@ -419,14 +446,14 @@ export default function App() {
                   <h4 className="font-semibold mb-2 text-sm">Send DM to User</h4>
                   <input value={dmTarget} onChange={(e) => setDmTarget(e.target.value)} placeholder="User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
                   <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} placeholder="Message (sent as SocialLink.io Staff)" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={() => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } notify("DM sent to " + dmTarget, "success"); setDmTarget(""); setDmMessage(""); }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
+                  <button onClick={async () => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } try { const res = await fetch(apiUrl + "/api/dm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: dmTarget, message: dmMessage }) }); const data = await res.json(); if (data.success) { notify("DM sent to " + data.sent_to, "success"); setDmTarget(""); setDmMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
                   <p className="text-xs text-slate-500 mt-2">Bot will look up username + avatar from SocialLink.io Staff server and send DM on behalf of staff team.</p>
                 </div>
                 <div className="border-t border-slate-700/50 pt-4">
                   <h4 className="font-semibold mb-2 text-sm">Send Message to Channel</h4>
                   <input value={channelTarget} onChange={(e) => setChannelTarget(e.target.value)} placeholder="Server/Channel (e.g. Babble Playpen / general)" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
                   <textarea value={channelMessage} onChange={(e) => setChannelMessage(e.target.value)} placeholder="Message to send to channel" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={() => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } notify("Message sent to " + channelTarget, "success"); setChannelTarget(""); setChannelMessage(""); }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition">Send to Channel</button>
+                  <button onClick={async () => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } const parts = channelTarget.split("/"); try { const res = await fetch(apiUrl + "/api/channel-message", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ server: parts[0]?.trim(), channel: parts[1]?.trim(), message: channelMessage }) }); const data = await res.json(); if (data.success) { notify("Message sent to " + data.channel, "success"); setChannelTarget(""); setChannelMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition">Send to Channel</button>
                 </div>
               </div>
             )}
@@ -447,7 +474,7 @@ export default function App() {
                 <h3 className="font-semibold mb-3">Settings</h3>
                 <div>
                   <label className="text-xs text-slate-400 block mb-1">Bot API URL</label>
-                  <input placeholder="http://192.168.1.128:8080" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
+                  <input value={apiUrl} onChange={(e) => { setApiUrl(e.target.value); localStorage.setItem("sahara_api_url", e.target.value); }} placeholder="http://192.168.1.128:8080" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
                   <p className="text-xs text-slate-500 mt-1">Local IP for same-network, or tunnel URL for remote access.</p>
                 </div>
                 <div>
