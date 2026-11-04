@@ -54,7 +54,13 @@ export default function App() {
     localStorage.setItem("sahara_theme", theme);
   }, [theme]);
 
+  const [trollSweepActive, setTrollSweepActive] = useState(false);
+  const [trollSweepProgress, setTrollSweepProgress] = useState(0);
+  const [trollSweepServer, setTrollSweepServer] = useState("");
+  const [trollSweepMembers, setTrollSweepMembers] = useState(0);
+  const [trollSweepResults, setTrollSweepResults] = useState<any[]>([]);
   const [violationFilter, setViolationFilter] = useState("all");
+  const [trollSweepDone, setTrollSweepDone] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("sahara_user");
@@ -143,6 +149,32 @@ export default function App() {
   const handleUnlock = () => {
     if (pinInput === pin) { setLocked(false); setPinInput(""); notify("Unlocked!", "success"); }
     else { notify("Wrong PIN", "error"); setPinInput(""); }
+  };
+
+  const runTrollSweep = async () => {
+    setTrollSweepActive(true);
+    setTrollSweepDone(false);
+    setTrollSweepProgress(0);
+    setTrollSweepResults([]);
+    const srvs = servers.length ? servers : await (await fetch(apiUrl + "/api/servers")).json();
+    const total = srvs.length;
+    for (let i = 0; i < srvs.length; i++) {
+      const s = srvs[i];
+      setTrollSweepServer(s.name);
+      setTrollSweepProgress(Math.round(((i) / total) * 100));
+      try {
+        const members = await (await fetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.name))).json();
+        setTrollSweepMembers((prev) => prev + (members?.length || 0));
+        // Check for suspicious patterns (new accounts, no avatar, etc.)
+        const suspicious = (members || []).filter((m: any) => !m.avatar || m.name.includes("http") || m.name.length < 3);
+        if (suspicious.length > 0) {
+          setTrollSweepResults((prev) => [...prev, { server: s.name, count: suspicious.length, users: suspicious.map((u: any) => u.name) }]);
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    setTrollSweepProgress(100);
+    setTrollSweepDone(true);
   };
 
   const clearFeed = () => { setMessages([]); notify("Feed cleared", "info"); };
@@ -393,7 +425,7 @@ export default function App() {
                   {[
                     { label: "Restart Bot", action: () => notify("Bot restart requested", "info") },
                     { label: "Clear Feed", action: clearFeed },
-                    { label: "Run Troll Sweep", action: () => notify("Troll sweep started", "info") },
+                    { label: "Run Troll Sweep", action: () => runTrollSweep() },
                     { label: "Export Logs", action: () => notify("Logs exported", "success") },
                     { label: "Refresh Data", action: () => { setLoading(true); setTimeout(() => { setLoading(false); notify("Data refreshed", "success"); }, 800); } },
                   ].map((a) => (
@@ -672,6 +704,44 @@ export default function App() {
           </motion.div>
         )}
       </main>
+
+      {trollSweepActive && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="w-full max-w-2xl p-8">
+            <h2 className="text-3xl font-bold text-center mb-2">🔍 Troll Sweep</h2>
+            <p className="text-sm text-slate-400 text-center mb-8">Scanning all servers for suspicious activity</p>
+            <div className="mb-6">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-slate-300">{trollSweepServer || "Starting..."}</span>
+                <span className="text-indigo-400">{trollSweepProgress}%</span>
+              </div>
+              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500" style={{ width: trollSweepProgress + "%" }} />
+              </div>
+            </div>
+            <div className="flex justify-between text-sm text-slate-400 mb-6">
+              <span>Members scanned: {trollSweepMembers}</span>
+              <span>Servers: {servers.length}</span>
+            </div>
+            {trollSweepDone && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-emerald-400">✅ Sweep Complete</h3>
+                {trollSweepResults.length === 0 ? (
+                  <p className="text-sm text-slate-400">No suspicious activity detected.</p>
+                ) : (
+                  trollSweepResults.map((r, i) => (
+                    <div key={i} className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30">
+                      <p className="text-sm font-medium text-rose-300">{r.server}: {r.count} suspicious</p>
+                      <p className="text-xs text-slate-400">{r.users.join(", ")}</p>
+                    </div>
+                  ))
+                )}
+                <button onClick={() => { setTrollSweepActive(false); setTrollSweepMembers(0); }} className="w-full mt-4 px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Close</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
