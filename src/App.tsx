@@ -335,10 +335,83 @@ export default function App() {
         )}
 
         {["members", "moderation", "music", "settings"].includes(active) && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-xl p-8 text-center">
-            <Sparkles className="w-12 h-12 mx-auto mb-4 text-indigo-400 opacity-50" />
-            <h3 className="text-lg font-semibold mb-2">{active.charAt(0).toUpperCase() + active.slice(1)}</h3>
-            <p className="text-sm text-slate-400">Coming soon - connect to bot session for live data.</p>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            {active === "members" && (
+              <>
+                <div className="glass rounded-xl p-4">
+                  <h3 className="font-semibold mb-3">Server Members</h3>
+                  <div className="space-y-2">
+                    {[
+                      { name: "stitchy_gw", avatar: "🧵", role: "Admin", server: "SocialLink.io Staff", status: "online" },
+                      { name: "glacy6832", avatar: "🌴", role: "Owner", server: "Glacy's Tropical", status: "online" },
+                      { name: "wolfman_4328", avatar: "🐺", role: "Member", server: "Bear Café", status: "offline" },
+                      { name: "smg4_2010", avatar: "🎮", role: "Member", server: "Babble Playpen", status: "online" },
+                    ].map((m, i) => (
+                      <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/30">
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">{m.avatar}</div>
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">{m.name}</span>
+                          <span className="text-xs text-slate-500 ml-2">{m.server}</span>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-700/50">{m.role}</span>
+                        <span className={"w-2 h-2 rounded-full " + (m.status === "online" ? "bg-emerald-400" : "bg-slate-600")} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            {active === "moderation" && (
+              <div className="glass rounded-xl p-4">
+                <h3 className="font-semibold mb-3">Moderation Controls</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {["Ban User", "Kick User", "Mute User", "Warn User", "Clear Channel", "Lock Channel"].map((a) => (
+                    <button key={a} onClick={() => notify(a + " (simulated)", "info")} className="px-4 py-3 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-sm transition text-left">{a}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {active === "music" && (
+              <div className="glass rounded-xl p-4">
+                <h3 className="font-semibold mb-3">Music Player</h3>
+                <div className="flex items-center gap-4 mb-4">
+                  <button onClick={() => notify("Playing", "success")} className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-sm hover:bg-emerald-500/30">Play</button>
+                  <button onClick={() => notify("Paused", "info")} className="px-4 py-2 rounded-lg bg-slate-700/50 text-slate-300 text-sm hover:bg-slate-600/50">Pause</button>
+                  <button onClick={() => notify("Skipped", "info")} className="px-4 py-2 rounded-lg bg-slate-700/50 text-slate-300 text-sm hover:bg-slate-600/50">Skip</button>
+                  <button onClick={() => notify("Stopped", "error")} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30">Stop</button>
+                </div>
+                <p className="text-xs text-slate-500">Now playing: Nothing (queue empty)</p>
+              </div>
+            )}
+            {active === "settings" && (
+              <div className="glass rounded-xl p-4 space-y-4">
+                <h3 className="font-semibold mb-3">Settings</h3>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Bot API URL (tunnel)</label>
+                  <input placeholder="https://your-tunnel-url.com" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Theme</label>
+                  <select className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm">
+                    <option>Dark (default)</option>
+                    <option>Light</option>
+                    <option>Midnight</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Desktop notifications</span>
+                  <button onClick={() => notify("Toggled", "info")} className="px-3 py-1 rounded bg-indigo-500/20 text-indigo-300 text-xs">On</button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Auto-refresh interval</span>
+                  <select className="px-3 py-1 rounded bg-slate-800/50 border border-slate-700 text-xs">
+                    <option>5s</option>
+                    <option>10s</option>
+                    <option>30s</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </main>
