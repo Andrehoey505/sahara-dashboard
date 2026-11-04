@@ -153,9 +153,11 @@ export default function App() {
   };
 
   const filteredMessages = messages.filter((m) =>
-    m.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.server.toLowerCase().includes(searchQuery.toLowerCase())
+    (!selectedServer || m.server === selectedServer) &&
+    (!selectedChannel || m.channel === selectedChannel) &&
+    (m.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     m.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     m.server.toLowerCase().includes(searchQuery.toLowerCase()))
   );
   const filteredViolations = violations.filter((v) => violationFilter === "all" || v.status === violationFilter);
 
@@ -386,8 +388,16 @@ export default function App() {
 
         {active === "livefeed" && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-slate-400">{filteredMessages.length} messages - Right-click for actions</p>
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <select value={selectedServer} onChange={(e) => { setSelectedServer(e.target.value); setSelectedChannel(""); }} className="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
+                <option value="">All servers</option>
+                {servers.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+              <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)} className="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" disabled={!selectedServer}>
+                <option value="">All channels</option>
+                {channels.map((c) => <option key={c.id} value={c.name}>#{c.name}</option>)}
+              </select>
+              <p className="text-sm text-slate-400 flex-1">{filteredMessages.length} messages</p>
               <button onClick={clearFeed} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm hover:bg-rose-500/20 transition">
                 <Trash2 className="w-3.5 h-3.5" /> Clear Feed
               </button>
@@ -406,12 +416,11 @@ export default function App() {
                       <p className="text-sm text-slate-300 truncate">{m.content}</p>
                     </div>
                     <div className="text-right flex flex-col items-end gap-1">
-                      <span className="text-xs text-slate-500">{m.time}</span>
+                      <span className="text-xs text-slate-500">{fmtTime(m.time)}</span>
                       {m.flagged && <div className="text-xs text-rose-400 mt-1">flagged</div>}
                       <div className="flex gap-1 mt-1">
-                        <button onClick={() => handleContextAction("approve", m)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20">✓</button>
-                        <button onClick={() => handleContextAction("deny", m)} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20">✗</button>
-                        <button onClick={() => handleContextAction("delete", m)} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 hover:bg-slate-600/50">🗑</button>
+                        <button onClick={() => setMessages((msgs) => msgs.filter((x) => x.id !== m.id))} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20" title="Delete from feed">🗑</button>
+                        <button onClick={() => { setMoreOptionsMsg(m); setMoreOptionsAction("warn"); setMoreOptionsReason(""); }} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" title="More options">⋯</button>
                       </div>
                     </div>
                   </motion.div>
@@ -424,6 +433,43 @@ export default function App() {
                 </div>
               )}
             </div>
+            {moreOptionsMsg && (
+              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setMoreOptionsMsg(null)}>
+                <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-lg font-semibold mb-4">More Options — {moreOptionsMsg.user}</h3>
+                  <p className="text-xs text-slate-400 mb-4">Server: {moreOptionsMsg.server} | Channel: #{moreOptionsMsg.channel}</p>
+                  <p className="text-sm text-slate-300 mb-4 italic">"{moreOptionsMsg.content}"</p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-1">Action</label>
+                      <select value={moreOptionsAction} onChange={(e) => setMoreOptionsAction(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
+                        <option value="warn">Warn</option>
+                        <option value="mute">Mute</option>
+                        <option value="timeout">Timeout (10 min)</option>
+                        <option value="kick">Kick</option>
+                        <option value="ban">Ban</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-1">Reason</label>
+                      <textarea value={moreOptionsReason} onChange={(e) => setMoreOptionsReason(e.target.value)} placeholder="Reason..." rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 resize-none" />
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => setMoreOptionsMsg(null)} className="px-4 py-2 rounded-lg bg-slate-700/50 text-slate-300 text-sm hover:bg-slate-600/50 transition">Cancel</button>
+                      <button onClick={async () => {
+                        if (!moreOptionsReason) { notify("Enter a reason", "error"); return; }
+                        try {
+                          const res = await fetch(apiUrl + "/api/moderation-action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server, reason: moreOptionsReason, duration: 10 }) });
+                          const data = await res.json();
+                          if (data.success) { notify(data.action + " applied to " + data.user, "success"); setMoreOptionsMsg(null); }
+                          else { notify(data.error || "Failed", "error"); }
+                        } catch (e) { notify("Connection failed", "error"); }
+                      }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition">Execute</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -472,24 +518,35 @@ export default function App() {
             {active === "members" && (
               <>
                 <div className="glass rounded-xl p-4">
-                  <h3 className="font-semibold mb-3">Server Members</h3>
+                  <div className="flex items-center gap-3 mb-4 flex-wrap">
+                    <select value={selectedServer} onChange={(e) => setSelectedServer(e.target.value)} className="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
+                      <option value="">Select server...</option>
+                      {servers.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                    <label className="flex items-center gap-2 text-sm text-slate-400">
+                      <input type="checkbox" checked={staffOnly} onChange={(e) => setStaffOnly(e.target.checked)} className="rounded" />
+                      Staff only
+                    </label>
+                    <span className="text-sm text-slate-400">{members.length} members</span>
+                  </div>
                   <div className="space-y-2">
-                    {[
-                      { name: "stitchy_gw", avatar: "🧵", role: "Admin", server: "SocialLink.io Staff", status: "online" },
-                      { name: "glacy6832", avatar: "🌴", role: "Owner", server: "Glacy's Tropical", status: "online" },
-                      { name: "wolfman_4328", avatar: "🐺", role: "Member", server: "Bear Café", status: "offline" },
-                      { name: "smg4_2010", avatar: "🎮", role: "Member", server: "Babble Playpen", status: "online" },
-                    ].map((m, i) => (
-                      <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/30">
-                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">{m.avatar}</div>
-                        <div className="flex-1">
-                          <span className="text-sm font-medium">{m.name}</span>
-                          <span className="text-xs text-slate-500 ml-2">{m.server}</span>
+                    {members.map((m) => (
+                      <div key={m.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/30">
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden">
+                          {m.avatar ? <img src={m.avatar} alt="" className="w-full h-full object-cover" /> : "👤"}
                         </div>
-                        <span className="text-xs px-2 py-0.5 rounded bg-slate-700/50">{m.role}</span>
-                        <span className={"w-2 h-2 rounded-full " + (m.status === "online" ? "bg-emerald-400" : "bg-slate-600")} />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium">{m.display_name || m.name}</span>
+                          <span className="text-xs text-slate-500 ml-2">{m.id}</span>
+                          {m.joined_at && <span className="text-xs text-slate-600 ml-2">joined {fmtTime(m.joined_at)}</span>}
+                        </div>
+                        <div className="flex gap-1 flex-wrap">
+                          {m.roles?.slice(0, 2).map((r: string) => <span key={r} className="text-xs px-2 py-0.5 rounded bg-slate-700/50">{r}</span>)}
+                        </div>
+                        <span className={"w-2 h-2 rounded-full " + (m.status === "online" ? "bg-emerald-400" : m.status === "idle" ? "bg-amber-400" : "bg-slate-600")} />
                       </div>
                     ))}
+                    {members.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Select a server to view members</p>}
                   </div>
                 </div>
               </>
