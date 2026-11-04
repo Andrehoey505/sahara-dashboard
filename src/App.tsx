@@ -48,6 +48,12 @@ export default function App() {
   const [channelMessage, setChannelMessage] = useState("");
   const [showContext, setShowContext] = useState(false);
   const [contextViolation, setContextViolation] = useState<any>(null);
+  const [theme, setTheme] = useState(localStorage.getItem("sahara_theme") || "dark");
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("sahara_theme", theme);
+  }, [theme]);
+
   const [violationFilter, setViolationFilter] = useState("all");
 
   useEffect(() => {
@@ -83,7 +89,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, [apiUrl]);
 
+  const playSound = (type: string) => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (type === "success") { osc.frequency.value = 880; gain.gain.value = 0.1; }
+      else if (type === "error") { osc.frequency.value = 220; gain.gain.value = 0.15; }
+      else { osc.frequency.value = 440; gain.gain.value = 0.08; }
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {}
+  };
+
   const notify = (msg: any, type = "info") => {
+    playSound(type);
     const id = Date.now();
     setNotifications((n) => [...n, { id, msg, type }]);
     setTimeout(() => setNotifications((n) => n.filter((x) => x.id !== id)), 3000);
@@ -626,10 +649,10 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-1">Theme</label>
-                  <select className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm">
-                    <option>Dark (default)</option>
-                    <option>Light</option>
-                    <option>Midnight</option>
+                  <select value={theme} onChange={(e) => setTheme(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm">
+                    <option value="dark">Dark (default)</option>
+                    <option value="light">Light</option>
+                    <option value="midnight">Midnight</option>
                   </select>
                 </div>
                 <div className="flex items-center justify-between">
