@@ -179,6 +179,12 @@ export default function App() {
 
   const isAndre = userId === "264680643013771265";
   const [armReminder, setArmReminder] = useState(false);
+  useEffect(() => {
+    if (!isAndre || !loggedIn) return;
+    const show = () => setArmReminder(true);
+    const t = setTimeout(show, 2 * 60 * 60 * 1000);
+    return () => clearTimeout(t);
+  }, [isAndre, loggedIn]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   const [edLastUpdate, setEdLastUpdate] = useState("");
   const [edStale, setEdStale] = useState(false);
@@ -913,7 +919,7 @@ export default function App() {
             <h3 className="font-bold text-lg mb-2">Gentle Arm Care</h3>
             <p className="text-sm text-slate-300 mb-4">Time to take your arm out of the sling for a bit — gentle shoulder/elbow movement, then back in. Ice ~10 min if sore.</p>
             <div className="flex gap-2">
-              <button onClick={() => setArmReminder(false)} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Done</button>
+              <button onClick={() => { setArmReminder(false); setTimeout(() => setArmReminder(true), 2 * 60 * 60 * 1000); }} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Done</button>
               <button onClick={() => { setArmReminder(false); setTimeout(() => setArmReminder(true), 30 * 60 * 1000); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">Snooze 30m</button>
             </div>
           </motion.div>
