@@ -199,8 +199,15 @@ export default function App() {
     if (!isAndre || !loggedIn) return;
     const fetchEd = async () => {
       try {
-        const res = await fetch("https://www.nidirect.gov.uk/articles/emergency-department-waiting-times");
-        const html = await res.text();
+        let html = "";
+        try {
+          const { Command } = await import("@tauri-apps/plugin-shell");
+          const out = await Command.create("curl", ["-sL", "https://www.nidirect.gov.uk/articles/emergency-department-waiting-times"]).execute();
+          html = out.stdout || "";
+        } catch {
+          const res = await fetch("https://www.nidirect.gov.uk/articles/emergency-department-waiting-times");
+          html = await res.text();
+        }
         const out: any = {};
         for (const [label, key] of [["Mater Hospital", "Mater"], ["Royal Victoria Hospital", "Royal Victoria"]]) {
           const m = html.match(new RegExp(label.replace(/ /g, "\\s+") + "[\\s\\S]*?Emergency Department[\\s\\S]*?(\\d+)\\s*mins", "i"));
@@ -210,6 +217,7 @@ export default function App() {
         const ts = lu ? lu[1].trim() : "";
         if (ts) setEdLastUpdate(ts);
         if (Object.keys(out).length) { setEdWaits(out); setEdStale(false); }
+        else setEdStale(true);
       } catch {
         setEdStale(true);
       }
