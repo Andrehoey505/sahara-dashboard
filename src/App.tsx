@@ -578,7 +578,6 @@ export default function App() {
                 </div>
                 {edLastUpdate && <p className="text-xs text-slate-500 mt-2">{edStale ? "⚠️ Stale — " : ""}Last updated: {edLastUpdate} · median arrival-to-clinician, by triage priority</p>}
                 <p className="text-xs text-slate-400 mt-2">MIUs &amp; Urgent Care Centres are often quieter for non-emergency issues.</p>
-                <a href="tel:03001234999" className="mt-3 inline-block px-3 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 text-xs hover:bg-indigo-500/30">📞 Phone First: 0300 123 4 999</a>
                 <p className="text-xs text-rose-300/80 mt-3">⚠️ Not medical advice. Go in person if: new numbness/tingling in fingers, can't lift the arm, pain getting sharper, or visible swelling/deformity.</p>
               </div>
             )}
