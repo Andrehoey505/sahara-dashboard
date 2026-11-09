@@ -177,7 +177,43 @@ export default function App() {
   const [ttsEnabled, setTtsEnabled] = useState(localStorage.getItem("sahara_tts") !== "off");
   const [soundEnabled, setSoundEnabled] = useState(localStorage.getItem("sahara_sound") !== "off");
 
-  const notify = (msg: any, type = "info") => {
+  const isAndre = userId === "264680643013771265";
+  const [armReminder, setArmReminder] = useState(false);
+  const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number }>({});
+  const [edLastUpdate, setEdLastUpdate] = useState("");
+
+  // Arm care reminder (only for Andre's profile)
+  useEffect(() => {
+    if (!isAndre || !loggedIn) return;
+    const interval = setInterval(() => {
+      setArmReminder(true);
+      if (soundEnabled) playSound("join");
+      speak("Time to take your arm out of the sling and do gentle wrist movements.");
+    }, 45 * 60 * 1000); // every 45 min
+    return () => clearInterval(interval);
+  }, [isAndre, loggedIn, soundEnabled]);
+
+  // Live ED waiting times
+  useEffect(() => {
+    if (!isAndre || !loggedIn) return;
+    const fetchEd = async () => {
+      try {
+        const res = await fetch("https://www.nidirect.gov.uk/articles/emergency-department-waiting-times");
+        const html = await res.text();
+        const out: any = {};
+        for (const [label, key] of [["Mater Hospital", "Mater"], ["Royal Victoria Hospital", "Royal Victoria"]]) {
+          const m = html.match(new RegExp(label.replace(/ /g, "\\s+") + "[\\s\\S]*?Emergency Department[\\s\\S]*?(\\d+)\\s*mins", "i"));
+          if (m) out[key] = parseInt(m[1]);
+        }
+        setEdWaits(out);
+        setEdLastUpdate(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
+      } catch {}
+    };
+    fetchEd();
+    const interval = setInterval(fetchEd, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isAndre, loggedIn]);
+    const notify = (msg: any, type = "info") => {
     playSound(type);
     const id = Date.now();
     setNotifications((n) => [...n, { id, msg, type }]);
@@ -514,6 +550,22 @@ export default function App() {
                 {loading && <div className="mt-4 flex justify-center"><RefreshCw className="w-5 h-5 animate-spin text-indigo-400" /></div>}
               </div>
             </div>
+            {isAndre && (
+              <div className="glass rounded-xl p-4 mt-4">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">🏥 ED Waiting Times (Belfast)</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 rounded-lg bg-slate-800/40">
+                    <p className="text-xs text-slate-400">Mater Hospital</p>
+                    <p className="text-2xl font-bold text-amber-300">{edWaits.Mater ?? "—"} <span className="text-sm text-slate-500">min</span></p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-800/40">
+                    <p className="text-xs text-slate-400">Royal Victoria Hospital</p>
+                    <p className="text-2xl font-bold text-amber-300">{edWaits["Royal Victoria"] ?? "—"} <span className="text-sm text-slate-500">min</span></p>
+                  </div>
+                </div>
+                {edLastUpdate && <p className="text-xs text-slate-500 mt-2">Updated {edLastUpdate} · refreshes every 5 min</p>}
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -819,6 +871,14 @@ export default function App() {
                 <button onClick={() => { setTrollSweepActive(false); setTrollSweepMembers(0); }} className="w-full mt-4 px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Close</button>
               </div>
             )}
+          </div>
+      {armReminder && isAndre && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
+          <div className="glass rounded-2xl p-6 w-96 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="text-4xl mb-3">💪</div>
+            <h3 className="font-bold text-lg mb-2">Arm Care Reminder</h3>
+            <p className="text-sm text-slate-300 mb-4">Time to take your arm out of the sling and do gentle wrist movements. Slow rotations, stop at pain.</p>
+            <button onClick={() => setArmReminder(false)} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Got it</button>
           </div>
         </div>
       )}
