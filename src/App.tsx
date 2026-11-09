@@ -66,7 +66,19 @@ export default function App() {
   useEffect(() => {
     const saved = localStorage.getItem("sahara_user");
     const savedPin = localStorage.getItem("sahara_pin");
-    if (saved) { setUserId(saved); setUserProfile({ name: "User " + saved.slice(-4), avatar: "👤", id: saved }); setLoggedIn(true); }
+    const api = localStorage.getItem("sahara_api_url") || "http://localhost:8080";
+    if (saved) {
+      setUserId(saved);
+      setUserProfile({ name: "User " + saved.slice(-4), avatar: "👤", id: saved });
+      setLoggedIn(true);
+      // Fetch real profile from bot API on launch (so username shows immediately)
+      fetch(api + "/api/user/" + saved)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.name) setUserProfile({ name: data.name, avatar: "👤", id: saved, avatarUrl: data.avatar });
+        })
+        .catch(() => {});
+    }
     if (savedPin) { setPin(savedPin); setPinSet(true); setLocked(true); }
   }, []);
 
