@@ -114,7 +114,21 @@ export default function App() {
         fetch(apiUrl + "/api/stats"),
       ]);
       if (msgRes.ok) setMessages(await msgRes.json());
-      if (violRes.ok) setViolations(await violRes.json());
+      if (violRes.ok) {
+        const newViols = await violRes.json();
+        const newIds = new Set(newViols.map((v: any) => v.id));
+        const added = newViols.filter((v: any) => !prevViolationIds.has(v.id) && prevViolationIds.size > 0);
+        if (added.length > 0) {
+          if (soundEnabled) playSound("violation");
+          if (ttsEnabled) {
+            const v = added[0];
+            speak(`New violation: ${v.user}. ${v.full_message || v.message || v.type}`);
+          }
+          notify(`New violation: ${added[0].user}`, "error");
+        }
+        setPrevViolationIds(newIds);
+        setViolations(newViols);
+      }
       if (srvRes.ok) setServers(await srvRes.json());
       if (statsRes.ok) { const d = await statsRes.json(); setMessagesToday(d.messages_today ?? 0); }
     } catch (e) {
@@ -138,12 +152,30 @@ export default function App() {
       gain.connect(ctx.destination);
       if (type === "success") { osc.frequency.value = 880; gain.gain.value = 0.1; }
       else if (type === "error") { osc.frequency.value = 220; gain.gain.value = 0.15; }
+      else if (type === "violation") { osc.frequency.value = 660; gain.gain.value = 0.12; }
+      else if (type === "join") { osc.frequency.value = 523; gain.gain.value = 0.1; }
       else { osc.frequency.value = 440; gain.gain.value = 0.08; }
       osc.start();
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      osc.stop(ctx.currentTime + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc.stop(ctx.currentTime + 0.2);
     } catch {}
   };
+
+  const speak = (text: string) => {
+    try {
+      if (!("speechSynthesis" in window)) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.05;
+      u.pitch = 1.0;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch {}
+  };
+
+  const [prevViolationIds, setPrevViolationIds] = useState<Set<any>>(new Set());
+  const [prevMemberIds, setPrevMemberIds] = useState<Set<any>>(new Set());
+  const [ttsEnabled, setTtsEnabled] = useState(localStorage.getItem("sahara_tts") !== "off");
+  const [soundEnabled, setSoundEnabled] = useState(localStorage.getItem("sahara_sound") !== "off");
 
   const notify = (msg: any, type = "info") => {
     playSound(type);
@@ -155,7 +187,17 @@ export default function App() {
   useEffect(() => {
     if (!selectedServer || !connected) return;
     fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(selectedServer)).then(r => r.json()).then(setChannels).catch(() => {});
-    fetch(apiUrl + "/api/members?server=" + encodeURIComponent(selectedServer) + "&staff_only=" + staffOnly).then(r => r.json()).then(setMembers).catch(() => {});
+    fetch(apiUrl + "/api/members?server=" + encodeURIComponent(selectedServer) + "&staff_only=" + staffOnly).then(r => r.json()).then((m) => {
+      const newIds = new Set((m || []).map((x: any) => x.id));
+      const added = (m || []).filter((x: any) => !prevMemberIds.has(x.id) && prevMemberIds.size > 0);
+      if (added.length > 0) {
+        if (soundEnabled) playSound("join");
+        if (ttsEnabled) speak(`New member joined: ${added[0].display_name || added[0].name}`);
+        notify(`New member: ${added[0].display_name || added[0].name}`, "info");
+      }
+      setPrevMemberIds(newIds);
+      setMembers(m || []);
+    }).catch(() => {});
   }, [selectedServer, staffOnly, connected, apiUrl]);
 
   const handleLogin = async () => {
@@ -722,8 +764,12 @@ export default function App() {
                   </select>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">Desktop notifications</span>
-                  <button onClick={() => notify("Toggled", "info")} className="px-3 py-1 rounded bg-indigo-500/20 text-indigo-300 text-xs">On</button>
+                  <span className="text-sm">Sound alerts</span>
+                  <button onClick={() => { setSoundEnabled(!soundEnabled); localStorage.setItem("sahara_sound", !soundEnabled ? "on" : "off"); }} className={"px-3 py-1 rounded text-xs " + (soundEnabled ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700/50 text-slate-400")}>{soundEnabled ? "On" : "Off"}</button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">TTS announcements</span>
+                  <button onClick={() => { setTtsEnabled(!ttsEnabled); localStorage.setItem("sahara_tts", !ttsEnabled ? "on" : "off"); }} className={"px-3 py-1 rounded text-xs " + (ttsEnabled ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700/50 text-slate-400")}>{ttsEnabled ? "On" : "Off"}</button>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Auto-refresh interval</span>
