@@ -879,7 +879,6 @@ export default function App() {
                 <button onClick={() => { setTrollSweepActive(false); setTrollSweepMembers(0); }} className="w-full mt-4 px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Close</button>
               </div>
             )}
-          </div>
       {armReminder && isAndre && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
           <div className="glass rounded-2xl p-6 w-96 text-center" onClick={(e) => e.stopPropagation()}>
