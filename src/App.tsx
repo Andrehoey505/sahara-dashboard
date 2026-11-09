@@ -182,6 +182,8 @@ export default function App() {
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   const [edLastUpdate, setEdLastUpdate] = useState("");
   const [edStale, setEdStale] = useState(false);
+  const [edLastFetch, setEdLastFetch] = useState<number>(0);
+  const [edNow, setEdNow] = useState<number>(Date.now());
 
   // Arm care reminder (only for Andre's profile)
   useEffect(() => {
@@ -206,17 +208,33 @@ export default function App() {
           setEdWaits(data.waits);
           if (data.last_updated) setEdLastUpdate(data.last_updated);
           setEdStale(!!data.stale);
+          setEdLastFetch(Date.now());
+          try { localStorage.setItem("sahara_ed_waits", JSON.stringify({ waits: data.waits, last_updated: data.last_updated, fetch: Date.now() })); } catch {}
         } else {
           setEdStale(true);
         }
       } catch {
+        // Dead API fallback: load last known from localStorage
+        try {
+          const cached = JSON.parse(localStorage.getItem("sahara_ed_waits") || "null");
+          if (cached && cached.waits) {
+            setEdWaits(cached.waits);
+            if (cached.last_updated) setEdLastUpdate(cached.last_updated);
+            setEdLastFetch(cached.fetch || 0);
+          }
+        } catch {}
         setEdStale(true);
       }
     };
     fetchEd();
     const interval = setInterval(fetchEd, 60 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [isAndre, loggedIn]);
+  }, [isAndre, loggedIn, apiUrl]);
+
+  useEffect(() => {
+    const t = setInterval(() => setEdNow(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
     const notify = (msg: any, type = "info") => {
     playSound(type);
     const id = Date.now();
@@ -570,7 +588,7 @@ export default function App() {
                     <p className={"text-3xl font-bold " + (edWaits["Royal Victoria"] == null ? "text-slate-500" : edWaits["Royal Victoria"] < 90 ? "text-emerald-400" : edWaits["Royal Victoria"] < 180 ? "text-amber-400" : "text-rose-400")}>{edWaits["Royal Victoria"] ?? "—"}<span className="text-base text-slate-500 ml-1">min</span></p>
                   </div>
                 </div>
-                {edLastUpdate && <p className="text-xs text-slate-400 mt-2" title={edLastUpdate}>{edStale ? "⚠️ Stale — " : "Updated "}{edLastUpdate}</p>}
+                {edLastUpdate && <p className="text-xs text-slate-400 mt-2" title={edLastUpdate}>{edStale ? "⚠️ API offline — last known " + (edWaits.Mater ?? "—") + " min (Mater), " + (edWaits["Royal Victoria"] ?? "—") + " min (RVH)" : "Updated " + (edLastFetch ? Math.max(0, Math.round((edNow - edLastFetch) / 60000)) + " min ago" : edLastUpdate)}</p>}
                 <p className="text-xs text-slate-400 mt-2"><a href="https://www.nidirect.gov.uk/articles/minor-injury-units" target="_blank" rel="noreferrer" className="text-indigo-300 hover:underline">MIUs &amp; Urgent Care Centres</a> are often quieter for non-emergency issues.</p>
                 <details className="mt-3">
                   <summary className="text-xs text-rose-300/90 cursor-pointer hover:text-rose-200">⚠️ Not medical advice — when to go in person</summary>
