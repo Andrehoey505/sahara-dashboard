@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { LayoutDashboard, Activity, Users, Shield, Music, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -197,39 +197,41 @@ export default function App() {
   }, [isAndre, loggedIn, soundEnabled]);
 
   // Live ED waiting times
-  useEffect(() => {
+  const fetchEd = useCallback(async () => {
     if (!isAndre || !loggedIn) return;
-    const fetchEd = async () => {
-      try {
-        const res = await fetch(apiUrl + "/api/ed-waits");
-        if (!res.ok) throw new Error("not ok");
-        const data = await res.json();
-        if (data.waits && Object.keys(data.waits).length) {
-          setEdWaits(data.waits);
-          if (data.last_updated) setEdLastUpdate(data.last_updated);
-          setEdStale(!!data.stale);
-          setEdLastFetch(Date.now());
-          try { localStorage.setItem("sahara_ed_waits", JSON.stringify({ waits: data.waits, last_updated: data.last_updated, fetch: Date.now() })); } catch {}
-        } else {
-          setEdStale(true);
-        }
-      } catch {
-        // Dead API fallback: load last known from localStorage
-        try {
-          const cached = JSON.parse(localStorage.getItem("sahara_ed_waits") || "null");
-          if (cached && cached.waits) {
-            setEdWaits(cached.waits);
-            if (cached.last_updated) setEdLastUpdate(cached.last_updated);
-            setEdLastFetch(cached.fetch || 0);
-          }
-        } catch {}
+    try {
+      const res = await fetch(apiUrl + "/api/ed-waits");
+      if (!res.ok) throw new Error("not ok");
+      const data = await res.json();
+      if (data.waits && Object.keys(data.waits).length) {
+        setEdWaits(data.waits);
+        if (data.last_updated) setEdLastUpdate(data.last_updated);
+        setEdStale(!!data.stale);
+        setEdLastFetch(Date.now());
+        try { localStorage.setItem("sahara_ed_waits", JSON.stringify({ waits: data.waits, last_updated: data.last_updated, fetch: Date.now() })); } catch {}
+      } else {
         setEdStale(true);
       }
-    };
+    } catch {
+      // Dead API fallback: load last known from localStorage
+      try {
+        const cached = JSON.parse(localStorage.getItem("sahara_ed_waits") || "null");
+        if (cached && cached.waits) {
+          setEdWaits(cached.waits);
+          if (cached.last_updated) setEdLastUpdate(cached.last_updated);
+          setEdLastFetch(cached.fetch || 0);
+        }
+      } catch {}
+      setEdStale(true);
+    }
+  }, [isAndre, loggedIn, apiUrl]);
+
+  useEffect(() => {
+    if (!isAndre || !loggedIn) return;
     fetchEd();
     const interval = setInterval(fetchEd, 60 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [isAndre, loggedIn, apiUrl]);
+  }, [isAndre, loggedIn, fetchEd]);
 
   useEffect(() => {
     const t = setInterval(() => setEdNow(Date.now()), 60000);
@@ -588,8 +590,8 @@ export default function App() {
                     <p className={"text-3xl font-bold " + (edWaits["Royal Victoria"] == null ? "text-slate-500" : edWaits["Royal Victoria"] < 90 ? "text-emerald-400" : edWaits["Royal Victoria"] < 180 ? "text-amber-400" : "text-rose-400")}>{edWaits["Royal Victoria"] ?? "—"}<span className="text-base text-slate-500 ml-1">min</span></p>
                   </div>
                 </div>
-                {edLastUpdate && <p className="text-xs text-slate-400 mt-2" title={edLastUpdate}>{edStale ? "⚠️ API offline — last known " + (edWaits.Mater ?? "—") + " min (Mater), " + (edWaits["Royal Victoria"] ?? "—") + " min (RVH)" : "Updated " + (edLastFetch ? Math.max(0, Math.round((edNow - edLastFetch) / 60000)) + " min ago" : edLastUpdate)}</p>}
-                <p className="text-xs text-slate-400 mt-2"><a href="https://www.nidirect.gov.uk/articles/minor-injury-units" target="_blank" rel="noreferrer" className="text-indigo-300 hover:underline">MIUs &amp; Urgent Care Centres</a> are often quieter for non-emergency issues.</p>
+                {edLastUpdate || edStale ? <p className="text-xs text-slate-400 mt-2" title={edLastUpdate || ""}>{edStale ? "⚠️ API offline — last known " + (edWaits.Mater ?? "—") + " min (Mater), " + (edWaits["Royal Victoria"] ?? "—") + " min (RVH)" : "Updated " + (edLastFetch ? Math.max(0, Math.round((edNow - edLastFetch) / 60000)) + " min ago" : edLastUpdate)}</p> : <p className="text-xs text-slate-400 mt-2">⚠️ API offline — no cached data yet</p>}
+                <p className="text-xs text-slate-400 mt-2"><a href="https://www.nidirect.gov.uk/articles/minor-injuries-units" target="_blank" rel="noreferrer" className="text-indigo-300 hover:underline">MIUs &amp; Urgent Care Centres</a> are often quieter for non-emergency issues.</p>
                 <details className="mt-3">
                   <summary className="text-xs text-rose-300/90 cursor-pointer hover:text-rose-200">⚠️ Not medical advice — when to go in person</summary>
                   <p className="text-xs text-rose-300/80 mt-2">New numbness/tingling in fingers, can't lift the arm, pain getting sharper instead of settling, or visible swelling/deformity → go in person, don't check the app.</p>
