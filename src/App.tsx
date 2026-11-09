@@ -199,25 +199,16 @@ export default function App() {
     if (!isAndre || !loggedIn) return;
     const fetchEd = async () => {
       try {
-        let html = "";
-        try {
-          const { Command } = await import("@tauri-apps/plugin-shell");
-          const out = await Command.create("curl", ["-sL", "https://www.nidirect.gov.uk/articles/emergency-department-waiting-times"]).execute();
-          html = out.stdout || "";
-        } catch {
-          const res = await fetch("https://www.nidirect.gov.uk/articles/emergency-department-waiting-times");
-          html = await res.text();
+        const res = await fetch(apiUrl + "/api/ed-waits");
+        if (!res.ok) throw new Error("not ok");
+        const data = await res.json();
+        if (data.waits && Object.keys(data.waits).length) {
+          setEdWaits(data.waits);
+          if (data.last_updated) setEdLastUpdate(data.last_updated);
+          setEdStale(!!data.stale);
+        } else {
+          setEdStale(true);
         }
-        const out: any = {};
-        for (const [label, key] of [["Mater Hospital", "Mater"], ["Royal Victoria Hospital", "Royal Victoria"]]) {
-          const m = html.match(new RegExp(label.replace(/ /g, "\\s+") + "[\\s\\S]*?Emergency Department[\\s\\S]*?(\\d+)\\s*mins", "i"));
-          if (m) out[key] = parseInt(m[1]);
-        }
-        const lu = html.match(/Last updated:\s*([^.]*?)(?:\.|$)/i);
-        const ts = lu ? lu[1].trim() : "";
-        if (ts) setEdLastUpdate(ts);
-        if (Object.keys(out).length) { setEdWaits(out); setEdStale(false); }
-        else setEdStale(true);
       } catch {
         setEdStale(true);
       }
