@@ -179,8 +179,9 @@ export default function App() {
 
   const isAndre = userId === "264680643013771265";
   const [armReminder, setArmReminder] = useState(false);
-  const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number }>({});
+  const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   const [edLastUpdate, setEdLastUpdate] = useState("");
+  const [edStale, setEdStale] = useState(false);
 
   // Arm care reminder (only for Andre's profile)
   useEffect(() => {
@@ -189,7 +190,7 @@ export default function App() {
       setArmReminder(true);
       if (soundEnabled) playSound("join");
       speak("Time to take your arm out of the sling and do gentle wrist movements.");
-    }, 45 * 60 * 1000); // every 45 min
+    }, 2 * 60 * 60 * 1000); // every 2 hours, gentle
     return () => clearInterval(interval);
   }, [isAndre, loggedIn, soundEnabled]);
 
@@ -205,12 +206,16 @@ export default function App() {
           const m = html.match(new RegExp(label.replace(/ /g, "\\s+") + "[\\s\\S]*?Emergency Department[\\s\\S]*?(\\d+)\\s*mins", "i"));
           if (m) out[key] = parseInt(m[1]);
         }
-        setEdWaits(out);
-        setEdLastUpdate(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
-      } catch {}
+        const lu = html.match(/Last updated:\s*([^.]*?)(?:\.|$)/i);
+        const ts = lu ? lu[1].trim() : "";
+        if (ts) setEdLastUpdate(ts);
+        if (Object.keys(out).length) { setEdWaits(out); setEdStale(false); }
+      } catch {
+        setEdStale(true);
+      }
     };
     fetchEd();
-    const interval = setInterval(fetchEd, 5 * 60 * 1000);
+    const interval = setInterval(fetchEd, 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isAndre, loggedIn]);
     const notify = (msg: any, type = "info") => {
@@ -554,16 +559,19 @@ export default function App() {
               <div className="glass rounded-xl p-4 mt-4">
                 <h3 className="font-semibold mb-3 flex items-center gap-2">🏥 ED Waiting Times (Belfast)</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 rounded-lg bg-slate-800/40">
-                    <p className="text-xs text-slate-400">Mater Hospital</p>
+                  <div className={"p-3 rounded-lg bg-slate-800/40 " + (edStale ? "opacity-50" : "")}>
+                    <p className="text-xs text-slate-400">Mater Hospital — typical wait</p>
                     <p className="text-2xl font-bold text-amber-300">{edWaits.Mater ?? "—"} <span className="text-sm text-slate-500">min</span></p>
                   </div>
-                  <div className="p-3 rounded-lg bg-slate-800/40">
-                    <p className="text-xs text-slate-400">Royal Victoria Hospital</p>
+                  <div className={"p-3 rounded-lg bg-slate-800/40 " + (edStale ? "opacity-50" : "")}>
+                    <p className="text-xs text-slate-400">Royal Victoria — typical wait</p>
                     <p className="text-2xl font-bold text-amber-300">{edWaits["Royal Victoria"] ?? "—"} <span className="text-sm text-slate-500">min</span></p>
                   </div>
                 </div>
-                {edLastUpdate && <p className="text-xs text-slate-500 mt-2">Updated {edLastUpdate} · refreshes every 5 min</p>}
+                {edLastUpdate && <p className="text-xs text-slate-500 mt-2">{edStale ? "⚠️ Stale — " : ""}Last updated: {edLastUpdate} · median arrival-to-clinician, by triage priority</p>}
+                <p className="text-xs text-slate-400 mt-2">MIUs &amp; Urgent Care Centres are often quieter for non-emergency issues.</p>
+                <a href="tel:03001234999" className="mt-3 inline-block px-3 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 text-xs hover:bg-indigo-500/30">📞 Phone First: 0300 123 4 999</a>
+                <p className="text-xs text-rose-300/80 mt-3">⚠️ Not medical advice. Go in person if: new numbness/tingling in fingers, can't lift the arm, pain getting sharper, or visible swelling/deformity.</p>
               </div>
             )}
           </motion.div>
@@ -876,9 +884,12 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
           <div className="glass rounded-2xl p-6 w-96 text-center" onClick={(e) => e.stopPropagation()}>
             <div className="text-4xl mb-3">💪</div>
-            <h3 className="font-bold text-lg mb-2">Arm Care Reminder</h3>
-            <p className="text-sm text-slate-300 mb-4">Time to take your arm out of the sling and do gentle wrist movements. Slow rotations, stop at pain.</p>
-            <button onClick={() => setArmReminder(false)} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Got it</button>
+            <h3 className="font-bold text-lg mb-2">Gentle Arm Care</h3>
+            <p className="text-sm text-slate-300 mb-4">Time to take your arm out of the sling for a bit — gentle shoulder/elbow movement, then back in. Ice ~10 min if sore.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setArmReminder(false)} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Done</button>
+              <button onClick={() => { setArmReminder(false); setTimeout(() => setArmReminder(true), 30 * 60 * 1000); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">Snooze 30m</button>
+            </div>
           </div>
         </div>
       )}
