@@ -55,6 +55,25 @@ export default function App() {
     localStorage.setItem("sahara_theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        const update = await check();
+        if (update?.available) {
+          const ok = window.confirm(`Update ${update.version} available. Install now?`);
+          if (ok) {
+            await update.downloadAndInstall();
+            await relaunch();
+          }
+        }
+      } catch (e) {
+        // Not running in Tauri or no update endpoint configured — ignore
+      }
+    })();
+  }, []);
+
   const [trollSweepActive, setTrollSweepActive] = useState(false);
   const [trollSweepProgress, setTrollSweepProgress] = useState(0);
   const [trollSweepServer, setTrollSweepServer] = useState("");
