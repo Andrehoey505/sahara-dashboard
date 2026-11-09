@@ -556,20 +556,26 @@ export default function App() {
             </div>
             {isAndre && (
               <div className="glass rounded-xl p-4 mt-4">
-                <h3 className="font-semibold mb-3 flex items-center gap-2">🏥 ED Waiting Times (Belfast)</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className={"p-3 rounded-lg bg-slate-800/40 " + (edStale ? "opacity-50" : "")}>
-                    <p className="text-xs text-slate-400">Mater Hospital — typical wait</p>
-                    <p className="text-2xl font-bold text-amber-300">{edWaits.Mater ?? "—"} <span className="text-sm text-slate-500">min</span></p>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold flex items-center gap-2">🏥 ED Waiting Times (Belfast)</h3>
+                  <button onClick={fetchEd} className="text-xs px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">↻ Refresh</button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={"p-4 rounded-xl " + (edStale ? "bg-slate-800/60" : "bg-gradient-to-br from-slate-800/60 to-slate-900/40")}>
+                    <p className="text-xs text-slate-300 mb-1">Mater — typical (median) wait</p>
+                    <p className={"text-4xl font-bold " + (edWaits.Mater == null ? "text-slate-500" : edWaits.Mater < 90 ? "text-emerald-400" : edWaits.Mater < 180 ? "text-amber-400" : "text-rose-400")}>{edWaits.Mater ?? "—"}<span className="text-base text-slate-500 ml-1">min</span></p>
                   </div>
-                  <div className={"p-3 rounded-lg bg-slate-800/40 " + (edStale ? "opacity-50" : "")}>
-                    <p className="text-xs text-slate-400">Royal Victoria — typical wait</p>
-                    <p className="text-2xl font-bold text-amber-300">{edWaits["Royal Victoria"] ?? "—"} <span className="text-sm text-slate-500">min</span></p>
+                  <div className={"p-4 rounded-xl " + (edStale ? "bg-slate-800/60" : "bg-slate-800/40")}>
+                    <p className="text-xs text-slate-300 mb-1">Royal Victoria — typical (median) wait</p>
+                    <p className={"text-3xl font-bold " + (edWaits["Royal Victoria"] == null ? "text-slate-500" : edWaits["Royal Victoria"] < 90 ? "text-emerald-400" : edWaits["Royal Victoria"] < 180 ? "text-amber-400" : "text-rose-400")}>{edWaits["Royal Victoria"] ?? "—"}<span className="text-base text-slate-500 ml-1">min</span></p>
                   </div>
                 </div>
-                {edLastUpdate && <p className="text-xs text-slate-500 mt-2">{edStale ? "⚠️ Stale — " : ""}Last updated: {edLastUpdate} · median arrival-to-clinician, by triage priority</p>}
-                <p className="text-xs text-slate-400 mt-2">MIUs &amp; Urgent Care Centres are often quieter for non-emergency issues.</p>
-                <p className="text-xs text-rose-300/80 mt-3">⚠️ Not medical advice. Go in person if: new numbness/tingling in fingers, can't lift the arm, pain getting sharper, or visible swelling/deformity.</p>
+                {edLastUpdate && <p className="text-xs text-slate-400 mt-2" title={edLastUpdate}>{edStale ? "⚠️ Stale — " : "Updated "}{edLastUpdate}</p>}
+                <p className="text-xs text-slate-400 mt-2"><a href="https://www.nidirect.gov.uk/articles/minor-injury-units" target="_blank" rel="noreferrer" className="text-indigo-300 hover:underline">MIUs &amp; Urgent Care Centres</a> are often quieter for non-emergency issues.</p>
+                <details className="mt-3">
+                  <summary className="text-xs text-rose-300/90 cursor-pointer hover:text-rose-200">⚠️ Not medical advice — when to go in person</summary>
+                  <p className="text-xs text-rose-300/80 mt-2">New numbness/tingling in fingers, can't lift the arm, pain getting sharper instead of settling, or visible swelling/deformity → go in person, don't check the app.</p>
+                </details>
               </div>
             )}
           </motion.div>
@@ -881,8 +887,8 @@ export default function App() {
         </div>
       )}
       {armReminder && isAndre && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
-          <div className="glass rounded-2xl p-6 w-96 text-center" onClick={(e) => e.stopPropagation()}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-2xl p-6 w-96 text-center" onClick={(e) => e.stopPropagation()}>
             <div className="text-4xl mb-3">💪</div>
             <h3 className="font-bold text-lg mb-2">Gentle Arm Care</h3>
             <p className="text-sm text-slate-300 mb-4">Time to take your arm out of the sling for a bit — gentle shoulder/elbow movement, then back in. Ice ~10 min if sore.</p>
@@ -890,8 +896,8 @@ export default function App() {
               <button onClick={() => setArmReminder(false)} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Done</button>
               <button onClick={() => { setArmReminder(false); setTimeout(() => setArmReminder(true), 30 * 60 * 1000); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">Snooze 30m</button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
     </div>
   );
