@@ -11,7 +11,12 @@ import {
   playPlaylist,
   clearToken,
   completeAuthFromUrl,
+  getDevices,
+  transferTo,
+  createPlayer,
+  currentAccessToken,
   type NowPlaying,
+  type Device,
 } from "../lib/spotify";
 import type { AppSettings } from "./SetupScreen";
 
@@ -43,6 +48,9 @@ export default function SpotifyScreen({ settings, notify }: Props) {
     }
   });
   const [pastedUrl, setPastedUrl] = useState("");
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [deviceId, setDeviceId] = useState<string>("");
+  const [playerReady, setPlayerReady] = useState(false);
 
   const clientId = settings.spotifyClientId;
   const configured = !!clientId;
@@ -52,6 +60,9 @@ export default function SpotifyScreen({ settings, notify }: Props) {
     try {
       const np = await getNowPlaying(clientId);
       setNow(np);
+      const ds = await getDevices(clientId).catch(() => [] as Device[]);
+      setDevices(ds);
+      setDeviceId((cur) => cur || ds.find((d) => d.is_active)?.id || ds[0]?.id || "");
       setError("");
     } catch (e: any) {
       setError(e?.message || "Couldn't reach Spotify");
@@ -234,6 +245,113 @@ export default function SpotifyScreen({ settings, notify }: Props) {
           {error}
         </div>
       )}
+
+      {/* This app as a playback device */}
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-medium">Play from this app</h3>
+            <p className="text-sm text-slate-400 mt-1 max-w-[65ch]">
+              Makes Sahara appear as a Spotify device, so audio comes out of this window
+              instead of needing Spotify open elsewhere.
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              if (playerReady) return;
+              setBusy("sdk");
+              try {
+                const accessToken = await currentAccessToken(clientId);
+                const player = await createPlayer(clientId, accessToken);
+                player.addListener("ready", ({ device_id }: any) => {
+                  setPlayerReady(true);
+                  setDevices((d) => [
+                    ...d.filter((x) => x.id !== device_id),
+                    { id: device_id, name: "Sahara Dashboard", type: "Computer", is_active: false },
+                  ]);
+                  notify("Sahara is now a Spotify device", "success");
+                });
+                player.addListener("not_ready", () => setPlayerReady(false));
+                player.addListener("initialization_error", ({ message }: any) =>
+                  notify(message || "Playback init failed", "error")
+                );
+                player.addListener("authentication_error", () =>
+                  notify("Spotify rejected the session — reconnect", "error")
+                );
+                player.addListener("account_error", () =>
+                  notify("Playback needs Spotify Premium", "error")
+                );
+                const ok = await player.connect();
+                if (!ok) throw new Error("Couldn't start the player");
+              } catch (e: any) {
+                notify(e?.message || "Couldn't start in-app playback", "error");
+              } finally {
+                setBusy(null);
+              }
+            }}
+            disabled={busy !== null || playerReady}
+            className={
+              btn +
+              " shrink-0 px-4 py-2 text-sm " +
+              (playerReady
+                ? "bg-emerald-500/15 text-emerald-300"
+                : "bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25")
+            }
+          >
+            {playerReady ? "Ready" : busy === "sdk" ? "Starting…" : "Enable"}
+          </button>
+        </div>
+        {playerReady && (
+          <p className="text-xs text-emerald-300 mt-3">
+            Pick &quot;Sahara Dashboard&quot; from the device list below to play through the app.
+          </p>
+        )}
+      </div>
+
+      {/* Device picker */}
+      <div className="glass rounded-2xl p-5">
+        <h3 className="font-medium mb-1">Playback device</h3>
+        <p className="text-sm text-slate-400 mb-4 max-w-[65ch]">
+          Spotify can only play on a device that&apos;s already online. Pick one here to move
+          playback to it.
+        </p>
+        {devices.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            No devices online. Open Spotify on your phone or Mac, or enable in-app playback above.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {devices.map((d) => (
+              <button
+                key={d.id}
+                onClick={async () => {
+                  setBusy(d.id);
+                  try {
+                    await transferTo(clientId, d.id, true);
+                    setDeviceId(d.id);
+                    notify(`Playing on ${d.name}`, "success");
+                    await refresh();
+                  } catch (e: any) {
+                    notify(e?.message || "Couldn't switch device", "error");
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+                disabled={busy !== null}
+                className={
+                  "px-3 py-2 rounded-lg text-sm border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 " +
+                  (d.is_active || d.id === deviceId
+                    ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
+                    : "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-700/50")
+                }
+              >
+                {d.name}
+                <span className="text-xs text-slate-500 ml-2">{d.type.toLowerCase()}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Now playing */}
       <div className="glass rounded-2xl p-5">

@@ -285,3 +285,104 @@ export async function completeAuthFromUrl(
   }
   return completeAuth(clientId, redirectUri, code, state);
 }
+
+export type Device = {
+  id: string;
+  name: string;
+  type: string;
+  is_active: boolean;
+  volume_percent?: number;
+};
+
+/** Spotify Connect devices currently online for this account. */
+export async function getDevices(clientId: string): Promise<Device[]> {
+  const data = await authed(clientId, "/me/player/devices");
+  return (data?.devices || []).map((d: any) => ({
+    id: d.id,
+    name: d.name,
+    type: d.type,
+    is_active: !!d.is_active,
+    volume_percent: d.volume_percent,
+  }));
+}
+
+/** Move playback to a device. `play: true` starts playing immediately. */
+export async function transferTo(clientId: string, deviceId: string, play = true) {
+  await authed(clientId, "/me/player", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_ids: [deviceId], play }),
+  });
+}
+
+export async function setVolume(clientId: string, percent: number, deviceId?: string) {
+  const q = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
+  await authed(clientId, `/me/player/volume${q}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ volume_percent: Math.round(percent) }),
+  });
+}
+
+// ─── Web Playback SDK ─────────────────────────────────────────
+//
+// Turns the app itself into a Spotify Connect device, so audio comes out of
+// this window rather than needing Spotify open elsewhere. The SDK is loaded
+// from Spotify's CDN and needs a page served over https or localhost — which
+// the Tauri webview provides via its custom protocol on macOS.
+
+declare global {
+  interface Window {
+    Spotify?: any;
+    onSpotifyWebPlaybackSDKReady?: () => void;
+  }
+}
+
+let sdkPromise: Promise<any> | null = null;
+
+/** Load the Web Playback SDK once and resolve with window.Spotify. */
+export function loadPlaybackSdk(): Promise<any> {
+  if (sdkPromise) return sdkPromise;
+  sdkPromise = new Promise((resolve, reject) => {
+    if (window.Spotify) return resolve(window.Spotify);
+    window.onSpotifyWebPlaybackSDKReady = () => resolve(window.Spotify);
+    const script = document.createElement("script");
+    script.src = "https://sdk.scdn.co/spotify-player.js";
+    script.async = true;
+    script.onerror = () => reject(new Error("Couldn't load the Spotify playback SDK"));
+    document.head.appendChild(script);
+    setTimeout(() => reject(new Error("Spotify playback SDK timed out")), 15000);
+  });
+  return sdkPromise;
+}
+
+export type SdkPlayer = {
+  connect: () => Promise<boolean>;
+  disconnect: () => void;
+  addListener: (event: string, cb: (state: any) => void) => void;
+  getCurrentState?: () => Promise<any>;
+};
+
+/** Create a Connect device backed by this app window. */
+export async function createPlayer(
+  clientId: string,
+  token: string,
+  name = "Sahara Dashboard"
+): Promise<SdkPlayer> {
+  const Spotify = await loadPlaybackSdk();
+  const player: SdkPlayer = new Spotify.Player({
+    name,
+    getOAuthToken: (cb: (t: string) => void) => cb(token),
+    volume: 0.6,
+  });
+  return player;
+}
+
+
+/** Current access token, refreshed if needed. Used by the playback SDK. */
+export async function currentAccessToken(clientId: string): Promise<string> {
+  let token = loadToken();
+  if (!token) throw new Error("Not connected");
+  if (Date.now() > token.expires_at - 60000) token = await refresh(clientId, token);
+  return token.access_token;
+}
