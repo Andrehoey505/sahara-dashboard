@@ -184,7 +184,7 @@ export default function App() {
   const [sleepMode, setSleepMode] = useState(false);
   useEffect(() => {
     if (!isAndre || !loggedIn || !slingOn || sleepMode) return;
-    const show = () => { setArmReminder(true); try { (window as any).speechSynthesis?.speak(new SpeechSynthesisUtterance("Time to take your arm out of the sling for a few minutes.")); } catch {} };
+    const show = () => { setArmReminder(true); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/arm_reminder.ogg'); b.play().catch(()=>{}); }, 700); } catch {} };
     const t = setTimeout(show, 90 * 60 * 1000);
     return () => clearTimeout(t);
   }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
@@ -499,7 +499,7 @@ export default function App() {
           <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Sign Out</button>
           </div>
           {isAndre && (
-          <button onClick={() => { if (!sleepMode) { setSleepMode(true); setArmReminder(false); notify("Sleep mode: remove sling before bed! ⚠️", "error"); } else { setSleepMode(false); setSlingOn(true); localStorage.setItem("sahara_sling","on"); notify("Sling mode re-enabled", "success"); } }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up (sling on)" : "🌙 Going to sleep"}</button>
+          <button onClick={() => { if (!sleepMode) { setSleepMode(true); setArmReminder(false); notify("Sleep mode: remove sling before bed! ⚠️", "error"); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/sleep_warning.ogg'); b.play().catch(()=>{}); }, 700); } catch {} } else { setSleepMode(false); setSlingOn(true); localStorage.setItem("sahara_sling","on"); notify("Sling mode re-enabled", "success"); } }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up (sling on)" : "🌙 Going to sleep"}</button>
           )}
         </div>
         {!pinSet && (
