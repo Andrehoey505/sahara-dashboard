@@ -335,36 +335,35 @@ export default function App() {
               drops.push({key:'Royal Victoria', start:'/sounds/royal_drop_start.ogg', amount: prev["Royal Victoria"] - data.waits["Royal Victoria"]});
             }
             if (drops.length) {
-              const a0 = new Audio('/sounds/alarm_beep.wav');
-              a0.play().catch(()=>{});
-              // Build sequential playback queue
-              const queue: ({type:'audio';src:string} | {type:'tts';text:string})[] = [];
-              for (const d of drops) {
-                queue.push({type:'audio', src:d.start});
-                queue.push({type:'tts', text:String(d.amount)});
-                queue.push({type:'audio', src:'/sounds/minutes_end.ogg'});
-              }
-              const playNext = (i: number) => {
-                if (i >= queue.length) return;
-                const step = queue[i];
-                if (step.type === 'audio') {
-                  const x = new Audio(step.src);
-                  x.onended = () => playNext(i+1);
-                  x.play().catch(()=>{ playNext(i+1); });
-                } else {
-                  // Go through the shared speech queue rather than calling
-                  // speechSynthesis directly, so this sequence can't cut across
-                  // an announcement that's already playing. The next audio step
-                  // starts once the line has been handed over; the remaining
-                  // "minutes" clip follows the number, so a short gap is right.
+              // Play a sound clip and resolve when it finishes (or immediately
+              // if it can't play, so a blocked beep can't silence the rest).
+              const playClip = (src: string) =>
+                new Promise<void>((resolve) => {
                   try {
-                    speakText(step.text);
-                    setTimeout(() => playNext(i + 1), 200);
-                  } catch { playNext(i+1); }
+                    const audio = new Audio(src);
+                    audio.onended = () => resolve();
+                    audio.onerror = () => resolve();
+                    const p = audio.play();
+                    if (p) p.catch(() => resolve());
+                    // Backstop: a clip that never fires onended must not wedge
+                    // the sequence.
+                    setTimeout(resolve, 8000);
+                  } catch {
+                    resolve();
+                  }
+                });
+
+              // Sequence: beep → Sahara's "wait dropped" clip → number (mac
+              // TTS) → Sahara's "minutes" clip. Each step waits for the last.
+              const runSequence = async () => {
+                await playClip('/sounds/alarm_beep.wav');
+                for (const d of drops) {
+                  await playClip(d.start);
+                  await speakText(String(d.amount), settings.ttsVoice !== "off");
+                  await playClip('/sounds/minutes_end.ogg');
                 }
               };
-              a0.onended = () => playNext(0);
-              a0.onerror = () => playNext(0);
+              runSequence().catch(() => {});
             }
           }
         } catch {}

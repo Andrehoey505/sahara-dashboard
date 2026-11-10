@@ -113,7 +113,7 @@ function preferredVoice(): SpeechSynthesisVoice | undefined {
  * - The queue is capped, and when it overflows the oldest waiting line goes
  *   first. A burst of twenty is less useful than the latest few.
  */
-type QueuedSpeech = { text: string; rate: number; pitch: number; at: number };
+type QueuedSpeech = { text: string; rate: number; pitch: number; at: number; resolve?: () => void };
 
 const DUPLICATE_WINDOW_MS = 2000;
 const MAX_QUEUE = 8;
@@ -136,6 +136,7 @@ function dequeueAndSpeak() {
     if (settled) return;
     settled = true;
     speaking = false;
+    next.resolve?.();
     dequeueAndSpeak();
   };
 
@@ -155,7 +156,9 @@ function dequeueAndSpeak() {
     const backstop = Math.min(60000, 2000 + next.text.length * 90);
     setTimeout(() => {
       if (!settled) {
+        settled = true;
         speaking = false;
+        next.resolve?.();
         dequeueAndSpeak();
       }
     }, backstop);
@@ -171,22 +174,28 @@ function dequeueAndSpeak() {
  * Lines are queued, not played over the top of each other — one ends, the next
  * begins, in the order they were requested.
  */
-export function speak(text: string, enabled = true, rate = 0.95, pitch = 0.95) {
-  if (!enabled) return;
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+export function speak(text: string, enabled = true, rate = 0.95, pitch = 0.95): Promise<void> {
+  const noop = Promise.resolve();
+  if (!enabled) return noop;
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return noop;
   const line = (text || "").trim();
-  if (!line) return;
+  if (!line) return noop;
 
   const now = Date.now();
   const isDuplicate =
     speechQueue.some((q) => q.text === line && now - q.at < DUPLICATE_WINDOW_MS) ||
     (speaking && lastSpoken.text === line && now - lastSpoken.at < DUPLICATE_WINDOW_MS);
-  if (isDuplicate) return;
+  if (isDuplicate) return noop;
 
   if (speechQueue.length >= MAX_QUEUE) speechQueue.shift();
-  speechQueue.push({ text: line, rate, pitch, at: now });
-  lastSpoken = { text: line, at: now };
-  dequeueAndSpeak();
+
+  // Resolve when this specific line finishes, so callers can sequence other
+  // sounds around it rather than guessing at a delay.
+  return new Promise<void>((resolve) => {
+    speechQueue.push({ text: line, rate, pitch, at: now, resolve });
+    lastSpoken = { text: line, at: now };
+    dequeueAndSpeak();
+  });
 }
 
 /** Stop speaking and drop anything still waiting. */
