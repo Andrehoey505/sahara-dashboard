@@ -19,6 +19,7 @@ import {
   type Device,
 } from "../lib/spotify";
 import type { AppSettings } from "./SetupScreen";
+import { openExternal, readFromClipboard } from "../lib/native";
 
 type Props = {
   settings: AppSettings;
@@ -89,7 +90,10 @@ export default function SpotifyScreen({ settings, notify }: Props) {
       return;
     }
     const url = await beginAuth(clientId, settings.spotifyRedirectUri);
-    window.location.href = url;
+    // The webview can't navigate to an external site — hand off to the browser,
+    // then come back and paste the callback URL.
+    await openExternal(url);
+    setPasteMode(true);
   };
 
   const doTransport = async (action: "play" | "pause" | "next" | "previous") => {
@@ -170,6 +174,20 @@ export default function SpotifyScreen({ settings, notify }: Props) {
               After approving, your browser lands on a page that can&apos;t load — that&apos;s
               expected. Copy its full address and paste it here.
             </p>
+            <button
+              onClick={async () => {
+                const text = await readFromClipboard();
+                if (text) {
+                  setPastedUrl(text);
+                  notify("Pasted from clipboard", "success");
+                } else {
+                  notify("Nothing in the clipboard", "error");
+                }
+              }}
+              className="mb-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-700/50 text-slate-300 hover:bg-slate-600/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
+            >
+              Paste from clipboard
+            </button>
             <textarea
               value={pastedUrl}
               onChange={(e) => setPastedUrl(e.target.value)}
