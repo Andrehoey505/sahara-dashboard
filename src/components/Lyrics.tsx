@@ -74,13 +74,34 @@ export default function Lyrics({
 
   // Scroll the active line into view. Scrolls the container rather than using
   // scrollIntoView, which can also scroll the page behind the overlay.
+  // Autoscroll: keep the active line centred, and keep it there as the
+  // container resizes (window resize, lyrics toggle) rather than only when the
+  // active line changes.
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
+  const lastScrolled = useRef<number>(-1);
+
+  const scrollToActive = (force = false) => {
     const container = scrollRef.current;
     const el = activeRef.current;
     if (!container || !el) return;
+    if (!force && lastScrolled.current === activeIndex) return;
+    lastScrolled.current = activeIndex;
     const target = el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
     container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToActive(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => scrollToActive(true));
+    ro.observe(container);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex]);
 
   if (!track) return null;
@@ -124,8 +145,13 @@ export default function Lyrics({
           ref={scrollRef}
           className={
             "overflow-y-auto pr-1 scroll-smooth " +
-            (fullscreen ? "h-full" : large ? "h-full" : "max-h-72")
+            (fullscreen
+              ? "h-full [mask-image:linear-gradient(to_bottom,transparent,black_12%,black_88%,transparent)]"
+              : large
+                ? "h-full"
+                : "max-h-72")
           }
+          style={fullscreen ? { paddingTop: "30vh", paddingBottom: "30vh" } : undefined}
         >
           {data.synced.map((line, i) => {
             const d = distance(i);
