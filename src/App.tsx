@@ -12,6 +12,7 @@ import CatchUpBanner from "./components/CatchUpBanner";
 import SpotifyScreen from "./components/SpotifyScreen";
 import ActivitiesScreen from "./components/ActivitiesScreen";
 import ReactionRoles from "./components/ReactionRoles";
+import { SCREENS } from "./lib/screens";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 
@@ -513,6 +514,20 @@ export default function App() {
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
+  // Dev-time safety net: every nav item must have a screen defined below.
+  // (A screen that exists in NAV but has no render block used to fail silently,
+  // showing a heading with nothing under it.)
+  if ((import.meta as any).env?.DEV) {
+    NAV.forEach(({ id, label }) => {
+      if (!(SCREENS as readonly string[]).includes(id)) {
+        console.warn(
+          `[sahara] "${label}" (${id}) is in the nav but has no screen. ` +
+            "Add it to SCREENS and give it a render block."
+        );
+      }
+    });
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       {contextViolation && (
@@ -716,11 +731,7 @@ export default function App() {
                 {loading && <div className="mt-4 flex justify-center"><RefreshCw className="w-5 h-5 animate-spin text-indigo-400" /></div>}
               </div>
             </div>
-            {isAndre && (
-              <div className="mt-4">
-                <EdWaits apiUrl={apiUrl} variant="card" />
-              </div>
-            )}
+
           </motion.div>
         )}
 
@@ -857,16 +868,10 @@ export default function App() {
           </motion.div>
         )}
 
-        {[
-          "members",
-          "moderation",
-          "music",
-          "settings",
-          "spotify",
-          "trollwatch",
-          "activities",
-          "reactionroles",
-        ].includes(active) && (
+        {/* Every screen renders unconditionally; each block below checks `active`
+            itself. The old whitelist here meant a new screen rendered blank
+            until someone remembered to add it to the list. */}
+        {(
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             {active === "members" && (
               <MembersScreen
