@@ -179,12 +179,15 @@ export default function App() {
 
   const isAndre = userId === "264680643013771265";
   const [armReminder, setArmReminder] = useState(false);
+  const [slingOn, setSlingOn] = useState(() => localStorage.getItem("sahara_sling") !== "off");
+  const [slingStatusAsked, setSlingStatusAsked] = useState(() => localStorage.getItem("sahara_sling_asked") === "1");
+  const [sleepMode, setSleepMode] = useState(false);
   useEffect(() => {
-    if (!isAndre || !loggedIn) return;
-    const show = () => setArmReminder(true);
-    const t = setTimeout(show, 2 * 60 * 60 * 1000);
+    if (!isAndre || !loggedIn || !slingOn || sleepMode) return;
+    const show = () => { setArmReminder(true); try { (window as any).speechSynthesis?.speak(new SpeechSynthesisUtterance("Time to take your arm out of the sling for a few minutes.")); } catch {} };
+    const t = setTimeout(show, 90 * 60 * 1000);
     return () => clearTimeout(t);
-  }, [isAndre, loggedIn]);
+  }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   const [edLastUpdate, setEdLastUpdate] = useState("");
   const [edStale, setEdStale] = useState(false);
@@ -492,9 +495,12 @@ export default function App() {
             </div>
           </div>
           <div className="flex gap-2 mt-2">
-            <button onClick={() => { setLocked(true); notify("Locked", "info"); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Lock</button>
-            <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Sign Out</button>
+          <button onClick={() => { setLocked(true); notify("Locked", "info"); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Lock</button>
+          <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Sign Out</button>
           </div>
+          {isAndre && (
+          <button onClick={() => { if (!sleepMode) { setSleepMode(true); setArmReminder(false); notify("Sleep mode: remove sling before bed! ⚠️", "error"); } else { setSleepMode(false); setSlingOn(true); localStorage.setItem("sahara_sling","on"); notify("Sling mode re-enabled", "success"); } }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up (sling on)" : "🌙 Going to sleep"}</button>
+          )}
         </div>
         {!pinSet && (
           <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
@@ -911,6 +917,19 @@ export default function App() {
             )}
           </div>
         </div>
+      )}
+      {isAndre && loggedIn && !slingStatusAsked && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-2xl p-6 w-96 text-center">
+            <div className="text-4xl mb-3">🦴</div>
+            <h3 className="font-bold text-lg mb-2">Sling status?</h3>
+            <p className="text-sm text-slate-300 mb-4">Are you wearing the sling right now? This controls the reminders.</p>
+            <div className="flex gap-2">
+              <button onClick={() => { setSlingOn(true); localStorage.setItem("sahara_sling","on"); localStorage.setItem("sahara_sling_asked","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Yes, sling on</button>
+              <button onClick={() => { setSlingOn(false); localStorage.setItem("sahara_sling","off"); localStorage.setItem("sahara_sling_asked","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">No, it's off</button>
+            </div>
+          </motion.div>
+        </motion.div>
       )}
       {armReminder && isAndre && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
