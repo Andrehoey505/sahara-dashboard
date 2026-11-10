@@ -133,6 +133,7 @@ export default function App() {
       return new Set<string>();
     }
   });
+  const [contextMessages, setContextMessages] = useState<any>(null);
   const [hiddenViolations, setHiddenViolations] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem("sahara_hidden_violations");
@@ -586,6 +587,36 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (!contextViolation) {
+      setContextMessages(null);
+      return;
+    }
+    const channel = contextViolation.channel;
+    if (!channel) {
+      setContextMessages(null);
+      return;
+    }
+    let cancelled = false;
+    const params = new URLSearchParams({
+      channel: String(channel),
+      ts: String(contextViolation.time || ""),
+      before: "6",
+      after: "6",
+    });
+    fetch(apiUrl + "/api/context?" + params.toString())
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setContextMessages(d);
+      })
+      .catch(() => {
+        if (!cancelled) setContextMessages(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiUrl, contextViolation]);
+
   const filteredMessages = messages.filter((m) =>
     (!selectedServer || m.server === selectedServer) &&
     (!selectedChannel || m.channel === selectedChannel) &&
@@ -705,6 +736,34 @@ export default function App() {
                 <p className="text-sm font-medium mb-2">"{contextViolation.full_message || contextViolation.message}"</p>
                 <p className="text-xs text-slate-400">Flagged words: {contextViolation.words?.join(", ")}</p>
               </div>
+              {contextMessages ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-500">
+                    Conversation in {contextViolation.channel ? `#${contextViolation.channel}` : "channel"}
+                  </p>
+                  <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                    {[...(contextMessages.before || []), contextMessages.target, ...(contextMessages.after || [])]
+                      .filter(Boolean)
+                      .map((m: any, i: number) => (
+                        <div
+                          key={i}
+                          className={
+                            "text-xs p-2 rounded " +
+                            (m.flagged
+                              ? "bg-rose-500/10 border border-rose-500/30 text-rose-200"
+                              : "bg-slate-800/30 text-slate-400")
+                          }
+                        >
+                          <span className="font-medium text-slate-300">{m.author}</span>
+                          <span className="ml-1.5">{m.content}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600">No context available for this message.</p>
+              )}
+
               <div className="text-xs text-slate-500 grid grid-cols-2 gap-2">
                 <div className="p-2 rounded bg-slate-800/20">
                   <p className="mb-1">Severity</p>

@@ -27,6 +27,10 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
   const [newId, setNewId] = useState("");
   const [newReason, setNewReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [history, setHistory] = useState<
+    { user_id: string; removed_at: string; removed_by: string; reason_given: string }[]
+  >([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +38,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
       if (!res.ok) throw new Error("bad status");
       const data = await res.json();
       setTrolls(Array.isArray(data) ? data : data.trolls || []);
+      setHistory(Array.isArray(data.removal_history) ? data.removal_history : []);
       setError("");
     } catch {
       setError(
@@ -152,6 +157,17 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
+            onClick={() => setShowHistory((v) => !v)}
+            className={
+              "px-3 py-2 rounded-lg text-sm border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 " +
+              (showHistory
+                ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
+                : "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-700/50")
+            }
+          >
+            History{history.length ? ` (${history.length})` : ""}
+          </button>
+          <button
             onClick={() => setAdding((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
           >
@@ -206,6 +222,41 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
           >
             {busy === "add" ? "Adding…" : "Add to list"}
           </button>
+        </div>
+      )}
+
+      {showHistory && (
+        <div className="glass rounded-2xl p-5">
+          <h3 className="font-medium mb-3">Removed from the list</h3>
+          {history.length === 0 ? (
+            <p className="text-sm text-slate-500">Nobody has been removed yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {history.slice().reverse().map((h, i) => (
+                <div
+                  key={`${h.user_id}-${i}`}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/40 border border-slate-700/40"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-mono truncate">{h.user_id}</p>
+                    {h.reason_given && (
+                      <p className="text-xs text-slate-500 truncate">had: {h.reason_given}</p>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-500 shrink-0">
+                    {h.removed_at
+                      ? new Date(h.removed_at).toLocaleString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
