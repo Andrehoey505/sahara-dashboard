@@ -150,7 +150,7 @@ export default function App() {
       setConnectionError("");
       const [msgRes, violRes, srvRes, statsRes] = await Promise.all([
         fetch(apiUrl + "/api/messages?limit=50"),
-        fetch(apiUrl + "/api/violations?limit=50"),
+        fetch(apiUrl + "/api/violations?limit=200" + (violationFilter !== "all" ? "&status=" + encodeURIComponent(violationFilter) : "")),
         fetch(apiUrl + "/api/servers"),
         fetch(apiUrl + "/api/stats"),
       ]);
@@ -198,7 +198,7 @@ export default function App() {
     // hiddenMessageIds/hiddenViolationIds are read inside fetchData; including
     // them restarts the poll when either changes so the closure isn't stale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiUrl, hiddenMessages, hiddenViolations]);
+  }, [apiUrl, hiddenMessages, hiddenViolations, violationFilter]);
 
   // Total member count across servers. /api/members only returns a capped list,
   // so this is asked of each guild and summed; null until we have an answer.
