@@ -52,6 +52,7 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState<string>("");
   const [playerReady, setPlayerReady] = useState(false);
+  const [sdkError, setSdkError] = useState("");
 
   const clientId = settings.spotifyClientId;
   const configured = !!clientId;
@@ -302,7 +303,10 @@ export default function SpotifyScreen({ settings, notify }: Props) {
                 const ok = await player.connect();
                 if (!ok) throw new Error("Couldn't start the player");
               } catch (e: any) {
-                notify(e?.message || "Couldn't start in-app playback", "error");
+                const msg = e?.message || "Couldn't start in-app playback";
+                notify(msg, "error");
+                setSdkError(msg);
+                console.error("[spotify] SDK enable failed", e);
               } finally {
                 setBusy(null);
               }
@@ -322,6 +326,17 @@ export default function SpotifyScreen({ settings, notify }: Props) {
         {playerReady && (
           <p className="text-xs text-emerald-300 mt-3">
             Pick &quot;Sahara Dashboard&quot; from the device list below to play through the app.
+          </p>
+        )}
+        {sdkError && !playerReady && (
+          <p className="text-xs text-rose-300 mt-3 max-w-[65ch]">
+            {sdkError}
+          </p>
+        )}
+        {!playerReady && (
+          <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
+            Needs Spotify Premium. The SDK runs in a webview, so if this stays unavailable the app
+            can still control whichever device is active below.
           </p>
         )}
       </div>
