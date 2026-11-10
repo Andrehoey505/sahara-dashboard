@@ -497,9 +497,21 @@ export default function App() {
         const members = await (await fetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.name))).json();
         setTrollSweepMembers((prev) => prev + (members?.length || 0));
         // Check for suspicious patterns (new accounts, no avatar, etc.)
-        const suspicious = (members || []).filter((m: any) => !m.avatar || m.name.includes("http") || m.name.length < 3);
+        // Only things the bot actually knows are suspicious. No avatar and a
+        // short name were flagging ordinary members (and bots).
+        const suspicious = (members || []).filter(
+          (m: any) =>
+            !m.is_troll === false &&
+            (m.is_troll === true ||
+              (typeof m.account_age_days === "number" && m.account_age_days < 2))
+        );
         if (suspicious.length > 0) {
-          setTrollSweepResults((prev) => [...prev, { server: s.name, count: suspicious.length, users: suspicious.map((u: any) => u.name) }]);
+          const named = suspicious
+            .filter((u: any) => !u.bot)
+            .map((u: any) => u.display_name || u.name);
+          if (named.length > 0) {
+            setTrollSweepResults((prev) => [...prev, { server: s.name, count: named.length, users: named }]);
+          }
         }
       } catch {}
       await new Promise((r) => setTimeout(r, 800));
@@ -950,12 +962,12 @@ export default function App() {
                 <h3 className="font-semibold mb-4 flex items-center gap-2"><Zap className="w-4 h-4 text-amber-400" /> Quick Actions</h3>
                 <div className="space-y-2">
                   {[
-                    { label: "Restart Bot", action: () => notify("Bot restart requested", "success") },
-                    { label: "Clear Feed", action: clearFeed },
-                    { label: "Clear Violations", action: clearViolations },
-                    { label: "Run Troll Sweep", action: () => runTrollSweep() },
-                    { label: "Export Logs", action: () => notify("Logs exported", "success") },
-                    { label: "Refresh Data", action: () => { setLoading(true); setTimeout(() => { setLoading(false); notify("Data refreshed", "success"); }, 800); } },
+                    { label: "Refresh now", action: () => { setLoading(true); fetchData().finally(() => setLoading(false)); } },
+                    { label: "Clear feed", action: clearFeed },
+                    { label: "Clear violations", action: clearViolations },
+                    { label: "Run troll sweep", action: () => runTrollSweep() },
+                    { label: "Open server log", action: () => setActive("audit") },
+                    { label: "Open troll list", action: () => setActive("trolls") },
                   ].map((a) => (
                     <button key={a.label} onClick={a.action} className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-sm transition flex items-center justify-between group">
                       {a.label}
