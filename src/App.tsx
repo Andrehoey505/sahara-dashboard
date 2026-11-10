@@ -189,6 +189,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
+  const prevWaitsRef = useRef<{ Mater?: number; "Royal Victoria"?: number }>({});
   const [edLastUpdate, setEdLastUpdate] = useState("");
   const [edStale, setEdStale] = useState(false);
   const [edLastFetch, setEdLastFetch] = useState<number>(0);
@@ -213,6 +214,16 @@ export default function App() {
       if (!res.ok) throw new Error("not ok");
       const data = await res.json();
       if (data.waits && Object.keys(data.waits).length) {
+        // Check if waits dropped
+        try {
+          const prev = prevWaitsRef.current;
+          if (prev && ((data.waits.Mater != null && prev.Mater != null && data.waits.Mater < prev.Mater) ||
+                      (data.waits["Royal Victoria"] != null && prev["Royal Victoria"] != null && data.waits["Royal Victoria"] < prev["Royal Victoria"]))) {
+            const a = new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{});
+            setTimeout(() => { const b = new Audio('/sounds/ed_wait_drop.ogg'); b.play().catch(()=>{}); }, 700);
+          }
+        } catch {}
+        prevWaitsRef.current = data.waits;
         setEdWaits(data.waits);
         if (data.last_updated) setEdLastUpdate(data.last_updated);
         setEdStale(!!data.stale);
