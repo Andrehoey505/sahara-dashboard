@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, Music, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import SleepMode from "./components/SleepMode";
 import MembersScreen from "./components/MembersScreen";
 import SetupScreen, { loadSettings, saveSettings, type AppSettings } from "./components/SetupScreen";
 import LockScreen from "./components/LockScreen";
+import MusicScreen from "./components/MusicScreen";
+import TrollWatch from "./components/TrollWatch";
+import CatchUpBanner from "./components/CatchUpBanner";
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -200,6 +203,7 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [showSetup, setShowSetup] = useState(false);
   const [showSleep, setShowSleep] = useState(false);
+  const [catchUp, setCatchUp] = useState<{ flags: number; since?: string | null } | null>(null);
   const _cachedWaits = (() => { try { return JSON.parse(localStorage.getItem("sahara_ed_waits") || "null")?.waits || {}; } catch { return {}; } })();
   const prevWaitsRef = useRef<{ Mater?: number; "Royal Victoria"?: number }>(_cachedWaits);
   const [edLastUpdate, setEdLastUpdate] = useState("");
@@ -484,6 +488,7 @@ export default function App() {
     { id: "violations", label: "Violations", icon: AlertTriangle },
     { id: "members", label: "Members", icon: Users },
     { id: "moderation", label: "Moderation", icon: Shield },
+    { id: "trollwatch", label: "Troll Watch", icon: ShieldAlert },
     { id: "music", label: "Music", icon: Music },
     { id: "settings", label: "Settings", icon: Settings },
   ];
@@ -585,7 +590,14 @@ export default function App() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sleeping: false }),
-              }).catch(() => {});
+              })
+                .then((r) => r.json())
+                .then((d) => {
+                  if (d?.catch_up?.flags > 0) {
+                    setCatchUp({ flags: d.catch_up.flags, since: d.catch_up.since });
+                  }
+                })
+                .catch(() => {});
             }
           }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up (sling on)" : "🌙 Going to sleep"}</button>
           )}
@@ -602,6 +614,15 @@ export default function App() {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-6">
+        {catchUp && (
+          <div className="mb-4">
+            <CatchUpBanner
+              flags={catchUp.flags}
+              since={catchUp.since}
+              onDismiss={() => setCatchUp(null)}
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold capitalize">{active.replace("livefeed", "Live Messages")}</h2>
@@ -879,18 +900,8 @@ export default function App() {
                 </div>
               </div>
             )}
-            {active === "music" && (
-              <div className="glass rounded-xl p-4">
-                <h3 className="font-semibold mb-3">Music Player</h3>
-                <div className="flex items-center gap-4 mb-4">
-                  <button onClick={() => notify("Playing", "success")} className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-sm hover:bg-emerald-500/30">Play</button>
-                  <button onClick={() => notify("Paused", "info")} className="px-4 py-2 rounded-lg bg-slate-700/50 text-slate-300 text-sm hover:bg-slate-600/50">Pause</button>
-                  <button onClick={() => notify("Skipped", "info")} className="px-4 py-2 rounded-lg bg-slate-700/50 text-slate-300 text-sm hover:bg-slate-600/50">Skip</button>
-                  <button onClick={() => notify("Stopped", "error")} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30">Stop</button>
-                </div>
-                <p className="text-xs text-slate-500">Now playing: Nothing (queue empty)</p>
-              </div>
-            )}
+            {active === "music" && <MusicScreen apiUrl={apiUrl} notify={notify} />}
+            {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
             {active === "settings" && (
               <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Settings</h3>
