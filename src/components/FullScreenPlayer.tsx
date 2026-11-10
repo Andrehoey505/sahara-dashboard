@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, SkipForward, SkipBack, X, Mic2, Music2, Minimize2 } from "lucide-react";
 import { motionTokens } from "../lib/design";
@@ -20,13 +20,14 @@ function mmss(ms: number) {
 }
 
 /**
- * Full-window player: big artwork on one side, large scrolling lyrics on the
- * other. Built for reading across a room.
+ * Full screen player.
+ *
+ * Lyrics take the whole left side at a genuinely large size, with the artwork
+ * and track details alongside. No scrolling required to read along.
  */
 export default function FullScreenPlayer({ open, now, position, onClose, onTransport, busy }: Props) {
   const [showLyrics, setShowLyrics] = useState(true);
 
-  // Esc closes.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -46,23 +47,27 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={motionTokens.base}
-          className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md overflow-hidden"
+          className="fixed inset-0 z-50 bg-slate-950 overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Full screen player"
         >
-          {/* Artwork wash */}
           {now?.image && (
             <div
               aria-hidden="true"
-              className="absolute inset-0 opacity-25 blur-3xl scale-125"
-              style={{ backgroundImage: `url(${now.image})`, backgroundSize: "cover", backgroundPosition: "center" }}
+              className="absolute inset-0 opacity-30 blur-3xl scale-125"
+              style={{
+                backgroundImage: `url(${now.image})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
             />
           )}
+          <div className="absolute inset-0 bg-slate-950/70" />
 
           <div className="relative h-full flex flex-col p-6 sm:p-10">
             <header className="flex items-center justify-between shrink-0">
-              <p className="text-xs uppercase tracking-[0.2em] text-indigo-300/70">
+              <p className="text-xs uppercase tracking-[0.25em] text-indigo-300/70">
                 {now?.is_playing ? "Now playing" : "Paused"}
               </p>
               <div className="flex items-center gap-2">
@@ -87,17 +92,38 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
               </div>
             </header>
 
-            <div className="flex-1 min-h-0 grid lg:grid-cols-2 gap-8 lg:gap-14 items-center mt-6">
-              {/* Artwork + meta + transport */}
-              <div className="flex flex-col items-center text-center">
+            {/* Lyrics fill the left, artwork and details the right. */}
+            <div className="flex-1 min-h-0 grid lg:grid-cols-[1.4fr_1fr] gap-10 lg:gap-16 mt-6">
+              {showLyrics && (
+                <div className="min-h-0 h-full order-2 lg:order-1">
+                  <div className="h-full overflow-hidden">
+                    <Lyrics
+                      variant="fullscreen"
+                      track={now?.track}
+                      artist={now?.artists}
+                      album={now?.album}
+                      durationSec={now?.duration_ms ? Math.round(now.duration_ms / 1000) : undefined}
+                      progressMs={position}
+                      trackKey={`${now?.track || ""}|${now?.artists || ""}`}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div
+                className={
+                  "min-h-0 flex flex-col items-center justify-center text-center order-1 lg:order-2 " +
+                  (showLyrics ? "" : "lg:col-span-2")
+                }
+              >
                 {now?.image ? (
                   <img
                     src={now.image}
                     alt=""
-                    className="w-56 h-56 sm:w-72 sm:h-72 lg:w-80 lg:h-80 object-cover rounded-2xl shadow-2xl"
+                    className="w-40 h-40 sm:w-56 sm:h-56 lg:w-72 lg:h-72 xl:w-80 xl:h-80 object-cover rounded-2xl shadow-2xl"
                   />
                 ) : (
-                  <div className="w-56 h-56 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-2xl bg-slate-800 flex items-center justify-center">
+                  <div className="w-40 h-40 sm:w-56 sm:h-56 lg:w-72 lg:h-72 rounded-2xl bg-slate-800 flex items-center justify-center">
                     <Music2 className="w-16 h-16 text-slate-600" />
                   </div>
                 )}
@@ -105,13 +131,18 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                 <h1 className="text-2xl sm:text-3xl font-bold mt-6 truncate max-w-full">
                   {now?.track || "Nothing playing"}
                 </h1>
-                <p className="text-slate-300 truncate max-w-full mt-1">{now?.artists || ""}</p>
+                <p className="text-lg text-slate-300 truncate max-w-full mt-1">
+                  {now?.artists || ""}
+                </p>
+                {now?.album && (
+                  <p className="text-sm text-slate-500 truncate max-w-full mt-1">{now.album}</p>
+                )}
 
                 <div className="w-full max-w-md mt-6">
                   <div className="h-1.5 rounded-full bg-slate-700/70 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-indigo-400 to-violet-500"
-                      style={{ width: `${pct}%`, transition: "width 250ms linear" }}
+                      style={{ width: `${pct}%`, transition: "width 100ms linear" }}
                     />
                   </div>
                   <div className="flex justify-between text-xs text-slate-500 mt-1.5 tabular-nums">
@@ -146,23 +177,6 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                   </button>
                 </div>
               </div>
-
-              {/* Big lyrics */}
-              {showLyrics && (
-                <div className="min-h-0 h-full hidden lg:block">
-                  <div className="h-full overflow-hidden rounded-2xl bg-slate-900/40 border border-slate-800/60 p-6">
-                    <Lyrics
-                      variant="large"
-                      track={now?.track}
-                      artist={now?.artists}
-                      album={now?.album}
-                      durationSec={now?.duration_ms ? Math.round(now.duration_ms / 1000) : undefined}
-                      progressMs={position}
-                      trackKey={`${now?.track || ""}|${now?.artists || ""}`}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </motion.div>

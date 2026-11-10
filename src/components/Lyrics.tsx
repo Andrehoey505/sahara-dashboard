@@ -13,8 +13,11 @@ type Props = {
   progressMs?: number;
   /** Changing track keys the component so state resets cleanly. */
   trackKey: string;
-  /** "card" is the compact sidebar version; "large" is for the full-screen player. */
-  variant?: "card" | "large";
+  /**
+   * "card" is the compact inline version, "large" a medium panel, and
+   * "fullscreen" the big scrolling lyrics in the full screen player.
+   */
+  variant?: "card" | "large" | "fullscreen";
 };
 
 /**
@@ -82,26 +85,36 @@ export default function Lyrics({
 
   if (!track) return null;
 
-  const large = variant === "large";
-  const lineClass = (i: number) =>
-    large
-      ? i === activeIndex
+  const fullscreen = variant === "fullscreen";
+  const large = variant === "large" || fullscreen;
+
+  const lineClass = (i: number) => {
+    const isActive = i === activeIndex;
+    if (fullscreen) {
+      return isActive
+        ? "text-3xl sm:text-4xl xl:text-5xl font-bold text-white transition-colors duration-200"
+        : "text-3xl sm:text-4xl xl:text-5xl font-bold text-slate-500/60 transition-colors duration-200";
+    }
+    if (large) {
+      return isActive
         ? "text-2xl sm:text-3xl font-semibold text-indigo-200 transition-colors duration-200"
-        : "text-2xl sm:text-3xl font-semibold text-slate-600 transition-colors duration-200"
-      : i === activeIndex
-        ? "text-sm text-indigo-200 font-medium transition-colors duration-200"
-        : "text-sm text-slate-500 transition-colors duration-200";
+        : "text-2xl sm:text-3xl font-semibold text-slate-600 transition-colors duration-200";
+    }
+    return isActive
+      ? "text-sm text-indigo-200 font-medium transition-colors duration-200"
+      : "text-sm text-slate-500 transition-colors duration-200";
+  };
 
   const body = (
     <>
       {loading && (
-        <p className={large ? "text-lg text-slate-500" : "text-sm text-slate-500"}>
+        <p className={fullscreen ? "text-2xl text-slate-500" : large ? "text-lg text-slate-500" : "text-sm text-slate-500"}>
           Looking for lyrics…
         </p>
       )}
 
       {!loading && notFound && (
-        <p className={large ? "text-lg text-slate-500" : "text-sm text-slate-500"}>
+        <p className={fullscreen ? "text-2xl text-slate-500" : large ? "text-lg text-slate-500" : "text-sm text-slate-500"}>
           No lyrics found for this track. LRCLIB covers a lot but not everything.
         </p>
       )}
@@ -110,7 +123,8 @@ export default function Lyrics({
         <div
           ref={scrollRef}
           className={
-            "overflow-y-auto pr-1 scroll-smooth " + (large ? "h-full" : "max-h-72")
+            "overflow-y-auto pr-1 scroll-smooth " +
+            (fullscreen ? "h-full" : large ? "h-full" : "max-h-72")
           }
         >
           {data.synced.map((line, i) => {
@@ -127,8 +141,11 @@ export default function Lyrics({
                 }}
                 transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                 className={
-                  (large ? "leading-snug py-2 origin-left " : "leading-relaxed py-0.5 origin-left ") +
-                  lineClass(i)
+                  (fullscreen
+                    ? "leading-tight py-3 origin-left "
+                    : large
+                      ? "leading-snug py-2 origin-left "
+                      : "leading-relaxed py-0.5 origin-left ") + lineClass(i)
                 }
               >
                 {line.text}
