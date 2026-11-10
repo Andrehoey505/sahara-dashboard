@@ -332,3 +332,150 @@ export async function setVolume(clientId: string, percent: number, deviceId?: st
  * and the device never appears. Sahara is a remote control for whichever
  * Spotify device is already online; see getDevices and transferTo above.
  */
+
+// ─── Search ───────────────────────────────────────────────────
+
+export type SearchTrack = {
+  id: string;
+  uri: string;
+  name: string;
+  artists: string;
+  album: string;
+  image?: string;
+  duration_ms: number;
+};
+
+export type SearchArtist = { id: string; uri: string; name: string; image?: string; followers?: number };
+export type SearchAlbum = { id: string; uri: string; name: string; artists: string; image?: string };
+
+export type SearchResults = {
+  tracks: SearchTrack[];
+  artists: SearchArtist[];
+  albums: SearchAlbum[];
+};
+
+function imageOf(images?: { url: string; width?: number }[]): string | undefined {
+  if (!images || images.length === 0) return undefined;
+  return (images[1] || images[0]).url;
+}
+
+export async function search(clientId: string, query: string): Promise<SearchResults> {
+  const q = encodeURIComponent(query.trim());
+  if (!q) return { tracks: [], artists: [], albums: [] };
+  const data = await authed(clientId, `/search?q=${q}&type=track,artist,album&limit=8`);
+  return {
+    tracks: (data?.tracks?.items || []).map((t: any) => ({
+      id: t.id,
+      uri: t.uri,
+      name: t.name,
+      artists: (t.artists || []).map((a: any) => a.name).join(", "),
+      album: t.album?.name || "",
+      image: imageOf(t.album?.images),
+      duration_ms: t.duration_ms || 0,
+    })),
+    artists: (data?.artists?.items || []).map((a: any) => ({
+      id: a.id,
+      uri: a.uri,
+      name: a.name,
+      image: imageOf(a.images),
+      followers: a.followers?.total,
+    })),
+    albums: (data?.albums?.items || []).map((a: any) => ({
+      id: a.id,
+      uri: a.uri,
+      name: a.name,
+      artists: (a.artists || []).map((x: any) => x.name).join(", "),
+      image: imageOf(a.images),
+    })),
+  };
+}
+
+/** Play a track or album/artist context on a specific device. */
+export async function playUri(clientId: string, uri: string, deviceId?: string) {
+  const q = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
+  const isTrack = uri.includes(":track:");
+  await authed(clientId, `/me/player/play${q}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(isTrack ? { uris: [uri] } : { context_uri: uri }),
+  });
+}
+
+// ─── Lyrics (LRCLIB) ──────────────────────────────────────────
+//
+// Free, keyless, and returns time-synced LRC when the track has it. Exact
+// lookup by signature is far more reliable than fuzzy search, so that's tried
+// first and search only used as a fallback.
+
+export type LyricLine = { time: number; text: string };
+
+export type Lyrics = {
+  plain?: string;
+  synced: LyricLine[];
+  source: "lrclib" | "none";
+};
+
+const LRCLIB = "https://lrclib.net/api";
+
+function parseLrc(lrc: string): LyricLine[] {
+  const out: LyricLine[] = [];
+  lrc.split("\n").forEach((raw) => {
+    const m = raw.match(/^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/);
+    if (!m) return;
+    const mins = parseInt(m[1], 10);
+    const secs = parseFloat(m[2]);
+    const text = m[3].trim();
+    if (text) out.push({ time: mins * 60 + secs, text });
+  });
+  return out;
+}
+
+async function lrclibFetch(path: string): Promise<any | null> {
+  try {
+    const res = await fetch(LRCLIB + path, {
+      headers: { "Lrclib-Client": "Sahara Dashboard v0.3 (personal use)" },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function getLyrics(
+  track: string,
+  artist: string,
+  album?: string,
+  durationSec?: number
+): Promise<Lyrics> {
+  const none: Lyrics = { synced: [], source: "none" };
+  if (!track || !artist) return none;
+
+  // 1. Exact signature lookup.
+  const params = new URLSearchParams({ track_name: track, artist_name: artist });
+  if (album) params.set("album_name", album);
+  if (durationSec) params.set("duration", String(Math.round(durationSec)));
+  const exact = await lrclibFetch(`/get?${params.toString()}`);
+  if (exact) {
+    return {
+      plain: exact.plainLyrics || undefined,
+      synced: exact.syncedLyrics ? parseLrc(exact.syncedLyrics) : [],
+      source: "lrclib",
+    };
+  }
+
+  // 2. Fall back to search and take the first result with lyrics.
+  const found = await lrclibFetch(
+    `/search?${new URLSearchParams({ track_name: track, artist_name: artist }).toString()}`
+  );
+  if (Array.isArray(found) && found.length > 0) {
+    const withSynced = found.find((f: any) => f.syncedLyrics) || found[0];
+    return {
+      plain: withSynced.plainLyrics || undefined,
+      synced: withSynced.syncedLyrics ? parseLrc(withSynced.syncedLyrics) : [],
+      source: "lrclib",
+    };
+  }
+
+  return none;
+}

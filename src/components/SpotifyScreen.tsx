@@ -18,6 +18,8 @@ import {
 } from "../lib/spotify";
 import type { AppSettings } from "./SetupScreen";
 import { openExternal, readFromClipboard } from "../lib/native";
+import MusicSearch from "./MusicSearch";
+import Lyrics from "./Lyrics";
 
 type Props = {
   settings: AppSettings;
@@ -307,6 +309,13 @@ export default function SpotifyScreen({ settings, notify }: Props) {
         )}
       </div>
 
+      <MusicSearch
+        clientId={clientId}
+        deviceId={deviceId}
+        notify={notify}
+        onPlayed={refresh}
+      />
+
       {/* Now playing */}
       <div className="glass rounded-2xl p-5">
         <div className="flex items-center gap-4">
@@ -362,11 +371,16 @@ export default function SpotifyScreen({ settings, notify }: Props) {
           </button>
         </div>
 
-        <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
-          Playback happens on whichever Spotify device is currently active. Open Spotify on your
-          phone or Mac first if nothing is playing.
-        </p>
       </div>
+
+      <Lyrics
+        track={now?.track}
+        artist={now?.artists}
+        album={now?.album}
+        durationSec={now?.duration_ms ? Math.round(now.duration_ms / 1000) : undefined}
+        progressMs={now?.progress_ms}
+        trackKey={`${now?.track || ""}|${now?.artists || ""}`}
+      />
 
       {/* Playlists */}
       <div>
