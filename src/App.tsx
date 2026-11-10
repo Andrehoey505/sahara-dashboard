@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import SleepMode from "./components/SleepMode";
@@ -286,11 +286,14 @@ export default function App() {
                   x.onended = () => playNext(i+1);
                   x.play().catch(()=>{ playNext(i+1); });
                 } else {
+                  // Go through the shared speech queue rather than calling
+                  // speechSynthesis directly, so this sequence can't cut across
+                  // an announcement that's already playing. The next audio step
+                  // starts once the line has been handed over; the remaining
+                  // "minutes" clip follows the number, so a short gap is right.
                   try {
-                    const u = new SpeechSynthesisUtterance(step.text);
-                    u.onend = () => playNext(i+1);
-                    u.onerror = () => playNext(i+1);
-                    (window as any).speechSynthesis?.speak(u);
+                    speakText(step.text);
+                    setTimeout(() => playNext(i + 1), 200);
                   } catch { playNext(i+1); }
                 }
               };
@@ -333,11 +336,36 @@ export default function App() {
     const t = setInterval(() => setEdNow(Date.now()), 60000);
     return () => clearInterval(t);
   }, []);
-    const notify = (msg: any, type = "info") => {
+  // Toasts. Errors and violations stay up longer than a plain acknowledgement,
+  // because they carry information the user may need to act on. Hovering a toast
+  // clears its timer so it can be read without racing it.
+  const toastSeq = useRef(0);
+  const toastTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  const dismissToast = useCallback((id: number) => {
+    const t = toastTimers.current[id];
+    if (t) { clearTimeout(t); delete toastTimers.current[id]; }
+    setNotifications((n) => n.filter((x) => x.id !== id));
+  }, []);
+
+  const armToastTimer = useCallback((id: number, life: number) => {
+    const t = toastTimers.current[id];
+    if (t) clearTimeout(t);
+    toastTimers.current[id] = setTimeout(() => {
+      delete toastTimers.current[id];
+      setNotifications((n) => n.filter((x) => x.id !== id));
+    }, life);
+  }, []);
+
+  const notify = (msg: any, type = "info") => {
     playSound(type);
-    const id = Date.now();
-    setNotifications((n) => [...n, { id, msg, type }]);
-    setTimeout(() => setNotifications((n) => n.filter((x) => x.id !== id)), 3000);
+    const id = ++toastSeq.current;
+    setNotifications((n) => {
+      // Cap the stack so a burst can't fill the screen; drop the oldest.
+      const next = [...n, { id, msg, type }];
+      return next.length > 4 ? next.slice(next.length - 4) : next;
+    });
+    armToastTimer(id, type === "error" || type === "violation" ? 6000 : 3200);
   };
 
   useEffect(() => {
@@ -572,13 +600,53 @@ export default function App() {
           </div>
         </div>
       )}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        <AnimatePresence>
-          {notifications.map((n) => (
-            <motion.div key={n.id} initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }} className={"px-4 py-2.5 rounded-lg text-sm shadow-lg " + (n.type === "success" ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300" : n.type === "error" ? "bg-rose-500/20 border border-rose-500/30 text-rose-300" : "bg-indigo-500/20 border border-indigo-500/30 text-indigo-300")}>
-              {n.msg}
-            </motion.div>
-          ))}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-[min(22rem,calc(100vw-2rem))]" role="status" aria-live="polite">
+        <AnimatePresence initial={false}>
+          {notifications.map((n) => {
+            const tone =
+              n.type === "success"
+                ? { border: "border-emerald-400/30", glow: "shadow-emerald-500/10", icon: "text-emerald-300", bar: "bg-emerald-400/70", accent: "bg-emerald-400" }
+                : n.type === "error"
+                ? { border: "border-rose-400/30", glow: "shadow-rose-500/10", icon: "text-rose-300", bar: "bg-rose-400/70", accent: "bg-rose-400" }
+                : n.type === "violation"
+                ? { border: "border-amber-400/30", glow: "shadow-amber-500/10", icon: "text-amber-300", bar: "bg-amber-400/70", accent: "bg-amber-400" }
+                : { border: "border-indigo-400/30", glow: "shadow-indigo-500/10", icon: "text-indigo-300", bar: "bg-indigo-400/70", accent: "bg-indigo-400" };
+            const Icon = n.type === "success" ? CheckCircle : n.type === "error" || n.type === "violation" ? AlertTriangle : Info;
+            return (
+              <motion.div
+                key={n.id}
+                layout
+                initial={{ opacity: 0, x: 24, scale: 0.97 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 24, scale: 0.97, transition: { duration: 0.18 } }}
+                transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                onMouseEnter={() => {
+                  const t = toastTimers.current[n.id];
+                  if (t) { clearTimeout(t); delete toastTimers.current[n.id]; }
+                }}
+                onMouseLeave={() => armToastTimer(n.id, 1800)}
+                className={"relative overflow-hidden rounded-xl border backdrop-blur-xl bg-slate-900/80 px-3.5 py-3 shadow-xl " + tone.border + " " + tone.glow}
+              >
+                <div className="flex items-start gap-2.5">
+                  <Icon className={"w-4 h-4 mt-0.5 shrink-0 " + tone.icon} />
+                  <p className="text-sm text-slate-200 leading-snug flex-1 break-words">{n.msg}</p>
+                  <button
+                    onClick={() => dismissToast(n.id)}
+                    aria-label="Dismiss"
+                    className="shrink-0 -mr-1 -mt-1 p-1 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <motion.div
+                  initial={{ scaleX: 1 }}
+                  animate={{ scaleX: 0 }}
+                  transition={{ duration: (n.type === "error" || n.type === "violation" ? 6000 : 3200) / 1000, ease: "linear" }}
+                  className={"absolute bottom-0 left-0 right-0 h-0.5 origin-left " + tone.accent + " opacity-40"}
+                />
+              </motion.div>
+            );
+          })}
         </AnimatePresence>
       </div>
 

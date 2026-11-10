@@ -86,28 +86,117 @@ export function playCue(cue: Cue, enabled = true) {
 }
 
 /**
+ * Pick a calm, natural-sounding local voice.
+ *
+ * The list is empty until the platform finishes loading it, so this is called
+ * at speak time rather than cached once at startup.
+ */
+function preferredVoice(): SpeechSynthesisVoice | undefined {
+  const voices = window.speechSynthesis.getVoices();
+  return (
+    voices.find((v) => /Samantha|Serena|Daniel|Google UK English Female/i.test(v.name)) ||
+    voices.find((v) => v.lang === "en-GB") ||
+    voices[0]
+  );
+}
+
+/**
+ * Speech queue.
+ *
+ * One utterance at a time, strictly in arrival order: a line waits for the one
+ * before it to finish. Nothing is cancelled to make room, because cancelling is
+ * what used to cut announcements off mid-sentence.
+ *
+ * Two behaviours worth knowing:
+ * - Duplicates within DUPLICATE_WINDOW_MS are dropped. Three violations landing
+ *   together shouldn't be read out three times; the toast still shows each one.
+ * - The queue is capped, and when it overflows the oldest waiting line goes
+ *   first. A burst of twenty is less useful than the latest few.
+ */
+type QueuedSpeech = { text: string; rate: number; pitch: number; at: number };
+
+const DUPLICATE_WINDOW_MS = 2000;
+const MAX_QUEUE = 8;
+
+const speechQueue: QueuedSpeech[] = [];
+let speaking = false;
+let lastSpoken: { text: string; at: number } = { text: "", at: 0 };
+
+function dequeueAndSpeak() {
+  if (speaking) return;
+  const next = speechQueue.shift();
+  if (!next) return;
+
+  speaking = true;
+  let settled = false;
+  // onend fires on most paths, onerror on the rest, and neither on a few
+  // platform bugs (notably voices that fail to load). Settle once, on whichever
+  // comes first, with a duration-based backstop so the queue can't wedge.
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    speaking = false;
+    dequeueAndSpeak();
+  };
+
+  try {
+    const u = new SpeechSynthesisUtterance(next.text);
+    u.rate = next.rate;
+    u.pitch = next.pitch;
+    u.volume = 1;
+    const voice = preferredVoice();
+    if (voice) u.voice = voice;
+
+    u.onend = settle;
+    u.onerror = settle;
+
+    window.speechSynthesis.speak(u);
+    // Backstop: roughly 90ms per character, capped, in case no event arrives.
+    const backstop = Math.min(60000, 2000 + next.text.length * 90);
+    setTimeout(() => {
+      if (!settled) {
+        speaking = false;
+        dequeueAndSpeak();
+      }
+    }, backstop);
+  } catch {
+    settle();
+  }
+}
+
+/**
  * Speak a line. Prefers a calmer, slower delivery: the app is often used at
  * night and a clipped default voice is jarring.
+ *
+ * Lines are queued, not played over the top of each other — one ends, the next
+ * begins, in the order they were requested.
  */
 export function speak(text: string, enabled = true, rate = 0.95, pitch = 0.95) {
   if (!enabled) return;
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  const line = (text || "").trim();
+  if (!line) return;
+
+  const now = Date.now();
+  const isDuplicate =
+    speechQueue.some((q) => q.text === line && now - q.at < DUPLICATE_WINDOW_MS) ||
+    (speaking && lastSpoken.text === line && now - lastSpoken.at < DUPLICATE_WINDOW_MS);
+  if (isDuplicate) return;
+
+  if (speechQueue.length >= MAX_QUEUE) speechQueue.shift();
+  speechQueue.push({ text: line, rate, pitch, at: now });
+  lastSpoken = { text: line, at: now };
+  dequeueAndSpeak();
+}
+
+/** Stop speaking and drop anything still waiting. */
+export function stopSpeaking() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  speechQueue.length = 0;
+  speaking = false;
+  lastSpoken = { text: "", at: 0 };
   try {
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = rate;
-    u.pitch = pitch;
-    u.volume = 1;
-
-    // Prefer a natural-sounding local voice when one is available.
-    const voices = window.speechSynthesis.getVoices();
-    const preferred =
-      voices.find((v) => /Samantha|Serena|Daniel|Google UK English Female/i.test(v.name)) ||
-      voices.find((v) => v.lang === "en-GB") ||
-      voices[0];
-    if (preferred) u.voice = preferred;
-
     window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
   } catch {}
 }
 
