@@ -33,6 +33,9 @@ export default function App() {
     { id: 4, user: "stitchy_gw", avatar: "🧵", server: "SocialLink.io Staff", channel: "main-chat", content: "bb!status", time: "5m ago", flagged: false },
   ]);
   const [messagesToday, setMessagesToday] = useState(0);
+  const [violationsToday, setViolationsToday] = useState(0);
+  const [memberCount, setMemberCount] = useState<number | null>(null);
+  const [botHealthy, setBotHealthy] = useState(false);
   const [selectedServer, setSelectedServer] = useState("");
   const [selectedChannel, setSelectedChannel] = useState("");
   const [servers, setServers] = useState<any[]>([]);
@@ -146,9 +149,15 @@ export default function App() {
         setViolations(newViols);
       }
       if (srvRes.ok) setServers(await srvRes.json());
-      if (statsRes.ok) { const d = await statsRes.json(); setMessagesToday(d.messages_today ?? 0); }
+      if (statsRes.ok) {
+        const d = await statsRes.json();
+        setMessagesToday(d.messages_today ?? 0);
+        setViolationsToday(d.violations_today ?? 0);
+      }
+      setBotHealthy(true);
     } catch (e) {
       setConnected(false);
+      setBotHealthy(false);
       setConnectionError("Cannot reach bot API at " + apiUrl);
     }
   };
@@ -158,6 +167,31 @@ export default function App() {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [apiUrl]);
+
+  // Total member count across servers. /api/members only returns a capped list,
+  // so this is asked of each guild and summed; null until we have an answer.
+  useEffect(() => {
+    if (!connected || servers.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const totals = await Promise.all(
+          servers.map((s: any) =>
+            fetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.id) + "&limit=2000")
+              .then((r) => (r.ok ? r.json() : []))
+              .then((list) => (Array.isArray(list) ? list.length : 0))
+              .catch(() => 0)
+          )
+        );
+        if (!cancelled) setMemberCount(totals.reduce((a, b) => a + b, 0));
+      } catch {
+        if (!cancelled) setMemberCount(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, apiUrl, servers.length]);
 
   const playSound = (type: string) => {
     const map: Record<string, any> = {
@@ -758,9 +792,24 @@ export default function App() {
             <button onClick={() => notify("No new notifications", "info", { sound: false })} className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 relative">
               <Bell className="w-4 h-4" />
             </button>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              <span className="text-xs text-emerald-300">Bot Online</span>
+            <div
+              className={
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg border " +
+                (botHealthy
+                  ? "bg-emerald-500/10 border-emerald-500/30"
+                  : "bg-rose-500/10 border-rose-500/30")
+              }
+              role="status"
+            >
+              <span
+                className={
+                  "w-2 h-2 rounded-full " +
+                  (botHealthy ? "bg-emerald-400 animate-pulse" : "bg-rose-400")
+                }
+              />
+              <span className={"text-xs " + (botHealthy ? "text-emerald-300" : "text-rose-300")}>
+                {botHealthy ? "Bot online" : "Bot unreachable"}
+              </span>
             </div>
           </div>
         </div>
@@ -769,14 +818,42 @@ export default function App() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="grid grid-cols-4 gap-4 mb-6">
               {[
-                { label: "Servers", value: "6", color: "from-indigo-500 to-purple-500" },
-                { label: "Members", value: "1,247", color: "from-cyan-500 to-blue-500" },
-                { label: "Messages Today", value: messagesToday.toLocaleString(), color: "from-emerald-500 to-teal-500" },
-                { label: "Violations", value: violations.filter(v => v.status === "pending").length, color: "from-rose-500 to-orange-500" },
+                {
+                  label: "Servers",
+                  value: servers.length ? servers.length.toLocaleString() : "—",
+                  color: "from-indigo-500 to-violet-500",
+                  hint: "",
+                },
+                {
+                  label: "Members",
+                  value:
+                    memberCount != null
+                      ? memberCount.toLocaleString()
+                      : members.length
+                        ? `${members.length.toLocaleString()}+`
+                        : "—",
+                  color: "from-cyan-500 to-blue-500",
+                  hint: memberCount == null ? "across loaded servers" : "",
+                },
+                {
+                  label: "Messages today",
+                  value: messagesToday.toLocaleString(),
+                  color: "from-emerald-500 to-teal-500",
+                  hint: "",
+                },
+                {
+                  label: "Violations today",
+                  value: violationsToday.toLocaleString(),
+                  color: "from-rose-500 to-orange-500",
+                  hint: violations.filter((v) => v.status === "pending").length
+                    ? `${violations.filter((v) => v.status === "pending").length} pending review`
+                    : "",
+                },
               ].map((s) => (
                 <div key={s.label} className="glass rounded-xl p-4">
                   <p className="text-xs text-slate-400 mb-1">{s.label}</p>
-                  <span className="text-2xl font-bold">{s.value}</span>
+                  <span className="text-2xl font-bold tabular-nums">{s.value}</span>
+                  {s.hint && <p className="text-[11px] text-slate-500 mt-1">{s.hint}</p>}
                   <div className={"h-1 mt-3 rounded-full bg-gradient-to-r " + s.color + " opacity-60"} />
                 </div>
               ))}
