@@ -324,95 +324,11 @@ export async function setVolume(clientId: string, percent: number, deviceId?: st
   });
 }
 
-// ─── Web Playback SDK ─────────────────────────────────────────
-//
-// Turns the app itself into a Spotify Connect device, so audio comes out of
-// this window rather than needing Spotify open elsewhere. The SDK is loaded
-// from Spotify's CDN and needs a page served over https or localhost — which
-// the Tauri webview provides via its custom protocol on macOS.
-
-declare global {
-  interface Window {
-    Spotify?: any;
-    onSpotifyWebPlaybackSDKReady?: () => void;
-  }
-}
-
-let sdkPromise: Promise<any> | null = null;
-
 /**
- * Load the Web Playback SDK once and resolve with window.Spotify.
+ * Web Playback SDK — deliberately not used.
  *
- * The callback has to be installed *before* the script tag is appended —
- * Spotify calls onSpotifyWebPlaybackSDKReady synchronously while evaluating
- * the bundle, so setting it afterwards misses the event entirely and the
- * promise never settles.
+ * The SDK decodes DRM-protected audio through Encrypted Media Extensions. The
+ * Tauri webview on macOS doesn't expose it, so Player.connect() never resolves
+ * and the device never appears. Sahara is a remote control for whichever
+ * Spotify device is already online; see getDevices and transferTo above.
  */
-export function loadPlaybackSdk(): Promise<any> {
-  if (sdkPromise) return sdkPromise;
-
-  sdkPromise = new Promise((resolve, reject) => {
-    if (window.Spotify) return resolve(window.Spotify);
-
-    let settled = false;
-    const done = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      fn();
-    };
-
-    // Must be set before the script is appended.
-    window.onSpotifyWebPlaybackSDKReady = () =>
-      done(() => (window.Spotify ? resolve(window.Spotify) : reject(new Error("SDK loaded but window.Spotify is missing"))));
-
-    const script = document.createElement("script");
-    script.src = "https://sdk.scdn.co/spotify-player.js";
-    script.async = true;
-    script.onerror = () => done(() => reject(new Error("Couldn't load the Spotify playback SDK (blocked by CSP or network)")));
-    script.onload = () => {
-      // If the ready callback already fired we're done; otherwise give it a moment.
-      setTimeout(() => {
-        if (window.Spotify) done(() => resolve(window.Spotify));
-      }, 500);
-    };
-    document.head.appendChild(script);
-
-    setTimeout(
-      () => done(() => reject(new Error("Spotify playback SDK timed out — check the console for CSP errors"))),
-      15000
-    );
-  });
-
-  return sdkPromise;
-}
-
-export type SdkPlayer = {
-  connect: () => Promise<boolean>;
-  disconnect: () => void;
-  addListener: (event: string, cb: (state: any) => void) => void;
-  getCurrentState?: () => Promise<any>;
-};
-
-/** Create a Connect device backed by this app window. */
-export async function createPlayer(
-  clientId: string,
-  token: string,
-  name = "Sahara Dashboard"
-): Promise<SdkPlayer> {
-  const Spotify = await loadPlaybackSdk();
-  const player: SdkPlayer = new Spotify.Player({
-    name,
-    getOAuthToken: (cb: (t: string) => void) => cb(token),
-    volume: 0.6,
-  });
-  return player;
-}
-
-
-/** Current access token, refreshed if needed. Used by the playback SDK. */
-export async function currentAccessToken(clientId: string): Promise<string> {
-  let token = loadToken();
-  if (!token) throw new Error("Not connected");
-  if (Date.now() > token.expires_at - 60000) token = await refresh(clientId, token);
-  return token.access_token;
-}

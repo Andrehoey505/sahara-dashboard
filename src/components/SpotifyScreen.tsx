@@ -13,8 +13,6 @@ import {
   completeAuthFromUrl,
   getDevices,
   transferTo,
-  createPlayer,
-  currentAccessToken,
   type NowPlaying,
   type Device,
 } from "../lib/spotify";
@@ -51,8 +49,7 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   const [pastedUrl, setPastedUrl] = useState("");
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState<string>("");
-  const [playerReady, setPlayerReady] = useState(false);
-  const [sdkError, setSdkError] = useState("");
+
 
   const clientId = settings.spotifyClientId;
   const configured = !!clientId;
@@ -265,114 +262,12 @@ export default function SpotifyScreen({ settings, notify }: Props) {
         </div>
       )}
 
-      {/* This app as a playback device */}
-      <div className="glass rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="font-medium">Play from this app</h3>
-            <p className="text-sm text-slate-400 mt-1 max-w-[65ch]">
-              Makes Sahara appear as a Spotify device, so audio comes out of this window
-              instead of needing Spotify open elsewhere.
-            </p>
-          </div>
-          <button
-            onClick={async () => {
-              if (playerReady) return;
-              setBusy("sdk");
-              try {
-                setSdkError("");
-                const accessToken = await currentAccessToken(clientId);
-
-                // Never hang: if the SDK or connect() stalls, fail loudly.
-                const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) =>
-                  Promise.race([
-                    p,
-                    new Promise<T>((_, rej) =>
-                      setTimeout(() => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms)
-                    ),
-                  ]);
-
-                const player = await withTimeout(
-                  createPlayer(clientId, accessToken),
-                  20000,
-                  "Loading the Spotify SDK"
-                );
-                player.addListener("ready", ({ device_id }: any) => {
-                  setPlayerReady(true);
-                  setDevices((d) => [
-                    ...d.filter((x) => x.id !== device_id),
-                    { id: device_id, name: "Sahara Dashboard", type: "Computer", is_active: false },
-                  ]);
-                  notify("Sahara is now a Spotify device", "success");
-                });
-                player.addListener("not_ready", () => setPlayerReady(false));
-                player.addListener("initialization_error", ({ message }: any) =>
-                  notify(message || "Playback init failed", "error")
-                );
-                player.addListener("authentication_error", () =>
-                  notify("Spotify rejected the session — reconnect", "error")
-                );
-                player.addListener("account_error", () =>
-                  notify("Playback needs Spotify Premium", "error")
-                );
-                const ok = await withTimeout(player.connect(), 20000, "Starting the player");
-                if (!ok) throw new Error("Spotify refused the player connection");
-                // connect() resolving only means the handshake was accepted; the
-                // device isn't usable until "ready" fires. Stop showing the
-                // spinner either way and let the listener flip the state.
-                setBusy(null);
-                setSdkError(
-                  "Spotify accepted the connection but the player hasn't reported ready yet — " +
-                    "this usually means the webview can't decode DRM audio."
-                );
-              } catch (e: any) {
-                const msg = e?.message || "Couldn't start in-app playback";
-                notify(msg, "error");
-                setSdkError(msg);
-                console.error("[spotify] SDK enable failed", e);
-              } finally {
-                setBusy(null);
-              }
-            }}
-            disabled={busy !== null || playerReady}
-            className={
-              btn +
-              " shrink-0 px-4 py-2 text-sm " +
-              (playerReady
-                ? "bg-emerald-500/15 text-emerald-300"
-                : "bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25")
-            }
-          >
-            {playerReady ? "Ready" : busy === "sdk" ? "Starting…" : "Enable"}
-          </button>
-        </div>
-        {playerReady && (
-          <p className="text-xs text-emerald-300 mt-3">
-            Pick &quot;Sahara Dashboard&quot; from the device list below to play through the app.
-          </p>
-        )}
-        {sdkError && !playerReady && (
-          <div className="mt-3 max-w-[65ch]">
-            <p className="text-xs text-rose-300">{sdkError}</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Full detail is in the developer console (right-click → Inspect → Console).
-            </p>
-          </div>
-        )}
-        {!playerReady && (
-          <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
-            Needs Spotify Premium. The SDK runs in a webview, so if this stays unavailable the app
-            can still control whichever device is active below.
-          </p>
-        )}
-      </div>
-
       {/* Device picker */}
       <div className="glass rounded-2xl p-5">
         <h3 className="font-medium mb-1">Playback device</h3>
         <p className="text-sm text-slate-400 mb-4 max-w-[65ch]">
-          Spotify can only play on a device that&apos;s already online. Pick one here to move
-          playback to it.
+          Sahara is a remote control — pick the device you want to hear music on. Spotify can only
+          play on a device that&apos;s already online, so open Spotify on your phone or Mac first.
         </p>
         {devices.length === 0 ? (
           <p className="text-sm text-slate-500">
