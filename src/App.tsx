@@ -189,7 +189,8 @@ export default function App() {
     return () => clearTimeout(t);
   }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
-  const prevWaitsRef = useRef<{ Mater?: number; "Royal Victoria"?: number }>({});
+  const _cachedWaits = (() => { try { return JSON.parse(localStorage.getItem("sahara_ed_waits") || "null")?.waits || {}; } catch { return {}; } })();
+  const prevWaitsRef = useRef<{ Mater?: number; "Royal Victoria"?: number }>(_cachedWaits);
   const [edLastUpdate, setEdLastUpdate] = useState("");
   const [edStale, setEdStale] = useState(false);
   const [edLastFetch, setEdLastFetch] = useState<number>(0);
