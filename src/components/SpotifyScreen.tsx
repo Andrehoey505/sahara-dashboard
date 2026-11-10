@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Play, Pause, SkipForward, SkipBack, Music2, Link2, LogOut, RefreshCw } from "lucide-react";
 import { motionTokens } from "../lib/design";
@@ -79,21 +79,33 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   useEffect(() => {
     if (!connected) return;
     refresh();
-    const t = setInterval(refresh, 1500);
+    const t = setInterval(refresh, 1000);
     return () => clearInterval(t);
   }, [connected, refresh]);
 
+  // Anchor playback position to the wall clock at each poll, then interpolate.
+  // Incrementing a counter drifts between polls; anchoring means the estimate
+  // stays honest even if a tick is late or the tab was throttled.
+  const anchorRef = useRef<{ base: number; at: number }>({ base: 0, at: Date.now() });
+
   useEffect(() => {
-    if (!now?.is_playing || !now.duration_ms) {
+    anchorRef.current = { base: now?.progress_ms ?? 0, at: Date.now() };
+  }, [now?.progress_ms, now?.track]);
+
+  useEffect(() => {
+    const duration = now?.duration_ms ?? 0;
+    if (!now?.is_playing || !duration) {
       setPosition(now?.progress_ms ?? 0);
       return;
     }
-    setPosition(now.progress_ms ?? 0);
-    const t = setInterval(() => {
-      setPosition((p) => Math.min(now.duration_ms ?? p, p + 100));
-    }, 100);
+    const tick = () => {
+      const { base, at } = anchorRef.current;
+      setPosition(Math.min(duration, base + (Date.now() - at)));
+    };
+    tick();
+    const t = setInterval(tick, 100);
     return () => clearInterval(t);
-  }, [now?.progress_ms, now?.is_playing, now?.duration_ms]);
+  }, [now?.is_playing, now?.duration_ms, now?.progress_ms]);
 
   useEffect(() => {
     if (!connected || !clientId) return;
