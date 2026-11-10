@@ -47,7 +47,8 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={motionTokens.base}
-          className="fixed inset-0 z-50 bg-slate-950 overflow-hidden h-screen w-screen"
+          style={{ position: "fixed", top: 0, left: 0, width: "100dvw", height: "100dvh" }}
+          className="z-50 bg-slate-950 overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Full screen player"
@@ -65,7 +66,7 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
           )}
           <div className="absolute inset-0 bg-slate-950/70" />
 
-          <div className="relative h-full min-h-0 flex flex-col p-4 sm:p-8">
+          <div className="relative flex flex-col p-4 sm:p-6" style={{ height: "100%" }}>
             <header className="flex items-center justify-between shrink-0">
               <p className="text-xs uppercase tracking-[0.25em] text-indigo-300/70">
                 {now?.is_playing ? "Now playing" : "Paused"}
@@ -93,7 +94,7 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
             </header>
 
             {/* Lyrics fill the left, artwork and details the right. */}
-            <div className="flex-1 min-h-0 grid lg:grid-cols-[1.5fr_1fr] gap-8 lg:gap-12 mt-4 overflow-hidden">
+            <div className="flex-1 min-h-0 grid lg:grid-cols-[1.6fr_1fr] gap-6 lg:gap-10 mt-3 overflow-hidden">
               {showLyrics && (
                 <div className="min-h-0 h-full order-2 lg:order-1 overflow-hidden">
                   <div className="h-full min-h-0 overflow-hidden">

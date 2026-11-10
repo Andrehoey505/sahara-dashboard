@@ -119,8 +119,8 @@ export default function Lyrics({
     const isActive = i === activeIndex;
     if (fullscreen) {
       return isActive
-        ? "text-2xl sm:text-3xl xl:text-4xl font-bold text-white"
-        : "text-2xl sm:text-3xl xl:text-4xl font-bold text-slate-500/50";
+        ? "text-2xl sm:text-3xl xl:text-4xl font-bold"
+        : "text-2xl sm:text-3xl xl:text-4xl font-bold text-slate-600/50";
     }
     if (large) {
       return isActive
@@ -130,36 +130,35 @@ export default function Lyrics({
     return isActive ? "text-sm text-indigo-200 font-medium" : "text-sm text-slate-500";
   };
 
-  /** Render a line, emphasising the word currently being sung. */
+  /**
+   * Render a line with a smooth karaoke sweep.
+   *
+   * LRCLIB gives line timings, not per-word ones, so the fill position is
+   * interpolated across the line's duration. A gradient with a hard stop at
+   * that position wipes from filled to unfilled, which reads as a continuous
+   * transition rather than a word snapping on and off.
+   */
   const renderLine = (text: string, isActive: boolean) => {
-    if (!fullscreen || !isActive) return text;
-    const words = text.split(/(\s+)/);
-    const spoken = words.filter((w) => w.trim().length > 0);
-    if (spoken.length === 0) return text;
-    const cutoff = Math.floor(wordProgress * spoken.length);
-
-    let seen = -1;
-    return words.map((w, idx) => {
-      if (!w.trim()) return <span key={idx}>{w}</span>;
-      seen += 1;
-      const isCurrent = seen === cutoff;
-      return (
-        <span
-          key={idx}
-          className={isCurrent ? "text-white" : undefined}
-          style={
-            isCurrent
-              ? {
-                  textShadow:
-                    "0 0 18px rgba(165,180,252,0.85), 0 0 42px rgba(129,140,248,0.55), 0 0 80px rgba(99,102,241,0.35)",
-                }
-              : undefined
-          }
-        >
-          {w}
-        </span>
-      );
-    });
+    if (!isActive || !fullscreen) return text;
+    const pct = Math.round(wordProgress * 100);
+    return (
+      <span
+        style={{
+          backgroundImage: `linear-gradient(90deg,
+            #ffffff 0%,
+            #ffffff ${pct}%,
+            rgba(148,163,184,0.45) ${pct}%,
+            rgba(148,163,184,0.45) 100%)`,
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          color: "transparent",
+          filter: "drop-shadow(0 0 18px rgba(129,140,248,0.55)) drop-shadow(0 0 42px rgba(99,102,241,0.3))",
+          transition: "background-image 120ms linear",
+        }}
+      >
+        {text}
+      </span>
+    );
   };
 
   const body = (
@@ -180,14 +179,14 @@ export default function Lyrics({
         <div
           ref={scrollRef}
           className={
-            "overflow-y-auto overflow-x-hidden pr-2 scroll-smooth " +
+            "relative overflow-y-auto overflow-x-hidden pr-2 scroll-smooth " +
             (fullscreen ? "h-full" : large ? "h-full" : "max-h-72")
           }
           style={
             fullscreen
               ? {
-                  paddingTop: "22vh",
-                  paddingBottom: "22vh",
+                  paddingTop: "18vh",
+                  paddingBottom: "18vh",
                   maskImage:
                     "linear-gradient(to bottom, transparent, black 14%, black 86%, transparent)",
                   WebkitMaskImage:
@@ -204,7 +203,7 @@ export default function Lyrics({
                 key={i}
                 ref={isActive ? activeRef : null}
                 animate={{
-                  opacity: isActive ? 1 : d <= 1 ? 0.6 : d <= 3 ? 0.3 : 0.15,
+                  opacity: isActive ? 1 : d <= 1 ? 0.55 : d <= 3 ? 0.25 : 0.12,
                   scale: isActive ? 1 : 0.98,
                 }}
                 transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
@@ -216,11 +215,6 @@ export default function Lyrics({
                       ? "leading-snug py-2 "
                       : "leading-relaxed py-0.5 ") +
                   lineClass(i)
-                }
-                style={
-                  isActive
-                    ? { textShadow: "0 0 26px rgba(129,140,248,0.45)" }
-                    : undefined
                 }
               >
                 {renderLine(line.text, isActive)}
