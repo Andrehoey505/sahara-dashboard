@@ -12,9 +12,56 @@
     line-height: 1.5;
   }
 
+  /* Themes only styled body before, so Light and Midnight looked identical to
+     Dark. These override the surface colours the components actually use. */
   [data-theme="dark"] body { @apply bg-slate-950 text-slate-100; }
-  [data-theme="light"] body { @apply bg-slate-100 text-slate-900; }
   [data-theme="midnight"] body { @apply bg-indigo-950 text-indigo-100; }
+
+  [data-theme="midnight"] .glass {
+    background: rgba(30, 27, 75, 0.65);
+    border-color: rgba(129, 140, 248, 0.18);
+  }
+
+  /* Light theme: invert the slate surfaces rather than every utility class.
+     Scoped to the app shell so portalled overlays keep their own styling. */
+  [data-theme="light"] body { @apply bg-slate-100 text-slate-900; }
+  [data-theme="light"] .glass {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(15, 23, 42, 0.1);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  }
+  [data-theme="light"] .bg-slate-950,
+  [data-theme="light"] .bg-slate-950\/80,
+  [data-theme="light"] .bg-slate-950\/95 { background-color: rgb(241 245 249) !important; }
+  [data-theme="light"] .bg-slate-900,
+  [data-theme="light"] .bg-slate-900\/40,
+  [data-theme="light"] .bg-slate-900\/50,
+  [data-theme="light"] .bg-slate-900\/60,
+  [data-theme="light"] .bg-slate-900\/80 { background-color: rgb(248 250 252) !important; }
+  [data-theme="light"] .bg-slate-800,
+  [data-theme="light"] .bg-slate-800\/30,
+  [data-theme="light"] .bg-slate-800\/40,
+  [data-theme="light"] .bg-slate-800\/50,
+  [data-theme="light"] .bg-slate-800\/60 { background-color: rgb(226 232 240) !important; }
+  [data-theme="light"] .bg-slate-700,
+  [data-theme="light"] .bg-slate-700\/40,
+  [data-theme="light"] .bg-slate-700\/50,
+  [data-theme="light"] .bg-slate-700\/70 { background-color: rgb(203 213 225) !important; }
+  [data-theme="light"] .border-slate-700,
+  [data-theme="light"] .border-slate-700\/40,
+  [data-theme="light"] .border-slate-700\/50,
+  [data-theme="light"] .border-slate-800\/60 { border-color: rgb(203 213 225) !important; }
+  [data-theme="light"] .text-slate-100,
+  [data-theme="light"] .text-slate-200,
+  [data-theme="light"] .text-slate-300 { color: rgb(15 23 42) !important; }
+  [data-theme="light"] .text-slate-400 { color: rgb(51 65 85) !important; }
+  [data-theme="light"] .text-slate-500,
+  [data-theme="light"] .text-slate-600 { color: rgb(100 116 139) !important; }
+  [data-theme="light"] .accent-wash {
+    background:
+      radial-gradient(120% 90% at 12% -10%, rgba(99, 102, 241, 0.14), transparent 60%),
+      radial-gradient(90% 80% at 88% 0%, rgba(139, 92, 246, 0.1), transparent 55%);
+  }
 
   /* A visible focus ring everywhere. Never remove it without a replacement. */
   :focus-visible {

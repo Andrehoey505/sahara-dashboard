@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Sahara Dashboard",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "identifier": "com.sahara.dashboard",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -36,7 +36,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_YOUR_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM3NzE0NUEwNzgwNkNBNzEKUldSeHlnWjRvRVZ4TjBSai80V1VJaWtBWkd0T0xzTXAza2YyTEk0NDJqdnp5M3cvTk1NOVcrWFkK",
       "endpoints": [
         "https://github.com/Andrehoey505/sahara-dashboard/releases/latest/download/latest.json"
       ],

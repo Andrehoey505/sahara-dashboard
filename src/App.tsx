@@ -706,13 +706,32 @@ export default function App() {
                 <p className="text-sm font-medium mb-2">"{contextViolation.full_message || contextViolation.message}"</p>
                 <p className="text-xs text-slate-400">Flagged words: {contextViolation.words?.join(", ")}</p>
               </div>
-              <div className="text-xs text-slate-500">
-                <p className="mb-1">Before:</p>
-                <div className="p-2 rounded bg-slate-800/20 text-slate-400">... previous messages in channel ...</div>
-              </div>
-              <div className="text-xs text-slate-500">
-                <p className="mb-1">After:</p>
-                <div className="p-2 rounded bg-slate-800/20 text-slate-400">... following messages in channel ...</div>
+              <div className="text-xs text-slate-500 grid grid-cols-2 gap-2">
+                <div className="p-2 rounded bg-slate-800/20">
+                  <p className="mb-1">Severity</p>
+                  <p className="text-slate-300 capitalize">{contextViolation.severity || "unknown"}</p>
+                </div>
+                <div className="p-2 rounded bg-slate-800/20">
+                  <p className="mb-1">Channel</p>
+                  <p className="text-slate-300">{contextViolation.channel ? `#${contextViolation.channel}` : "—"}</p>
+                </div>
+                <div className="p-2 rounded bg-slate-800/20">
+                  <p className="mb-1">Type</p>
+                  <p className="text-slate-300">{contextViolation.type || "unknown"}</p>
+                </div>
+                <div className="p-2 rounded bg-slate-800/20">
+                  <p className="mb-1">Flagged</p>
+                  <p className="text-slate-300">
+                    {contextViolation.time
+                      ? new Date(contextViolation.time).toLocaleString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—"}
+                  </p>
+                </div>
               </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => { handleContextAction("approve", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-sm hover:bg-emerald-500/30">Approve</button>
