@@ -182,11 +182,12 @@ export default function App() {
   const [slingOn, setSlingOn] = useState(() => localStorage.getItem("sahara_sling") !== "off");
   const [slingStatusAsked, setSlingStatusAsked] = useState(() => sessionStorage.getItem("sahara_sling_asked_session") === "1");
   const [sleepMode, setSleepMode] = useState(false);
+  const slingBackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!isAndre || !loggedIn || !slingOn || sleepMode) return;
-    const show = () => { setArmReminder(true); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/arm_reminder.ogg'); b.play().catch(()=>{}); }, 700); setTimeout(()=>{ const c=new Audio('/sounds/sling_back_on.ogg'); c.play().catch(()=>{}); }, 8*60*1000); } catch {} };
+    const show = () => { setArmReminder(true); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/arm_reminder.ogg'); b.play().catch(()=>{}); }, 700); if (slingBackTimerRef.current) clearTimeout(slingBackTimerRef.current); slingBackTimerRef.current = setTimeout(()=>{ const c=new Audio('/sounds/sling_back_on.ogg'); c.play().catch(()=>{}); }, 8*60*1000); } catch {} };
     const t = setTimeout(show, 90 * 60 * 1000);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); if (slingBackTimerRef.current) { clearTimeout(slingBackTimerRef.current); slingBackTimerRef.current = null; } };
   }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   const _cachedWaits = (() => { try { return JSON.parse(localStorage.getItem("sahara_ed_waits") || "null")?.waits || {}; } catch { return {}; } })();
