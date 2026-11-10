@@ -20,6 +20,8 @@ import type { AppSettings } from "./SetupScreen";
 import { openExternal, readFromClipboard } from "../lib/native";
 import MusicSearch from "./MusicSearch";
 import Lyrics from "./Lyrics";
+import NowPlayingHero from "./NowPlayingHero";
+import FullScreenPlayer from "./FullScreenPlayer";
 
 type Props = {
   settings: AppSettings;
@@ -36,6 +38,10 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   const [connected, setConnected] = useState(!!loadToken());
   const [now, setNow] = useState<NowPlaying | null>(null);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  // Playback position ticks locally between polls so the progress bar and the
+  // lyric highlight stay smooth instead of jumping every few seconds.
+  const [position, setPosition] = useState(0);
+  const [fullScreen, setFullScreen] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [pasteMode, setPasteMode] = useState(false);
@@ -73,9 +79,21 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   useEffect(() => {
     if (!connected) return;
     refresh();
-    const t = setInterval(refresh, 8000);
+    const t = setInterval(refresh, 3000);
     return () => clearInterval(t);
   }, [connected, refresh]);
+
+  useEffect(() => {
+    if (!now?.is_playing || !now.duration_ms) {
+      setPosition(now?.progress_ms ?? 0);
+      return;
+    }
+    setPosition(now.progress_ms ?? 0);
+    const t = setInterval(() => {
+      setPosition((p) => Math.min(now.duration_ms ?? p, p + 250));
+    }, 250);
+    return () => clearInterval(t);
+  }, [now?.progress_ms, now?.is_playing, now?.duration_ms]);
 
   useEffect(() => {
     if (!connected || !clientId) return;
@@ -316,70 +334,30 @@ export default function SpotifyScreen({ settings, notify }: Props) {
         onPlayed={refresh}
       />
 
-      {/* Now playing */}
-      <div className="glass rounded-2xl p-5">
-        <div className="flex items-center gap-4">
-          {now?.image ? (
-            <img src={now.image} alt="" className="w-20 h-20 rounded-lg object-cover bg-slate-800" />
-          ) : (
-            <div className="w-20 h-20 rounded-lg bg-slate-800 flex items-center justify-center">
-              <Music2 className="w-7 h-7 text-slate-600" />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="font-medium truncate">{now?.track || "Nothing playing"}</p>
-            <p className="text-sm text-slate-400 truncate">{now?.artists || "—"}</p>
-            {now?.device && <p className="text-xs text-slate-500 mt-1">on {now.device}</p>}
-          </div>
-        </div>
-
-        {now?.duration_ms && now?.progress_ms != null && (
-          <div className="mt-4">
-            <div className="h-1 rounded-full bg-slate-700 overflow-hidden">
-              <div
-                className="h-full bg-indigo-500 transition-[width] duration-500"
-                style={{ width: `${Math.min(100, (now.progress_ms / now.duration_ms) * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 mt-5">
-          <button
-            onClick={() => doTransport("previous")}
-            disabled={busy !== null}
-            aria-label="Previous track"
-            className={btn + " p-2.5 bg-slate-700/50 text-slate-300 hover:bg-slate-600/60"}
-          >
-            <SkipBack className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => doTransport(now?.is_playing ? "pause" : "play")}
-            disabled={busy !== null}
-            className={btn + " px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 font-semibold text-sm hover:opacity-90"}
-          >
-            {now?.is_playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            {now?.is_playing ? "Pause" : "Play"}
-          </button>
-          <button
-            onClick={() => doTransport("next")}
-            disabled={busy !== null}
-            aria-label="Next track"
-            className={btn + " p-2.5 bg-slate-700/50 text-slate-300 hover:bg-slate-600/60"}
-          >
-            <SkipForward className="w-4 h-4" />
-          </button>
-        </div>
-
-      </div>
+      <NowPlayingHero
+        now={now}
+        position={position}
+        busy={busy !== null}
+        onTransport={doTransport}
+        onExpand={() => setFullScreen(true)}
+      />
 
       <Lyrics
         track={now?.track}
         artist={now?.artists}
         album={now?.album}
         durationSec={now?.duration_ms ? Math.round(now.duration_ms / 1000) : undefined}
-        progressMs={now?.progress_ms}
+        progressMs={position}
         trackKey={`${now?.track || ""}|${now?.artists || ""}`}
+      />
+
+      <FullScreenPlayer
+        open={fullScreen}
+        now={now}
+        position={position}
+        busy={busy !== null}
+        onClose={() => setFullScreen(false)}
+        onTransport={doTransport}
       />
 
       {/* Playlists */}

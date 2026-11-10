@@ -12,13 +12,23 @@ type Props = {
   progressMs?: number;
   /** Changing track keys the component so state resets cleanly. */
   trackKey: string;
+  /** "card" is the compact sidebar version; "large" is for the full-screen player. */
+  variant?: "card" | "large";
 };
 
 /**
  * Lyrics from LRCLIB, highlighted line-by-line when the track has synced
  * timing. Falls back to plain text when it doesn't.
  */
-export default function Lyrics({ track, artist, album, durationSec, progressMs, trackKey }: Props) {
+export default function Lyrics({
+  track,
+  artist,
+  album,
+  durationSec,
+  progressMs,
+  trackKey,
+  variant = "card",
+}: Props) {
   const [data, setData] = useState<LyricsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -61,43 +71,68 @@ export default function Lyrics({ track, artist, album, durationSec, progressMs, 
 
   if (!track) return null;
 
-  return (
-    <div className="glass rounded-2xl p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <Mic2 className="w-4 h-4 text-indigo-300" />
-        <h3 className="font-medium">Lyrics</h3>
-      </div>
+  const large = variant === "large";
+  const lineClass = (i: number) =>
+    large
+      ? i === activeIndex
+        ? "text-2xl sm:text-3xl font-semibold text-indigo-200 transition-colors duration-200"
+        : "text-2xl sm:text-3xl font-semibold text-slate-600 transition-colors duration-200"
+      : i === activeIndex
+        ? "text-sm text-indigo-200 font-medium transition-colors duration-200"
+        : "text-sm text-slate-500 transition-colors duration-200";
 
-      {loading && <p className="text-sm text-slate-500">Looking for lyrics…</p>}
+  const body = (
+    <>
+      {loading && (
+        <p className={large ? "text-lg text-slate-500" : "text-sm text-slate-500"}>
+          Looking for lyrics…
+        </p>
+      )}
 
       {!loading && notFound && (
-        <p className="text-sm text-slate-500">
+        <p className={large ? "text-lg text-slate-500" : "text-sm text-slate-500"}>
           No lyrics found for this track. LRCLIB covers a lot but not everything.
         </p>
       )}
 
       {data?.synced.length ? (
-        <div className="max-h-72 overflow-y-auto pr-1 space-y-1">
+        <div className={"overflow-y-auto pr-1 " + (large ? "h-full space-y-4" : "max-h-72 space-y-1")}>
           {data.synced.map((line, i) => (
             <p
               key={i}
               ref={i === activeIndex ? activeRef : null}
-              className={
-                "text-sm leading-relaxed transition-colors duration-300 " +
-                (i === activeIndex
-                  ? "text-indigo-200 font-medium"
-                  : "text-slate-500")
-              }
+              className={(large ? "leading-snug " : "leading-relaxed ") + lineClass(i)}
             >
               {line.text}
             </p>
           ))}
         </div>
       ) : data?.plain ? (
-        <pre className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap font-sans max-h-72 overflow-y-auto">
+        <pre
+          className={
+            "whitespace-pre-wrap font-sans overflow-y-auto " +
+            (large
+              ? "text-xl leading-relaxed text-slate-400 h-full"
+              : "text-sm leading-relaxed text-slate-400 max-h-72")
+          }
+        >
           {data.plain}
         </pre>
       ) : null}
+    </>
+  );
+
+  if (large) {
+    return <div className="h-full">{body}</div>;
+  }
+
+  return (
+    <div className="glass rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Mic2 className="w-4 h-4 text-indigo-300" />
+        <h3 className="font-medium">Lyrics</h3>
+      </div>
+      {body}
     </div>
   );
 }
