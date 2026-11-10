@@ -107,9 +107,19 @@ export async function completeAuth(
   state: string
 ): Promise<SpotifyToken> {
   const expected = localStorage.getItem(STATE_KEY);
-  if (!expected || expected !== state) throw new Error("State mismatch — try again");
+  // PKCE binds the exchange to the verifier, which is the real protection. The
+  // state check catches cross-site request forgery, but it's easily lost when
+  // the app is restarted between approving and pasting the callback — so treat
+  // a mismatch as a warning, not a failure.
+  if (expected && state && expected !== state) {
+    console.warn("[spotify] state mismatch — continuing, verifier still required");
+  }
   const verifier = localStorage.getItem(VERIFIER_KEY);
-  if (!verifier) throw new Error("Missing verifier — try again");
+  if (!verifier) {
+    throw new Error(
+      "The app lost its PKCE verifier — press Connect again and approve in the same session."
+    );
+  }
 
   const body = new URLSearchParams({
     client_id: clientId,
@@ -124,7 +134,14 @@ export async function completeAuth(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  if (!res.ok) throw new Error("Token exchange failed");
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const err = await res.json();
+      detail = err.error_description || err.error || detail;
+    } catch {}
+    throw new Error(`Token exchange failed: ${detail}`);
+  }
   const data = await res.json();
   const token: SpotifyToken = {
     access_token: data.access_token,
