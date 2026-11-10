@@ -54,6 +54,10 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
       notify("That doesn't look like a Discord user ID", "error");
       return;
     }
+    if (newReason.trim().length < 3) {
+      notify("A reason is required — it's what makes the entry auditable", "error");
+      return;
+    }
     setBusy("add");
     try {
       const res = await fetch(apiUrl + "/api/trolls", {
@@ -184,20 +188,20 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
             </div>
             <div>
               <label htmlFor="troll-reason" className="block text-sm font-medium text-slate-300 mb-2">
-                Reason <span className="text-slate-500 font-normal">(optional)</span>
+                Reason
               </label>
               <input
                 id="troll-reason"
                 value={newReason}
                 onChange={(e) => setNewReason(e.target.value)}
-                placeholder="Why they're on the list"
+                placeholder="Why they're on the list — required"
                 className={field}
               />
             </div>
           </div>
           <button
             onClick={add}
-            disabled={busy !== null || !newId.trim()}
+            disabled={busy !== null || !newId.trim() || newReason.trim().length < 3}
             className="mt-4 px-4 py-2 rounded-lg text-sm bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 transition"
           >
             {busy === "add" ? "Adding…" : "Add to list"}
@@ -229,7 +233,38 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
             <div className="min-w-0 flex-1">
               <p className="font-medium truncate">{t.name || "Unknown user"}</p>
               <p className="text-xs text-slate-500 font-mono truncate">{t.user_id}</p>
-              {t.reason && <p className="text-sm text-slate-400 mt-1.5 max-w-[65ch]">{t.reason}</p>}
+              {t.reason ? (
+                <p className="text-sm text-slate-400 mt-1.5 max-w-[65ch]">{t.reason}</p>
+              ) : (
+                <button
+                  onClick={() => {
+                    const reason = window.prompt(
+                      `Why is ${t.name || t.user_id} on the troll list?`,
+                      ""
+                    );
+                    if (reason && reason.trim().length >= 3) {
+                      fetch(apiUrl + "/api/trolls/" + encodeURIComponent(t.user_id) + "/reason", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ reason: reason.trim() }),
+                      })
+                        .then(async (r) => {
+                          const d = await r.json().catch(() => ({}));
+                          if (r.ok && d.success) {
+                            notify("Reason saved", "success");
+                            load();
+                          } else {
+                            notify(d.error || "Couldn't save that reason", "error");
+                          }
+                        })
+                        .catch(() => notify("Connection failed", "error"));
+                    }
+                  }}
+                  className="mt-1.5 text-xs px-2 py-1 rounded-lg bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 transition-colors"
+                >
+                  No reason recorded — add one
+                </button>
+              )}
               <p className="text-xs text-slate-600 mt-1">
                 {t.servers?.length ? t.servers.join(", ") : "no recorded servers"}
                 {t.added_at ? ` · added ${t.added_at.slice(0, 10)}` : ""}
