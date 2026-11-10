@@ -46,7 +46,7 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
   const [configs, setConfigs] = useState<Record<string, ServerConfig>>({});
   const [selected, setSelected] = useState<string>("");
   const [draft, setDraft] = useState<ServerConfig>(emptyConfig);
-  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+  const [roles, setRoles] = useState<{ id: string; name: string; assignable?: boolean; color?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -81,14 +81,30 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
     setDraft(existing ? { ...existing, role_mappings: existing.role_mappings.length ? existing.role_mappings : [{ emoji: "", role_id: "" }] } : { ...emptyConfig });
   }, [selected, configs]);
 
-  // Roles for the dropdown, best effort — the bot doesn't expose a role list yet.
+  // Roles for the dropdown, from /api/roles.
+  const [rolesError, setRolesError] = useState("");
+  const [canManage, setCanManage] = useState(true);
+
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;
-    fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(selected))
-      .catch(() => null)
-      .finally(() => {
-        if (!cancelled) setRoles([]);
+    setRolesError("");
+    fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(selected))
+      .then((r) => {
+        if (!r.ok) throw new Error("bad status");
+        return r.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setRoles(data.roles || []);
+        setCanManage(data.can_manage_roles !== false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRoles([]);
+        setRolesError(
+          "Couldn't load roles — the bot needs the /api/roles endpoint (update Babblebot), or it isn't connected."
+        );
       });
     return () => {
       cancelled = true;
@@ -285,14 +301,31 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
                       className={field + " pl-8 text-center"}
                     />
                   </div>
-                  <input
-                    value={m.role_id}
-                    onChange={(e) => setMapping(i, { role_id: e.target.value })}
-                    placeholder="Role ID"
-                    aria-label={`Role ID ${i + 1}`}
-                    spellCheck={false}
-                    className={field}
-                  />
+                  {roles.length > 0 ? (
+                    <select
+                      value={m.role_id}
+                      onChange={(e) => setMapping(i, { role_id: e.target.value })}
+                      aria-label={`Role ${i + 1}`}
+                      className={field}
+                    >
+                      <option value="">Pick a role…</option>
+                      {roles.map((r) => (
+                        <option key={r.id} value={r.id} disabled={r.assignable === false}>
+                          {r.name}
+                          {r.assignable === false ? " — can't assign" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={m.role_id}
+                      onChange={(e) => setMapping(i, { role_id: e.target.value })}
+                      placeholder="Role ID"
+                      aria-label={`Role ID ${i + 1}`}
+                      spellCheck={false}
+                      className={field}
+                    />
+                  )}
                   <button
                     onClick={() => removeRow(i)}
                     aria-label={`Remove mapping ${i + 1}`}
@@ -304,9 +337,19 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
               ))}
             </div>
 
+            {rolesError && (
+              <p className="text-xs text-amber-300 mt-3 max-w-[65ch]">{rolesError}</p>
+            )}
+            {!canManage && (
+              <p className="text-xs text-amber-300 mt-3 max-w-[65ch]">
+                The bot is missing Manage Roles in this server, so reactions won't actually assign
+                anything until that permission is granted.
+              </p>
+            )}
             <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
-              Role IDs come from Discord with Developer Mode on — right-click a role → Copy ID.
-              Custom emoji need the full form, e.g. <code className="text-slate-400">name:id</code>.
+              Roles the bot can&apos;t assign are greyed out — usually they sit above the bot&apos;s
+              own role, or are managed by an integration. Custom emoji need the full form, e.g.{" "}
+              <code className="text-slate-400">name:id</code>.
             </p>
           </div>
 
