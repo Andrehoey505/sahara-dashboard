@@ -68,6 +68,15 @@ export default function Lyrics({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackKey]);
 
+  /**
+   * Seconds to delay the highlight relative to the reported position.
+   *
+   * LRC timestamps mark when a line starts, and Spotify's progress_ms trails
+   * the audio reaching the speaker by a beat, so highlighting exactly on time
+   * reads as early. A small positive offset makes the glow land with the vocal.
+   */
+  const HIGHLIGHT_OFFSET = 0.3;
+
   const fullscreen = variant === "fullscreen";
   const large = variant === "large" || fullscreen;
 
@@ -75,7 +84,7 @@ export default function Lyrics({
   const lines = data?.synced ?? [];
 
   const activeIndex = lines.length
-    ? lines.reduce((best, line, i) => (line.time <= seconds + 0.25 ? i : best), -1)
+    ? lines.reduce((best, line, i) => (line.time <= seconds - HIGHLIGHT_OFFSET ? i : best), -1)
     : -1;
 
   // Progress through the active line, used to pick which word to emphasise.
@@ -84,7 +93,7 @@ export default function Lyrics({
     const start = lines[activeIndex].time;
     const end = activeIndex + 1 < lines.length ? lines[activeIndex + 1].time : start + 4;
     const span = Math.max(0.4, end - start);
-    wordProgress = Math.min(1, Math.max(0, (seconds - start) / span));
+    wordProgress = Math.min(1, Math.max(0, (seconds - HIGHLIGHT_OFFSET - start) / span));
   }
 
   // Keep the active line centred. Re-centres on resize as well, so opening the
