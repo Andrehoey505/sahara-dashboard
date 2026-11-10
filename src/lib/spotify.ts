@@ -340,19 +340,49 @@ declare global {
 
 let sdkPromise: Promise<any> | null = null;
 
-/** Load the Web Playback SDK once and resolve with window.Spotify. */
+/**
+ * Load the Web Playback SDK once and resolve with window.Spotify.
+ *
+ * The callback has to be installed *before* the script tag is appended —
+ * Spotify calls onSpotifyWebPlaybackSDKReady synchronously while evaluating
+ * the bundle, so setting it afterwards misses the event entirely and the
+ * promise never settles.
+ */
 export function loadPlaybackSdk(): Promise<any> {
   if (sdkPromise) return sdkPromise;
+
   sdkPromise = new Promise((resolve, reject) => {
     if (window.Spotify) return resolve(window.Spotify);
-    window.onSpotifyWebPlaybackSDKReady = () => resolve(window.Spotify);
+
+    let settled = false;
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
+
+    // Must be set before the script is appended.
+    window.onSpotifyWebPlaybackSDKReady = () =>
+      done(() => (window.Spotify ? resolve(window.Spotify) : reject(new Error("SDK loaded but window.Spotify is missing"))));
+
     const script = document.createElement("script");
     script.src = "https://sdk.scdn.co/spotify-player.js";
     script.async = true;
-    script.onerror = () => reject(new Error("Couldn't load the Spotify playback SDK"));
+    script.onerror = () => done(() => reject(new Error("Couldn't load the Spotify playback SDK (blocked by CSP or network)")));
+    script.onload = () => {
+      // If the ready callback already fired we're done; otherwise give it a moment.
+      setTimeout(() => {
+        if (window.Spotify) done(() => resolve(window.Spotify));
+      }, 500);
+    };
     document.head.appendChild(script);
-    setTimeout(() => reject(new Error("Spotify playback SDK timed out")), 15000);
+
+    setTimeout(
+      () => done(() => reject(new Error("Spotify playback SDK timed out — check the console for CSP errors"))),
+      15000
+    );
   });
+
   return sdkPromise;
 }
 

@@ -329,9 +329,12 @@ export default function SpotifyScreen({ settings, notify }: Props) {
           </p>
         )}
         {sdkError && !playerReady && (
-          <p className="text-xs text-rose-300 mt-3 max-w-[65ch]">
-            {sdkError}
-          </p>
+          <div className="mt-3 max-w-[65ch]">
+            <p className="text-xs text-rose-300">{sdkError}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Full detail is in the developer console (right-click → Inspect → Console).
+            </p>
+          </div>
         )}
         {!playerReady && (
           <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
