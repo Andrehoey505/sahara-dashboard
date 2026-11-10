@@ -79,7 +79,7 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   useEffect(() => {
     if (!connected) return;
     refresh();
-    const t = setInterval(refresh, 3000);
+    const t = setInterval(refresh, 1500);
     return () => clearInterval(t);
   }, [connected, refresh]);
 
@@ -90,8 +90,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
     }
     setPosition(now.progress_ms ?? 0);
     const t = setInterval(() => {
-      setPosition((p) => Math.min(now.duration_ms ?? p, p + 250));
-    }, 250);
+      setPosition((p) => Math.min(now.duration_ms ?? p, p + 100));
+    }, 100);
     return () => clearInterval(t);
   }, [now?.progress_ms, now?.is_playing, now?.duration_ms]);
 

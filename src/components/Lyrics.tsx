@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { Mic2 } from "lucide-react";
 import { getLyrics, type Lyrics as LyricsData } from "../lib/spotify";
 
@@ -62,11 +63,21 @@ export default function Lyrics({
 
   const seconds = progressMs != null ? progressMs / 1000 : 0;
   const activeIndex = data?.synced.length
-    ? data.synced.reduce((best, line, i) => (line.time <= seconds + 0.4 ? i : best), -1)
+    ? data.synced.reduce((best, line, i) => (line.time <= seconds + 0.25 ? i : best), -1)
     : -1;
 
+  // Distance from the active line, so nearby lines can fade rather than snap.
+  const distance = (i: number) => (activeIndex < 0 ? 99 : Math.abs(i - activeIndex));
+
+  // Scroll the active line into view. Scrolls the container rather than using
+  // scrollIntoView, which can also scroll the page behind the overlay.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const container = scrollRef.current;
+    const el = activeRef.current;
+    if (!container || !el) return;
+    const target = el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
+    container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
   }, [activeIndex]);
 
   if (!track) return null;
@@ -96,16 +107,34 @@ export default function Lyrics({
       )}
 
       {data?.synced.length ? (
-        <div className={"overflow-y-auto pr-1 " + (large ? "h-full space-y-4" : "max-h-72 space-y-1")}>
-          {data.synced.map((line, i) => (
-            <p
-              key={i}
-              ref={i === activeIndex ? activeRef : null}
-              className={(large ? "leading-snug " : "leading-relaxed ") + lineClass(i)}
-            >
-              {line.text}
-            </p>
-          ))}
+        <div
+          ref={scrollRef}
+          className={
+            "overflow-y-auto pr-1 scroll-smooth " + (large ? "h-full" : "max-h-72")
+          }
+        >
+          {data.synced.map((line, i) => {
+            const d = distance(i);
+            const isActive = i === activeIndex;
+            return (
+              <motion.p
+                key={i}
+                ref={isActive ? activeRef : null}
+                animate={{
+                  opacity: isActive ? 1 : d <= 1 ? 0.65 : d <= 3 ? 0.35 : 0.18,
+                  scale: isActive ? 1 : 0.97,
+                  y: isActive ? 0 : 0,
+                }}
+                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                className={
+                  (large ? "leading-snug py-2 origin-left " : "leading-relaxed py-0.5 origin-left ") +
+                  lineClass(i)
+                }
+              >
+                {line.text}
+              </motion.p>
+            );
+          })}
         </div>
       ) : data?.plain ? (
         <pre
