@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import SleepMode from "./components/SleepMode";
@@ -9,8 +9,12 @@ import LockScreen from "./components/LockScreen";
 import MusicScreen from "./components/MusicScreen";
 import TrollWatch from "./components/TrollWatch";
 import CatchUpBanner from "./components/CatchUpBanner";
+import SpotifyScreen from "./components/SpotifyScreen";
+import { handleCallback, loadToken } from "./lib/spotify";
 
 export default function App() {
+  // Finish the Spotify handshake if we came back from the authorise screen.
+  const [spotifyReady, setSpotifyReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
@@ -201,6 +205,23 @@ export default function App() {
   // Sleep mode: shown before the Mac is closed. Posts to the bot so anything
   // missed overnight can be surfaced on wake.
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (window.location.search.includes("code=")) {
+          const current = loadSettings();
+          if (current.spotifyClientId) {
+            await handleCallback(current.spotifyClientId, current.spotifyRedirectUri);
+          }
+        }
+      } catch (e) {
+        console.warn("Spotify callback failed", e);
+      } finally {
+        setSpotifyReady(true);
+      }
+    })();
+  }, []);
   const [showSetup, setShowSetup] = useState(false);
   const [showSleep, setShowSleep] = useState(false);
   const [catchUp, setCatchUp] = useState<{ flags: number; since?: string | null } | null>(null);
@@ -421,6 +442,10 @@ export default function App() {
   );
   const filteredViolations = violations.filter((v) => violationFilter === "all" || v.status === violationFilter);
 
+  if (!spotifyReady) {
+    return <div className="min-h-screen bg-slate-950" />;
+  }
+
   if (locked) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -490,6 +515,7 @@ export default function App() {
     { id: "moderation", label: "Moderation", icon: Shield },
     { id: "trollwatch", label: "Troll Watch", icon: ShieldAlert },
     { id: "music", label: "Music", icon: Music },
+    { id: "spotify", label: "Spotify", icon: Music2 },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -902,6 +928,7 @@ export default function App() {
             )}
             {active === "music" && <MusicScreen apiUrl={apiUrl} notify={notify} />}
             {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
+            {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
             {active === "settings" && (
               <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Settings</h3>

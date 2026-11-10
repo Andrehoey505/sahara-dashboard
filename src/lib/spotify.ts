@@ -1,0 +1,232 @@
+/**
+ * Spotify Web API — authorisation code flow with PKCE.
+ *
+ * The app has no backend of its own, so everything happens in the browser.
+ * PKCE avoids needing a client secret in the browser at all, which is the
+ * safer option for a desktop app: the secret never leaves the machine and the
+ * token exchange is bound to a one-time code verifier.
+ *
+ * Requires an active Spotify Premium account — playback control is Premium-only.
+ */
+
+const AUTH_URL = "https://accounts.spotify.com/authorize";
+const TOKEN_URL = "https://accounts.spotify.com/api/token";
+const API = "https://api.spotify.com/v1";
+
+const TOKEN_KEY = "sahara_spotify_token";
+const VERIFIER_KEY = "sahara_spotify_verifier";
+const STATE_KEY = "sahara_spotify_state";
+
+const SCOPES = [
+  "user-read-playback-state",
+  "user-modify-playback-state",
+  "user-read-currently-playing",
+  "playlist-read-private",
+  "user-library-read",
+].join(" ");
+
+export type SpotifyToken = {
+  access_token: string;
+  refresh_token?: string;
+  expires_at: number;
+};
+
+export type NowPlaying = {
+  is_playing: boolean;
+  track?: string;
+  artists?: string;
+  album?: string;
+  image?: string;
+  progress_ms?: number;
+  duration_ms?: number;
+  device?: string;
+};
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let str = "";
+  bytes.forEach((b) => (str += String.fromCharCode(b)));
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function randomString(length = 64): string {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+async function sha256(input: string): Promise<Uint8Array> {
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return new Uint8Array(digest);
+}
+
+export function loadToken(): SpotifyToken | null {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEY);
+    return raw ? (JSON.parse(raw) as SpotifyToken) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveToken(t: SpotifyToken) {
+  localStorage.setItem(TOKEN_KEY, JSON.stringify(t));
+}
+
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(VERIFIER_KEY);
+  localStorage.removeItem(STATE_KEY);
+}
+
+/** Build the authorise URL and stash the verifier/state for the callback. */
+export async function beginAuth(clientId: string, redirectUri: string): Promise<string> {
+  const verifier = randomString(64);
+  const state = randomString(16);
+  localStorage.setItem(VERIFIER_KEY, verifier);
+  localStorage.setItem(STATE_KEY, state);
+
+  const challenge = base64UrlEncode(await sha256(verifier));
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: redirectUri,
+    scope: SCOPES,
+    code_challenge_method: "S256",
+    code_challenge: challenge,
+    state,
+  });
+  return `${AUTH_URL}?${params.toString()}`;
+}
+
+/** Exchange the ?code= from the callback for a token. */
+export async function completeAuth(
+  clientId: string,
+  redirectUri: string,
+  code: string,
+  state: string
+): Promise<SpotifyToken> {
+  const expected = localStorage.getItem(STATE_KEY);
+  if (!expected || expected !== state) throw new Error("State mismatch — try again");
+  const verifier = localStorage.getItem(VERIFIER_KEY);
+  if (!verifier) throw new Error("Missing verifier — try again");
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: redirectUri,
+    code_verifier: verifier,
+  });
+
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) throw new Error("Token exchange failed");
+  const data = await res.json();
+  const token: SpotifyToken = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: Date.now() + (data.expires_in ?? 3600) * 1000,
+  };
+  saveToken(token);
+  return token;
+}
+
+async function refresh(clientId: string, token: SpotifyToken): Promise<SpotifyToken> {
+  if (!token.refresh_token) throw new Error("No refresh token");
+  const body = new URLSearchParams({
+    client_id: clientId,
+    grant_type: "refresh_token",
+    refresh_token: token.refresh_token,
+  });
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) throw new Error("Refresh failed");
+  const data = await res.json();
+  const next: SpotifyToken = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token ?? token.refresh_token,
+    expires_at: Date.now() + (data.expires_in ?? 3600) * 1000,
+  };
+  saveToken(next);
+  return next;
+}
+
+async function authed(clientId: string, path: string, init?: RequestInit) {
+  let token = loadToken();
+  if (!token) throw new Error("Not connected");
+  if (Date.now() > token.expires_at - 60000) {
+    token = await refresh(clientId, token);
+  }
+  const res = await fetch(API + path, {
+    ...init,
+    headers: {
+      ...(init?.headers || {}),
+      Authorization: `Bearer ${token.access_token}`,
+    },
+  });
+  if (res.status === 204) return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Spotify error ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getNowPlaying(clientId: string): Promise<NowPlaying | null> {
+  const data = await authed(clientId, "/me/player");
+  if (!data || !data.item) return null;
+  return {
+    is_playing: !!data.is_playing,
+    track: data.item.name,
+    artists: (data.item.artists || []).map((a: any) => a.name).join(", "),
+    album: data.item.album?.name,
+    image: data.item.album?.images?.[1]?.url || data.item.album?.images?.[0]?.url,
+    progress_ms: data.progress_ms,
+    duration_ms: data.item.duration_ms,
+    device: data.device?.name,
+  };
+}
+
+export async function transport(clientId: string, action: "play" | "pause" | "next" | "previous") {
+  const method = action === "next" || action === "previous" ? "POST" : "PUT";
+  const path = `/me/player/${action}`;
+  await authed(clientId, path, { method });
+}
+
+export async function getPlaylists(clientId: string) {
+  const data = await authed(clientId, "/me/playlists?limit=50");
+  return (data?.items || []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    image: p.images?.[1]?.url || p.images?.[0]?.url,
+    tracks: p.tracks?.total,
+    uri: p.uri,
+  }));
+}
+
+export async function playPlaylist(clientId: string, uri: string) {
+  await authed(clientId, "/me/player/play", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ context_uri: uri }),
+  });
+}
+
+/** Read ?code=&state= from the current URL and finish the handshake. */
+export async function handleCallback(clientId: string, redirectUri: string): Promise<boolean> {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  const state = params.get("state");
+  if (!code || !state) return false;
+  await completeAuth(clientId, redirectUri, code, state);
+  // Clean the code out of the URL so a refresh doesn't retry it.
+  window.history.replaceState({}, "", window.location.pathname);
+  return true;
+}
