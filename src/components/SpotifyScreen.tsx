@@ -280,8 +280,23 @@ export default function SpotifyScreen({ settings, notify }: Props) {
               if (playerReady) return;
               setBusy("sdk");
               try {
+                setSdkError("");
                 const accessToken = await currentAccessToken(clientId);
-                const player = await createPlayer(clientId, accessToken);
+
+                // Never hang: if the SDK or connect() stalls, fail loudly.
+                const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) =>
+                  Promise.race([
+                    p,
+                    new Promise<T>((_, rej) =>
+                      setTimeout(() => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms)
+                    ),
+                  ]);
+
+                const player = await withTimeout(
+                  createPlayer(clientId, accessToken),
+                  20000,
+                  "Loading the Spotify SDK"
+                );
                 player.addListener("ready", ({ device_id }: any) => {
                   setPlayerReady(true);
                   setDevices((d) => [
@@ -300,8 +315,16 @@ export default function SpotifyScreen({ settings, notify }: Props) {
                 player.addListener("account_error", () =>
                   notify("Playback needs Spotify Premium", "error")
                 );
-                const ok = await player.connect();
-                if (!ok) throw new Error("Couldn't start the player");
+                const ok = await withTimeout(player.connect(), 20000, "Starting the player");
+                if (!ok) throw new Error("Spotify refused the player connection");
+                // connect() resolving only means the handshake was accepted; the
+                // device isn't usable until "ready" fires. Stop showing the
+                // spinner either way and let the listener flip the state.
+                setBusy(null);
+                setSdkError(
+                  "Spotify accepted the connection but the player hasn't reported ready yet — " +
+                    "this usually means the webview can't decode DRM audio."
+                );
               } catch (e: any) {
                 const msg = e?.message || "Couldn't start in-app playback";
                 notify(msg, "error");
