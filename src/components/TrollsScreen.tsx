@@ -33,7 +33,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
       const res = await fetch(apiUrl + "/api/trolls");
       if (!res.ok) throw new Error("bad status");
       const data = await res.json();
-      setTrolls(data.trolls || []);
+      setTrolls(Array.isArray(data) ? data : data.trolls || []);
       setError("");
     } catch {
       setError(
@@ -61,18 +61,20 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: id, reason: newReason.trim() }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         notify(`${data.name || id} added to the troll list`, "success");
         setNewId("");
         setNewReason("");
         setAdding(false);
         load();
+      } else if (res.status === 404) {
+        notify("The bot doesn't have /api/trolls yet — pull and restart Babblebot", "error");
       } else {
-        notify(data.error || "Couldn't add that user", "error");
+        notify(data.error || `Couldn't add that user (HTTP ${res.status})`, "error");
       }
-    } catch {
-      notify("Connection failed", "error");
+    } catch (e: any) {
+      notify(`Can't reach the bot at ${apiUrl} — ${e?.message || "network error"}`, "error");
     } finally {
       setBusy(null);
     }
@@ -84,15 +86,17 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
       const res = await fetch(apiUrl + "/api/trolls/" + encodeURIComponent(t.user_id), {
         method: "DELETE",
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         notify(`${t.name || t.user_id} removed`, "success");
         setTrolls((prev) => prev.filter((x) => x.user_id !== t.user_id));
+      } else if (res.status === 404) {
+        notify("The bot doesn't have /api/trolls yet — pull and restart Babblebot", "error");
       } else {
-        notify(data.error || "Couldn't remove that user", "error");
+        notify(data.error || `Couldn't remove that user (HTTP ${res.status})`, "error");
       }
-    } catch {
-      notify("Connection failed", "error");
+    } catch (e: any) {
+      notify(`Can't reach the bot at ${apiUrl} — ${e?.message || "network error"}`, "error");
     } finally {
       setBusy(null);
     }
