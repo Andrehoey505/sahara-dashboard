@@ -445,6 +445,7 @@ export default function App() {
           <SetupScreen
             initial={settings}
             firstRun={!showSetup}
+            onClose={showSetup ? () => setShowSetup(false) : undefined}
             onSave={(next) => {
               setSettings(next);
               setApiUrl(next.apiUrl);

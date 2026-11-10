@@ -1,6 +1,20 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { Server, Eye, EyeOff, CheckCircle2, XCircle, Plug } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Server,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+  Plug,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Music,
+  Volume2,
+  Sparkles,
+  ArrowRight,
+} from "lucide-react";
 import { motionTokens } from "../lib/design";
 
 export type AppSettings = {
@@ -32,32 +46,54 @@ export function loadSettings(): AppSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch {}
-  // Migrate the old single-value key so existing installs keep working.
   const legacy = localStorage.getItem("sahara_api_url");
   return { ...DEFAULT_SETTINGS, ...(legacy ? { apiUrl: legacy } : {}) };
 }
 
 export function saveSettings(s: AppSettings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
-  // Keep the legacy key in sync for any code still reading it.
   localStorage.setItem("sahara_api_url", s.apiUrl);
 }
 
 type Props = {
   initial: AppSettings;
   onSave: (s: AppSettings) => void;
-  /** First run shows a welcome header; the settings page reuses the form. */
+  /** Called when dismissed without saving. Omitted on first run. */
+  onClose?: () => void;
   firstRun?: boolean;
 };
 
-export default function SetupScreen({ initial, onSave, firstRun = false }: Props) {
+type StepId = "welcome" | "bot" | "spotify" | "voice" | "done";
+
+const STEPS: { id: StepId; title: string; blurb: string; icon: typeof Server }[] = [
+  { id: "welcome", title: "Welcome", blurb: "Two minutes to get Sahara talking to Babblebot", icon: Sparkles },
+  { id: "bot", title: "Babblebot", blurb: "Where the bot's API is listening", icon: Server },
+  { id: "spotify", title: "Spotify", blurb: "Optional — control your own music here", icon: Music },
+  { id: "voice", title: "Announcements", blurb: "Which spoken alerts you actually want", icon: Volume2 },
+  { id: "done", title: "Ready", blurb: "You're set up", icon: CheckCircle2 },
+];
+
+const field =
+  "w-full px-3 py-2.5 rounded-lg bg-slate-800/60 border border-slate-700 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 transition";
+const label = "block text-sm font-medium text-slate-300 mb-2";
+
+export default function SetupScreen({ initial, onSave, onClose, firstRun = false }: Props) {
   const [draft, setDraft] = useState<AppSettings>(initial);
+  const [stepIndex, setStepIndex] = useState(firstRun ? 0 : 1);
   const [showSecret, setShowSecret] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
 
+  const step = STEPS[stepIndex];
+  const isFirst = stepIndex === 0;
+  const isLast = stepIndex === STEPS.length - 1;
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
+
+  const apiLooksValid = useMemo(
+    () => /^https?:\/\/.+/.test(draft.apiUrl.trim()),
+    [draft.apiUrl]
+  );
 
   const testConnection = async () => {
     setTesting(true);
@@ -72,165 +108,291 @@ export default function SetupScreen({ initial, onSave, firstRun = false }: Props
     }
   };
 
-  const field =
-    "w-full px-3 py-2.5 rounded-lg bg-slate-800/60 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 transition";
-  const label = "block text-sm font-medium text-slate-300 mb-2";
+  const commit = () => {
+    saveSettings(draft);
+    onSave(draft);
+  };
+
+  const next = () => {
+    if (step.id === "bot" && !apiLooksValid) return;
+    if (isLast) {
+      commit();
+      return;
+    }
+    setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={motionTokens.enter}
-      className="max-w-2xl"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="setup-title"
     >
-      {firstRun && (
-        <header className="mb-8">
-          <h1 className="text-2xl font-semibold">Welcome to Sahara</h1>
-          <p className="text-slate-400 mt-2 max-w-[65ch]">
-            Point the app at the machine running Babblebot, then add Spotify if you want to control
-            music from here. You can change all of this later in Settings.
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={motionTokens.enter}
+        onClick={(e) => e.stopPropagation()}
+        className="glass rounded-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
+        {/* Header */}
+        <header className="accent-wash px-6 pt-6 pb-5 border-b border-slate-700/50 shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shrink-0">
+                <step.icon className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 id="setup-title" className="text-lg font-semibold leading-tight">
+                  {step.title}
+                </h2>
+                <p className="text-sm text-slate-400 mt-0.5">{step.blurb}</p>
+              </div>
+            </div>
+            {onClose && (
+              <button
+                onClick={onClose}
+                aria-label="Close setup"
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Progress */}
+          <div className="flex gap-1.5 mt-5" aria-hidden="true">
+            {STEPS.map((s, i) => (
+              <div
+                key={s.id}
+                className={
+                  "h-1 flex-1 rounded-full transition-colors " +
+                  (i <= stepIndex ? "bg-indigo-500" : "bg-slate-700")
+                }
+              />
+            ))}
+          </div>
+          <p className="sr-only" aria-live="polite">
+            Step {stepIndex + 1} of {STEPS.length}: {step.title}
           </p>
         </header>
-      )}
 
-      {/* Bot API */}
-      <section className="glass rounded-2xl p-6 mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <Server className="w-4 h-4 text-indigo-300" />
-          <h2 className="font-semibold">Babblebot connection</h2>
-        </div>
-        <p className="text-sm text-slate-400 mb-5 max-w-[65ch]">
-          The LAN address of the machine running the bot. Default port is 8080.
-        </p>
-
-        <label htmlFor="apiUrl" className={label}>
-          API address
-        </label>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            id="apiUrl"
-            value={draft.apiUrl}
-            onChange={(e) => set("apiUrl", e.target.value)}
-            placeholder="http://192.168.1.131:8080"
-            className={field}
-          />
-          <button
-            onClick={testConnection}
-            disabled={testing}
-            className="shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-slate-700/60 text-sm text-slate-200 hover:bg-slate-600/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-50 transition-colors"
-          >
-            <Plug className="w-4 h-4" />
-            {testing ? "Testing…" : "Test"}
-          </button>
-        </div>
-
-        {testResult === "ok" && (
-          <p className="flex items-center gap-2 text-sm text-emerald-300 mt-3">
-            <CheckCircle2 className="w-4 h-4" /> Connected
-          </p>
-        )}
-        {testResult === "fail" && (
-          <p className="flex items-center gap-2 text-sm text-rose-300 mt-3">
-            <XCircle className="w-4 h-4" /> Couldn&apos;t reach that address
-          </p>
-        )}
-      </section>
-
-      {/* Spotify */}
-      <section className="glass rounded-2xl p-6 mb-6">
-        <h2 className="font-semibold mb-1">Spotify</h2>
-        <p className="text-sm text-slate-400 mb-5 max-w-[65ch]">
-          Optional. Create an app at developer.spotify.com, then paste the credentials here. Needs
-          an active Premium account.
-        </p>
-
-        <label htmlFor="spClientId" className={label}>
-          Client ID
-        </label>
-        <input
-          id="spClientId"
-          value={draft.spotifyClientId}
-          onChange={(e) => set("spotifyClientId", e.target.value)}
-          className={field + " mb-4"}
-          autoComplete="off"
-          spellCheck={false}
-        />
-
-        <label htmlFor="spSecret" className={label}>
-          Client secret
-        </label>
-        <div className="relative mb-4">
-          <input
-            id="spSecret"
-            type={showSecret ? "text" : "password"}
-            value={draft.spotifyClientSecret}
-            onChange={(e) => set("spotifyClientSecret", e.target.value)}
-            className={field + " pr-11"}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <button
-            type="button"
-            onClick={() => setShowSecret((v) => !v)}
-            aria-label={showSecret ? "Hide client secret" : "Show client secret"}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-          >
-            {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
-
-        <label htmlFor="spRedirect" className={label}>
-          Redirect URI
-        </label>
-        <input
-          id="spRedirect"
-          value={draft.spotifyRedirectUri}
-          onChange={(e) => set("spotifyRedirectUri", e.target.value)}
-          className={field}
-          spellCheck={false}
-        />
-        <p className="text-xs text-slate-500 mt-2 max-w-[65ch]">
-          Must match exactly what you entered in the Spotify dashboard.
-        </p>
-      </section>
-
-      {/* Voice */}
-      <section className="glass rounded-2xl p-6 mb-8">
-        <h2 className="font-semibold mb-1">Announcements</h2>
-        <p className="text-sm text-slate-400 mb-5 max-w-[65ch]">
-          Spoken alerts use a calm voice. Choose which ones you actually want to hear.
-        </p>
-        <div className="space-y-3">
-          {[
-            { key: "ttsEdDrop" as const, text: "Emergency department wait drops" },
-            { key: "ttsArmReminder" as const, text: "Arm care reminders" },
-            { key: "ttsNewMember" as const, text: "New member joins" },
-          ].map(({ key, text }) => (
-            <label
-              key={key}
-              className="flex items-center justify-between gap-4 p-3 rounded-lg bg-slate-800/40 cursor-pointer hover:bg-slate-800/60 transition-colors"
+        {/* Body */}
+        <div className="px-6 py-6 overflow-y-auto flex-1">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step.id}
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={motionTokens.base}
             >
-              <span className="text-sm text-slate-300">{text}</span>
-              <input
-                type="checkbox"
-                checked={draft[key]}
-                onChange={(e) => set(key, e.target.checked)}
-                className="w-4 h-4 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 rounded"
-              />
-            </label>
-          ))}
-        </div>
-      </section>
+              {step.id === "welcome" && (
+                <div className="space-y-4 max-w-[65ch]">
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    Sahara is the control centre for your Discord bot. Point it at the machine
+                    running Babblebot and it can show you live moderation, member lookups,
+                    emergency department waits and more.
+                  </p>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    You can change any of this later in Settings. Nothing here is permanent.
+                  </p>
+                </div>
+              )}
 
-      <button
-        onClick={() => {
-          saveSettings(draft);
-          onSave(draft);
-        }}
-        className="px-6 py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition"
-      >
-        Save settings
-      </button>
-    </motion.div>
+              {step.id === "bot" && (
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="apiUrl" className={label}>
+                      API address
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <input
+                        id="apiUrl"
+                        value={draft.apiUrl}
+                        onChange={(e) => set("apiUrl", e.target.value)}
+                        placeholder="http://192.168.1.131:8080"
+                        spellCheck={false}
+                        autoComplete="off"
+                        className={field}
+                      />
+                      <button
+                        onClick={testConnection}
+                        disabled={testing || !apiLooksValid}
+                        className="shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-slate-700/60 text-sm text-slate-200 hover:bg-slate-600/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
+                      >
+                        <Plug className="w-4 h-4" />
+                        {testing ? "Testing…" : "Test"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 max-w-[65ch]">
+                      The LAN address of the machine running Babblebot. Default port is 8080.
+                    </p>
+                  </div>
+
+                  {testResult === "ok" && (
+                    <p className="flex items-center gap-2 text-sm text-emerald-300" role="status">
+                      <CheckCircle2 className="w-4 h-4" /> Connected
+                    </p>
+                  )}
+                  {testResult === "fail" && (
+                    <p className="flex items-center gap-2 text-sm text-rose-300" role="status">
+                      <XCircle className="w-4 h-4" /> Couldn&apos;t reach that address
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {step.id === "spotify" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-400 leading-relaxed max-w-[65ch]">
+                    Optional. Create an app at{" "}
+                    <a
+                      href="https://developer.spotify.com/dashboard"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2"
+                    >
+                      developer.spotify.com
+                    </a>{" "}
+                    and paste the credentials here. Needs an active Premium account.
+                  </p>
+
+                  <div>
+                    <label htmlFor="spClientId" className={label}>
+                      Client ID
+                    </label>
+                    <input
+                      id="spClientId"
+                      value={draft.spotifyClientId}
+                      onChange={(e) => set("spotifyClientId", e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className={field}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="spSecret" className={label}>
+                      Client secret
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="spSecret"
+                        type={showSecret ? "text" : "password"}
+                        value={draft.spotifyClientSecret}
+                        onChange={(e) => set("spotifyClientSecret", e.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className={field + " pr-11"}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecret((v) => !v)}
+                        aria-label={showSecret ? "Hide client secret" : "Show client secret"}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
+                      >
+                        {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="spRedirect" className={label}>
+                      Redirect URI
+                    </label>
+                    <input
+                      id="spRedirect"
+                      value={draft.spotifyRedirectUri}
+                      onChange={(e) => set("spotifyRedirectUri", e.target.value)}
+                      spellCheck={false}
+                      className={field}
+                    />
+                    <p className="text-xs text-slate-500 mt-2 max-w-[65ch]">
+                      Must match exactly what you entered in the Spotify dashboard.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {step.id === "voice" && (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-400 mb-4 max-w-[65ch]">
+                    Spoken alerts use a calm voice. Choose which ones you actually want to hear —
+                    you can change these any time.
+                  </p>
+                  {[
+                    { key: "ttsEdDrop" as const, text: "Emergency department wait drops" },
+                    { key: "ttsArmReminder" as const, text: "Arm care reminders" },
+                    { key: "ttsNewMember" as const, text: "New member joins" },
+                  ].map(({ key, text }) => (
+                    <label
+                      key={key}
+                      className="flex items-center justify-between gap-4 p-3.5 rounded-lg bg-slate-800/40 border border-slate-700/40 cursor-pointer hover:bg-slate-800/60 transition-colors"
+                    >
+                      <span className="text-sm text-slate-300">{text}</span>
+                      <input
+                        type="checkbox"
+                        checked={draft[key]}
+                        onChange={(e) => set(key, e.target.checked)}
+                        className="w-4 h-4 accent-indigo-500 rounded"
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {step.id === "done" && (
+                <div className="text-center py-4">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-4">
+                    <CheckCircle2 className="w-7 h-7" />
+                  </div>
+                  <p className="text-sm text-slate-300 max-w-[45ch] mx-auto leading-relaxed">
+                    Sahara will connect to{" "}
+                    <span className="text-slate-100 font-medium">{draft.apiUrl}</span>. You can
+                    change this and everything else in Settings.
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Footer */}
+        <footer className="px-6 py-4 border-t border-slate-700/50 flex items-center justify-between gap-3 shrink-0">
+          <button
+            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+            disabled={isFirst}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-0 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" /> Back
+          </button>
+
+          <div className="flex items-center gap-2">
+            {!isLast && (
+              <button
+                onClick={() => {
+                  commit();
+                  onClose?.();
+                }}
+                className="px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
+              >
+                Skip setup
+              </button>
+            )}
+            <button
+              onClick={next}
+              disabled={step.id === "bot" && !apiLooksValid}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold text-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 transition"
+            >
+              {isLast ? "Finish" : "Continue"}
+              {isLast ? <ArrowRight className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+          </div>
+        </footer>
+      </motion.div>
+    </div>
   );
 }
