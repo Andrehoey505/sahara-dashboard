@@ -180,7 +180,7 @@ export default function App() {
   const isAndre = userId === "264680643013771265";
   const [armReminder, setArmReminder] = useState(false);
   const [slingOn, setSlingOn] = useState(() => localStorage.getItem("sahara_sling") !== "off");
-  const [slingStatusAsked, setSlingStatusAsked] = useState(() => localStorage.getItem("sahara_sling_asked_v2") === "1");
+  const [slingStatusAsked, setSlingStatusAsked] = useState(() => sessionStorage.getItem("sahara_sling_asked_session") === "1");
   const [sleepMode, setSleepMode] = useState(false);
   useEffect(() => {
     if (!isAndre || !loggedIn || !slingOn || sleepMode) return;
@@ -969,8 +969,8 @@ export default function App() {
             <h3 className="font-bold text-lg mb-2">Sling status?</h3>
             <p className="text-sm text-slate-300 mb-4">Are you wearing the sling right now? This controls the reminders.</p>
             <div className="flex gap-2">
-              <button onClick={() => { setSlingOn(true); localStorage.setItem("sahara_sling","on"); localStorage.setItem("sahara_sling_asked_v2","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Yes, sling on</button>
-              <button onClick={() => { setSlingOn(false); localStorage.setItem("sahara_sling","off"); localStorage.setItem("sahara_sling_asked_v2","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">No, it's off</button>
+              <button onClick={() => { setSlingOn(true); localStorage.setItem("sahara_sling","on"); sessionStorage.setItem("sahara_sling_asked_session","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Yes, sling on</button>
+              <button onClick={() => { setSlingOn(false); localStorage.setItem("sahara_sling","off"); sessionStorage.setItem("sahara_sling_asked_session","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">No, it's off</button>
             </div>
           </motion.div>
         </motion.div>
