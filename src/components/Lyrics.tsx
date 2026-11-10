@@ -91,27 +91,48 @@ export default function Lyrics({
   // full screen view doesn't leave the line off-screen.
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollToActive = () => {
+  /**
+   * Centre the active line.
+   *
+   * Measured from getBoundingClientRect rather than offsetTop: the lines are
+   * framer-motion elements with transforms, and offsetTop is unreliable inside
+   * a scrolling ancestor, which is why the view drifted to the bottom and then
+   * off-screen instead of following.
+   */
+  const scrollToActive = (smooth = true) => {
     const container = scrollRef.current;
     const el = activeRef.current;
     if (!container || !el) return;
-    const target = el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
-    container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+
+    const containerRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const delta = elRect.top - containerRect.top;
+    const target =
+      container.scrollTop + delta - container.clientHeight / 2 + elRect.height / 2;
+
+    const max = container.scrollHeight - container.clientHeight;
+    container.scrollTo({
+      top: Math.max(0, Math.min(target, max)),
+      behavior: smooth ? "smooth" : "auto",
+    });
   };
 
+  // Follow the active line. rAF lets the new line's transform settle first.
   useEffect(() => {
-    scrollToActive();
+    const id = requestAnimationFrame(() => scrollToActive(true));
+    return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex]);
 
+  // Re-centre on resize, and jump without animation the first time lyrics load.
   useEffect(() => {
     const container = scrollRef.current;
     if (!container || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => scrollToActive());
+    const ro = new ResizeObserver(() => scrollToActive(false));
     ro.observe(container);
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndex, variant]);
+  }, [activeIndex, variant, lines.length]);
 
   if (!track) return null;
 
