@@ -47,7 +47,7 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={motionTokens.base}
-          className="fixed inset-0 z-50 bg-slate-950 overflow-hidden"
+          className="fixed inset-0 z-50 bg-slate-950 overflow-hidden h-screen w-screen"
           role="dialog"
           aria-modal="true"
           aria-label="Full screen player"
@@ -65,7 +65,7 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
           )}
           <div className="absolute inset-0 bg-slate-950/70" />
 
-          <div className="relative h-full flex flex-col p-6 sm:p-10">
+          <div className="relative h-full min-h-0 flex flex-col p-4 sm:p-8">
             <header className="flex items-center justify-between shrink-0">
               <p className="text-xs uppercase tracking-[0.25em] text-indigo-300/70">
                 {now?.is_playing ? "Now playing" : "Paused"}
@@ -93,10 +93,10 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
             </header>
 
             {/* Lyrics fill the left, artwork and details the right. */}
-            <div className="flex-1 min-h-0 grid lg:grid-cols-[1.4fr_1fr] gap-10 lg:gap-16 mt-6">
+            <div className="flex-1 min-h-0 grid lg:grid-cols-[1.5fr_1fr] gap-8 lg:gap-12 mt-4 overflow-hidden">
               {showLyrics && (
-                <div className="min-h-0 h-full order-2 lg:order-1">
-                  <div className="h-full overflow-hidden">
+                <div className="min-h-0 h-full order-2 lg:order-1 overflow-hidden">
+                  <div className="h-full min-h-0 overflow-hidden">
                     <Lyrics
                       variant="fullscreen"
                       track={now?.track}
@@ -120,25 +120,25 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                   <img
                     src={now.image}
                     alt=""
-                    className="w-40 h-40 sm:w-56 sm:h-56 lg:w-72 lg:h-72 xl:w-80 xl:h-80 object-cover rounded-2xl shadow-2xl"
+                    className="w-36 h-36 sm:w-48 sm:h-48 lg:w-64 lg:h-64 xl:w-72 xl:h-72 object-cover rounded-2xl shadow-2xl"
                   />
                 ) : (
-                  <div className="w-40 h-40 sm:w-56 sm:h-56 lg:w-72 lg:h-72 rounded-2xl bg-slate-800 flex items-center justify-center">
+                  <div className="w-36 h-36 sm:w-48 sm:h-48 lg:w-64 lg:h-64 rounded-2xl bg-slate-800 flex items-center justify-center">
                     <Music2 className="w-16 h-16 text-slate-600" />
                   </div>
                 )}
 
-                <h1 className="text-2xl sm:text-3xl font-bold mt-6 truncate max-w-full">
+                <h1 className="text-xl sm:text-2xl font-bold mt-4 truncate max-w-full">
                   {now?.track || "Nothing playing"}
                 </h1>
-                <p className="text-lg text-slate-300 truncate max-w-full mt-1">
+                <p className="text-base text-slate-300 truncate max-w-full mt-1">
                   {now?.artists || ""}
                 </p>
                 {now?.album && (
                   <p className="text-sm text-slate-500 truncate max-w-full mt-1">{now.album}</p>
                 )}
 
-                <div className="w-full max-w-md mt-6">
+                <div className="w-full max-w-sm mt-4">
                   <div className="h-1.5 rounded-full bg-slate-700/70 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-indigo-400 to-violet-500"
@@ -151,7 +151,7 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 mt-6">
+                <div className="flex items-center gap-3 mt-4">
                   <button
                     onClick={() => onTransport("previous")}
                     disabled={busy || !now}
