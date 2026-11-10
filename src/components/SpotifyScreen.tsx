@@ -10,6 +10,7 @@ import {
   getPlaylists,
   playPlaylist,
   clearToken,
+  completeAuthFromUrl,
   type NowPlaying,
 } from "../lib/spotify";
 import type { AppSettings } from "./SetupScreen";
@@ -31,6 +32,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [pasteMode, setPasteMode] = useState(false);
+  const [pastedUrl, setPastedUrl] = useState("");
 
   const clientId = settings.spotifyClientId;
   const configured = !!clientId;
@@ -118,13 +121,61 @@ export default function SpotifyScreen({ settings, notify }: Props) {
             No Client ID saved yet — open setup and add your Spotify credentials.
           </p>
         )}
-        <button
-          onClick={connect}
-          disabled={!configured}
-          className={btn + " px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 font-semibold text-sm hover:opacity-90"}
-        >
-          <Link2 className="w-4 h-4" /> Connect with Spotify
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={connect}
+            disabled={!configured}
+            className={btn + " px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 font-semibold text-sm hover:opacity-90"}
+          >
+            <Link2 className="w-4 h-4" /> Connect with Spotify
+          </button>
+          <button
+            onClick={() => setPasteMode((v) => !v)}
+            disabled={!configured}
+            className="text-sm text-slate-400 hover:text-slate-200 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 rounded transition-colors"
+          >
+            {pasteMode ? "Cancel" : "Already approved? Paste the link"}
+          </button>
+        </div>
+
+        {pasteMode && (
+          <div className="mt-6 p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
+            <p className="text-sm text-slate-300 mb-1">Paste the address you were sent to</p>
+            <p className="text-xs text-slate-500 mb-3 max-w-[65ch]">
+              After approving, your browser lands on a page that can&apos;t load — that&apos;s
+              expected. Copy its full address and paste it here.
+            </p>
+            <textarea
+              value={pastedUrl}
+              onChange={(e) => setPastedUrl(e.target.value)}
+              placeholder="http://127.0.0.1:5173/callback?code=..."
+              rows={3}
+              spellCheck={false}
+              className="w-full px-3 py-2 rounded-lg bg-slate-900/60 border border-slate-700 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 transition resize-none"
+            />
+            <button
+              onClick={async () => {
+                if (!pastedUrl.trim()) return;
+                setBusy("paste");
+                try {
+                  await completeAuthFromUrl(clientId, settings.spotifyRedirectUri, pastedUrl);
+                  setConnected(true);
+                  setPasteMode(false);
+                  setPastedUrl("");
+                  notify("Connected to Spotify", "success");
+                } catch (e: any) {
+                  notify(e?.message || "Couldn't finish connecting", "error");
+                } finally {
+                  setBusy(null);
+                }
+              }}
+              disabled={busy !== null || !pastedUrl.trim()}
+              className={btn + " mt-3 px-4 py-2 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 text-sm"}
+            >
+              Finish connecting
+            </button>
+          </div>
+        )}
       </motion.section>
     );
   }

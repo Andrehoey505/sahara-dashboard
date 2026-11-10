@@ -230,3 +230,41 @@ export async function handleCallback(clientId: string, redirectUri: string): Pro
   window.history.replaceState({}, "", window.location.pathname);
   return true;
 }
+
+/**
+ * Manual fallback for the callback.
+ *
+ * A packaged desktop app doesn't serve http://127.0.0.1:PORT, so the browser's
+ * redirect has nowhere to land. Instead of running a dev server just to catch
+ * one redirect, the user pastes the URL they ended up on and we take the code
+ * from it. Same PKCE exchange, same verifier — just triggered by hand.
+ */
+export async function completeAuthFromUrl(
+  clientId: string,
+  redirectUri: string,
+  pastedUrl: string
+): Promise<SpotifyToken> {
+  let code: string | null = null;
+  let state: string | null = null;
+
+  try {
+    const url = new URL(pastedUrl.trim());
+    code = url.searchParams.get("code");
+    state = url.searchParams.get("state");
+    if (url.searchParams.get("error")) {
+      throw new Error(url.searchParams.get("error") || "Spotify returned an error");
+    }
+  } catch (e: any) {
+    if (e?.message && !/Invalid URL/i.test(e.message)) throw e;
+    // Not a full URL — accept a bare ?code=...&state=... string too.
+    const q = pastedUrl.includes("?") ? pastedUrl.slice(pastedUrl.indexOf("?") + 1) : pastedUrl;
+    const params = new URLSearchParams(q);
+    code = params.get("code");
+    state = params.get("state");
+  }
+
+  if (!code || !state) {
+    throw new Error("No authorisation code found in that URL");
+  }
+  return completeAuth(clientId, redirectUri, code, state);
+}
