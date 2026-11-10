@@ -3,23 +3,43 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, #root { height: 100%; }
+
   body {
     @apply antialiased;
     font-family: "Inter", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
   }
+
   [data-theme="dark"] body { @apply bg-slate-950 text-slate-100; }
   [data-theme="light"] body { @apply bg-slate-100 text-slate-900; }
   [data-theme="midnight"] body { @apply bg-indigo-950 text-indigo-100; }
+
+  /* A visible focus ring everywhere. Never remove it without a replacement. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-indigo-500/60 ring-offset-0;
+  }
+
+  /* Tabular numerals so waiting-time figures don't jitter as they change. */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
 }
 
-.glass {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-}
+@layer components {
+  .glass {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+  }
 
-.glow {
-  box-shadow: 0 0 40px rgba(99, 102, 241, 0.15);
+  /* Soft accent wash for header/hero areas. */
+  .accent-wash {
+    background:
+      radial-gradient(120% 90% at 12% -10%, rgba(99, 102, 241, 0.22), transparent 60%),
+      radial-gradient(90% 80% at 88% 0%, rgba(139, 92, 246, 0.16), transparent 55%);
+  }
+
+  .glow { box-shadow: 0 0 40px rgba(99, 102, 241, 0.15); }
 }
 
 @keyframes pulse-glow {
@@ -28,3 +48,13 @@
 }
 
 .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Respect the OS reduced-motion setting. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { LayoutDashboard, Activity, Users, Shield, Music, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import EdWaits from "./components/EdWaits";
+import SleepMode from "./components/SleepMode";
+import MembersScreen from "./components/MembersScreen";
+import SetupScreen, { loadSettings, saveSettings, type AppSettings } from "./components/SetupScreen";
+import LockScreen from "./components/LockScreen";
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -190,6 +195,11 @@ export default function App() {
     return () => { clearTimeout(t); if (slingBackTimerRef.current) { clearTimeout(slingBackTimerRef.current); slingBackTimerRef.current = null; } };
   }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
+  // Sleep mode: shown before the Mac is closed. Posts to the bot so anything
+  // missed overnight can be surfaced on wake.
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [showSetup, setShowSetup] = useState(false);
+  const [showSleep, setShowSleep] = useState(false);
   const _cachedWaits = (() => { try { return JSON.parse(localStorage.getItem("sahara_ed_waits") || "null")?.waits || {}; } catch { return {}; } })();
   const prevWaitsRef = useRef<{ Mater?: number; "Royal Victoria"?: number }>(_cachedWaits);
   const [edLastUpdate, setEdLastUpdate] = useState("");
@@ -409,26 +419,39 @@ export default function App() {
 
   if (locked) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-950">
-        <div className="glass rounded-2xl p-8 w-80 text-center">
-          <Lock className="w-12 h-12 mx-auto mb-4 text-indigo-400" />
-          <h2 className="text-xl font-bold mb-2">Locked</h2>
-          <input type="password" value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleUnlock()} placeholder="PIN" className="w-full px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-center text-2xl tracking-widest focus:outline-none focus:border-indigo-500 mb-4" />
-          <button onClick={handleUnlock} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Unlock</button>
-        </div>
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <LockScreen
+          value={pinInput}
+          onChange={setPinInput}
+          onSubmit={handleUnlock}
+          error={!!pinInput && pinInput !== pin}
+        />
       </div>
     );
   }
 
-  if (!connected) {
+  if (!connected || showSetup) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
-        <div className="w-full max-w-md p-8 rounded-2xl bg-slate-900/50 border border-slate-800">
-          <h1 className="text-2xl font-bold mb-2 text-center">🐦 Sahara Dashboard</h1>
-          <p className="text-sm text-slate-400 text-center mb-6">Connect to your Discord bot to continue</p>
-          <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder="http://192.168.1.131:8080" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-3 focus:outline-none focus:border-indigo-500" />
-          {connectionError && <p className="text-xs text-rose-400 mb-3">{connectionError}</p>}
-          <button onClick={() => { localStorage.setItem("sahara_api_url", apiUrl); fetchData(); }} className="w-full px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Connect</button>
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="max-w-3xl mx-auto p-6">
+          {!showSetup && (
+            <header className="mb-6">
+              <h1 className="text-xl font-semibold">Sahara Dashboard</h1>
+              <p className="text-sm text-slate-400 mt-1">
+                {connectionError || "Set up the connection to Babblebot to continue."}
+              </p>
+            </header>
+          )}
+          <SetupScreen
+            initial={settings}
+            firstRun={!showSetup}
+            onSave={(next) => {
+              setSettings(next);
+              setApiUrl(next.apiUrl);
+              setShowSetup(false);
+              fetchData();
+            }}
+          />
         </div>
       </div>
     );
@@ -436,15 +459,18 @@ export default function App() {
 
   if (!loggedIn) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-950">
-        <div className="glass rounded-2xl p-8 w-96">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+        <div className="glass rounded-2xl p-8 w-full max-w-sm">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"><Sparkles className="w-6 h-6" /></div>
-            <div><h1 className="text-2xl font-bold">Sahara</h1><p className="text-sm text-slate-400">Control Center</p></div>
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center"><Sparkles className="w-6 h-6" /></div>
+            <div><h1 className="text-2xl font-semibold">Sahara</h1><p className="text-sm text-slate-400">Control Center</p></div>
           </div>
-          <label className="text-xs text-slate-400 mb-1 block">Discord User ID</label>
-          <input value={userId} onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleLogin()} placeholder="Your Discord User ID" className="w-full px-4 py-2.5 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 mb-4" />
-          <button onClick={handleLogin} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition flex items-center justify-center gap-2"><LogIn className="w-4 h-4" /> Sign In</button>
+          <label htmlFor="userId" className="text-sm text-slate-300 mb-2 block">Discord User ID</label>
+          <input id="userId" value={userId} onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleLogin()} placeholder="Your Discord User ID" className="w-full px-4 py-2.5 rounded-lg bg-slate-800/60 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 mb-4 transition" />
+          <button onClick={handleLogin} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition flex items-center justify-center gap-2"><LogIn className="w-4 h-4" /> Sign In</button>
+          <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
+            Your user ID links this app to you across sessions. The PIN lock is separate and asked on launch.
+          </p>
         </div>
       </div>
     );
@@ -452,6 +478,7 @@ export default function App() {
 
   const NAV = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "edwaits", label: "ED Waits", icon: Activity },
     { id: "livefeed", label: "Live Messages", icon: MessageSquare },
     { id: "violations", label: "Violations", icon: AlertTriangle },
     { id: "members", label: "Members", icon: Users },
@@ -545,7 +572,21 @@ export default function App() {
           <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Sign Out</button>
           </div>
           {isAndre && (
-          <button onClick={() => { if (!sleepMode) { setSleepMode(true); setArmReminder(false); notify("Sleep mode: remove sling before bed! ⚠️", "error"); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/sleep_warning.ogg'); b.play().catch(()=>{}); }, 700); } catch {} } else { setSleepMode(false); setSlingOn(true); localStorage.setItem("sahara_sling","on"); notify("Sling mode re-enabled", "success"); } }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up (sling on)" : "🌙 Going to sleep"}</button>
+          <button onClick={() => {
+            if (!sleepMode) {
+              setShowSleep(true);
+            } else {
+              setSleepMode(false);
+              setSlingOn(true);
+              localStorage.setItem("sahara_sling", "on");
+              notify("Welcome back — sling mode re-enabled", "success");
+              fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sleeping: false }),
+              }).catch(() => {});
+            }
+          }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up (sling on)" : "🌙 Going to sleep"}</button>
           )}
         </div>
         {!pinSet && (
@@ -633,30 +674,17 @@ export default function App() {
               </div>
             </div>
             {isAndre && (
-              <div className="glass rounded-xl p-4 mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold flex items-center gap-2">🏥 ED Waiting Times (Belfast)</h3>
-                  <button onClick={fetchEd} className="text-xs px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">↻ Refresh</button>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className={"p-4 rounded-xl " + (edStale ? "bg-slate-800/60" : "bg-gradient-to-br from-slate-800/60 to-slate-900/40")}>
-                    <p className="text-xs text-slate-300 mb-1">Mater — typical (median) wait</p>
-                    <p className={"text-4xl font-bold " + (edWaits.Mater == null ? "text-slate-500" : edWaits.Mater < 90 ? "text-emerald-400" : edWaits.Mater < 180 ? "text-amber-400" : "text-rose-400")}>{edWaits.Mater ?? "—"}<span className="text-base text-slate-500 ml-1">min</span></p>
-                  </div>
-                  <div className={"p-4 rounded-xl " + (edStale ? "bg-slate-800/60" : "bg-slate-800/40")}>
-                    <p className="text-xs text-slate-300 mb-1">Royal Victoria — typical (median) wait</p>
-                    <p className={"text-3xl font-bold " + (edWaits["Royal Victoria"] == null ? "text-slate-500" : edWaits["Royal Victoria"] < 90 ? "text-emerald-400" : edWaits["Royal Victoria"] < 180 ? "text-amber-400" : "text-rose-400")}>{edWaits["Royal Victoria"] ?? "—"}<span className="text-base text-slate-500 ml-1">min</span></p>
-                  </div>
-                </div>
-                {edLastUpdate || edStale ? <p className="text-xs text-slate-400 mt-2" title={edLastUpdate || ""}>{edStale ? "⚠️ API offline — last known " + (edWaits.Mater ?? "—") + " min (Mater), " + (edWaits["Royal Victoria"] ?? "—") + " min (RVH)" : "Updated " + (edLastFetch ? Math.max(0, Math.round((edNow - edLastFetch) / 60000)) + " min ago" : edLastUpdate)}</p> : <p className="text-xs text-slate-400 mt-2">⚠️ API offline — no cached data yet</p>}
-                <p className="text-xs text-slate-400 mt-2"><a href="https://www.nidirect.gov.uk/articles/minor-injuries-units" target="_blank" rel="noreferrer" className="text-indigo-300 hover:underline">MIUs &amp; Urgent Care Centres</a> are often quieter for non-emergency issues.</p>
-                <details className="mt-3">
-                  <summary className="text-xs text-rose-300/90 cursor-pointer hover:text-rose-200">⚠️ Not medical advice — when to go in person</summary>
-                  <p className="text-xs text-rose-300/80 mt-2">New numbness/tingling in fingers, can't lift the arm, pain getting sharper instead of settling, or visible swelling/deformity → go in person, don't check the app.</p>
-                </details>
+              <div className="mt-4">
+                <EdWaits apiUrl={apiUrl} variant="card" />
               </div>
             )}
           </motion.div>
+        )}
+
+        {active === "edwaits" && (
+          <div className="space-y-4">
+            <EdWaits apiUrl={apiUrl} variant="page" />
+          </div>
         )}
 
         {active === "livefeed" && (
@@ -789,40 +817,13 @@ export default function App() {
         {["members", "moderation", "music", "settings"].includes(active) && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             {active === "members" && (
-              <>
-                <div className="glass rounded-xl p-4">
-                  <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <select value={selectedServer} onChange={(e) => setSelectedServer(e.target.value)} className="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
-                      <option value="">Select server...</option>
-                      {servers.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                    <label className="flex items-center gap-2 text-sm text-slate-400">
-                      <input type="checkbox" checked={staffOnly} onChange={(e) => setStaffOnly(e.target.checked)} className="rounded" />
-                      Staff only
-                    </label>
-                    <span className="text-sm text-slate-400">{members.length} members</span>
-                  </div>
-                  <div className="space-y-2">
-                    {members.map((m) => (
-                      <div key={m.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/30">
-                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden">
-                          {m.avatar ? <img src={m.avatar} alt="" className="w-full h-full object-cover" /> : "👤"}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium">{m.display_name || m.name}</span>
-                          <span className="text-xs text-slate-500 ml-2">{m.id}</span>
-                          {m.joined_at && <span className="text-xs text-slate-600 ml-2">joined {fmtTime(m.joined_at)}</span>}
-                        </div>
-                        <div className="flex gap-1 flex-wrap">
-                          {m.roles?.slice(0, 2).map((r: string) => <span key={r} className="text-xs px-2 py-0.5 rounded bg-slate-700/50">{r}</span>)}
-                        </div>
-                        <span className={"w-2 h-2 rounded-full " + (m.status === "online" ? "bg-emerald-400" : m.status === "idle" ? "bg-amber-400" : "bg-slate-600")} />
-                      </div>
-                    ))}
-                    {members.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Select a server to view members</p>}
-                  </div>
-                </div>
-              </>
+              <MembersScreen
+                apiUrl={apiUrl}
+                onLookupViolations={(id) => {
+                  setSearchQuery(id);
+                  setActive("violations");
+                }}
+              />
             )}
             {active === "moderation" && (
               <div className="glass rounded-xl p-4 space-y-4">
@@ -892,6 +893,13 @@ export default function App() {
             {active === "settings" && (
               <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Settings</h3>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/40">
+                  <div>
+                    <p className="text-sm text-slate-300">Connection &amp; Spotify</p>
+                    <p className="text-xs text-slate-500">API address, Spotify credentials, announcement toggles</p>
+                  </div>
+                  <button onClick={() => setShowSetup(true)} className="px-3 py-1.5 rounded-lg text-xs bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors">Open setup</button>
+                </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-1">Bot API URL</label>
                   <input value={apiUrl} onChange={(e) => { setApiUrl(e.target.value); localStorage.setItem("sahara_api_url", e.target.value); }} placeholder="http://192.168.1.128:8080" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
@@ -977,6 +985,20 @@ export default function App() {
           </motion.div>
         </motion.div>
       )}
+      <SleepMode
+        open={showSleep}
+        onClose={() => setShowSleep(false)}
+        onSleep={() => {
+          setSleepMode(true);
+          setArmReminder(false);
+          notify("Sleep mode on — sling off, goodnight 🌙", "success");
+          fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sleeping: true }),
+          }).catch(() => {});
+        }}
+      />
       {armReminder && isAndre && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-2xl p-6 w-96 text-center" onClick={(e) => e.stopPropagation()}>
