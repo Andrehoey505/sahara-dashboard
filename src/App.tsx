@@ -226,17 +226,33 @@ export default function App() {
               drops.push({key:'Royal Victoria', start:'/sounds/royal_drop_start.ogg', amount: prev["Royal Victoria"] - data.waits["Royal Victoria"]});
             }
             if (drops.length) {
-              let offset = 0;
-              const a0 = new Audio('/sounds/alarm_beep.wav'); a0.play().catch(()=>{});
-              offset += 700;
+              const a0 = new Audio('/sounds/alarm_beep.wav');
+              a0.play().catch(()=>{});
+              // Build sequential playback queue
+              const queue: ({type:'audio';src:string} | {type:'tts';text:string})[] = [];
               for (const d of drops) {
-                setTimeout(() => { const x = new Audio(d.start); x.play().catch(()=>{}); }, offset);
-                offset += 900;
-                setTimeout(() => { try { const u = new SpeechSynthesisUtterance(String(d.amount)); (window as any).speechSynthesis?.speak(u); } catch {} }, offset);
-                offset += 700;
-                setTimeout(() => { const x = new Audio('/sounds/minutes_end.ogg'); x.play().catch(()=>{}); }, offset);
-                offset += 900;
+                queue.push({type:'audio', src:d.start});
+                queue.push({type:'tts', text:String(d.amount)});
+                queue.push({type:'audio', src:'/sounds/minutes_end.ogg'});
               }
+              const playNext = (i: number) => {
+                if (i >= queue.length) return;
+                const step = queue[i];
+                if (step.type === 'audio') {
+                  const x = new Audio(step.src);
+                  x.onended = () => playNext(i+1);
+                  x.play().catch(()=>{ playNext(i+1); });
+                } else {
+                  try {
+                    const u = new SpeechSynthesisUtterance(step.text);
+                    u.onend = () => playNext(i+1);
+                    u.onerror = () => playNext(i+1);
+                    (window as any).speechSynthesis?.speak(u);
+                  } catch { playNext(i+1); }
+                }
+              };
+              a0.onended = () => playNext(0);
+              a0.onerror = () => playNext(0);
             }
           }
         } catch {}
