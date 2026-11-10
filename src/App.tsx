@@ -120,6 +120,26 @@ export default function App() {
     if (savedPin) { setPin(savedPin); setPinSet(true); setLocked(true); }
   }, []);
 
+  // Cleared items return on the next refresh because the feed is polled, so
+  // "clear" has to mean "hide from now on": keep a set of hidden ids and filter
+  // the server response through it rather than only emptying local state.
+  const [hiddenMessages, setHiddenMessages] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("sahara_hidden_messages");
+      return new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [hiddenViolations, setHiddenViolations] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("sahara_hidden_violations");
+      return new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+
   const fetchData = async () => {
     try {
       const healthRes = await fetch(apiUrl + "/api/health");
@@ -132,7 +152,14 @@ export default function App() {
         fetch(apiUrl + "/api/servers"),
         fetch(apiUrl + "/api/stats"),
       ]);
-      if (msgRes.ok) setMessages(await msgRes.json());
+      if (msgRes.ok) {
+        const msgs = await msgRes.json();
+        setMessages(
+          Array.isArray(msgs)
+            ? msgs.filter((m: any) => !hiddenMessages.has(String(m.id)))
+            : []
+        );
+      }
       if (violRes.ok) {
         const newViols = await violRes.json();
         const newIds = new Set(newViols.map((v: any) => v.id));
@@ -146,7 +173,7 @@ export default function App() {
           notify(`New violation: ${added[0].user}`, "error");
         }
         setPrevViolationIds(newIds);
-        setViolations(newViols);
+        setViolations(newViols.filter((v: any) => !hiddenViolations.has(String(v.id))));
       }
       if (srvRes.ok) setServers(await srvRes.json());
       if (statsRes.ok) {
@@ -166,7 +193,10 @@ export default function App() {
     fetchData();
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
-  }, [apiUrl]);
+    // hiddenMessageIds/hiddenViolationIds are read inside fetchData; including
+    // them restarts the poll when either changes so the closure isn't stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiUrl, hiddenMessages, hiddenViolations]);
 
   // Total member count across servers. /api/members only returns a capped list,
   // so this is asked of each guild and summed; null until we have an answer.
@@ -476,7 +506,44 @@ export default function App() {
     setTrollSweepDone(true);
   };
 
-  const clearFeed = () => { setMessages([]); notify("Feed cleared", "info", { sound: false }); };
+  const persistHidden = (key: string, ids: Set<string>) => {
+    try {
+      // Keep the list bounded — older ids fall off the end.
+      const arr = Array.from(ids).slice(-500);
+      localStorage.setItem(key, JSON.stringify(arr));
+    } catch {}
+  };
+
+  const hideMessage = (id: string) => {
+    setHiddenMessages((prev) => {
+      const next = new Set(prev).add(String(id));
+      persistHidden("sahara_hidden_messages", next);
+      return next;
+    });
+    setMessages((msgs) => msgs.filter((x) => String(x.id) !== String(id)));
+  };
+
+  const clearFeed = () => {
+    setHiddenMessages((prev) => {
+      const next = new Set(prev);
+      messages.forEach((m) => next.add(String(m.id)));
+      persistHidden("sahara_hidden_messages", next);
+      return next;
+    });
+    setMessages([]);
+    notify("Feed cleared", "info", { sound: false });
+  };
+
+  const clearViolations = () => {
+    setHiddenViolations((prev) => {
+      const next = new Set(prev);
+      violations.forEach((v) => next.add(String(v.id)));
+      persistHidden("sahara_hidden_violations", next);
+      return next;
+    });
+    setViolations([]);
+    notify("Violations cleared", "info", { sound: false });
+  };
 
   const fmtTime = (ts: string) => {
     if (!ts) return "";
@@ -881,6 +948,7 @@ export default function App() {
                   {[
                     { label: "Restart Bot", action: () => notify("Bot restart requested", "success") },
                     { label: "Clear Feed", action: clearFeed },
+                    { label: "Clear Violations", action: clearViolations },
                     { label: "Run Troll Sweep", action: () => runTrollSweep() },
                     { label: "Export Logs", action: () => notify("Logs exported", "success") },
                     { label: "Refresh Data", action: () => { setLoading(true); setTimeout(() => { setLoading(false); notify("Data refreshed", "success"); }, 800); } },
@@ -937,7 +1005,7 @@ export default function App() {
                       <span className="text-xs text-slate-500">{fmtTime(m.time)}</span>
                       {m.flagged && <div className="text-xs text-rose-400 mt-1">flagged</div>}
                       <div className="flex gap-1 mt-1">
-                        <button onClick={() => setMessages((msgs) => msgs.filter((x) => x.id !== m.id))} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20" title="Delete from feed">🗑</button>
+                        <button onClick={() => hideMessage(String(m.id))} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20" title="Delete from feed">🗑</button>
                         <button onClick={() => { setMoreOptionsMsg(m); setMoreOptionsAction("warn"); setMoreOptionsReason(""); }} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" title="More options">⋯</button>
                       </div>
                     </div>
