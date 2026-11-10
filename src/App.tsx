@@ -214,13 +214,30 @@ export default function App() {
       if (!res.ok) throw new Error("not ok");
       const data = await res.json();
       if (data.waits && Object.keys(data.waits).length) {
-        // Check if waits dropped
+        // Check if waits dropped (only if not in sleep mode)
         try {
-          const prev = prevWaitsRef.current;
-          if (prev && ((data.waits.Mater != null && prev.Mater != null && data.waits.Mater < prev.Mater) ||
-                      (data.waits["Royal Victoria"] != null && prev["Royal Victoria"] != null && data.waits["Royal Victoria"] < prev["Royal Victoria"]))) {
-            const a = new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{});
-            setTimeout(() => { const b = new Audio('/sounds/ed_wait_drop.ogg'); b.play().catch(()=>{}); }, 700);
+          if (!sleepMode) {
+            const prev = prevWaitsRef.current;
+            const drops: {key:string; start:string; amount:number}[] = [];
+            if (prev && data.waits.Mater != null && prev.Mater != null && data.waits.Mater < prev.Mater) {
+              drops.push({key:'Mater', start:'/sounds/mater_drop_start.ogg', amount: prev.Mater - data.waits.Mater});
+            }
+            if (prev && data.waits["Royal Victoria"] != null && prev["Royal Victoria"] != null && data.waits["Royal Victoria"] < prev["Royal Victoria"]) {
+              drops.push({key:'Royal Victoria', start:'/sounds/royal_drop_start.ogg', amount: prev["Royal Victoria"] - data.waits["Royal Victoria"]});
+            }
+            if (drops.length) {
+              let offset = 0;
+              const a0 = new Audio('/sounds/alarm_beep.wav'); a0.play().catch(()=>{});
+              offset += 700;
+              for (const d of drops) {
+                setTimeout(() => { const x = new Audio(d.start); x.play().catch(()=>{}); }, offset);
+                offset += 900;
+                setTimeout(() => { try { const u = new SpeechSynthesisUtterance(String(d.amount)); (window as any).speechSynthesis?.speak(u); } catch {} }, offset);
+                offset += 700;
+                setTimeout(() => { const x = new Audio('/sounds/minutes_end.ogg'); x.play().catch(()=>{}); }, offset);
+                offset += 900;
+              }
+            }
           }
         } catch {}
         prevWaitsRef.current = data.waits;
@@ -244,7 +261,7 @@ export default function App() {
       } catch {}
       setEdStale(true);
     }
-  }, [isAndre, loggedIn, apiUrl]);
+  }, [isAndre, loggedIn, apiUrl, sleepMode]);
 
   useEffect(() => {
     if (!isAndre || !loggedIn) return;
