@@ -297,7 +297,18 @@ export default function App() {
   const [showSetup, setShowSetup] = useState(false);
   const [showSleep, setShowSleep] = useState(false);
   const [catchUp, setCatchUp] = useState<{ flags: number; since?: string | null } | null>(null);
-  const _cachedWaits = (() => { try { return JSON.parse(localStorage.getItem("sahara_ed_waits") || "null")?.waits || {}; } catch { return {}; } })();
+  // Seed from cache only if it is recent: an hours-old baseline would report a
+  // drop that already happened, or hide one that just did.
+  const _cachedWaits = (() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("sahara_ed_waits") || "null");
+      if (!raw || !raw.waits) return {};
+      const age = Date.now() - (raw.fetch || 0);
+      return age <= 20 * 60 * 1000 ? raw.waits : {};
+    } catch {
+      return {};
+    }
+  })();
   const prevWaitsRef = useRef<{ Mater?: number; "Royal Victoria"?: number }>(_cachedWaits);
   const [edLastUpdate, setEdLastUpdate] = useState("");
   const [edStale, setEdStale] = useState(false);
@@ -393,7 +404,9 @@ export default function App() {
   useEffect(() => {
     if (!isAndre || !loggedIn) return;
     fetchEd();
-    const interval = setInterval(fetchEd, 60 * 60 * 1000);
+    // The source page updates roughly every 10 minutes, so poll at half that
+    // to catch every published change rather than jumping over several at once.
+    const interval = setInterval(fetchEd, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isAndre, loggedIn, fetchEd]);
 
