@@ -41,8 +41,19 @@ fn bot_status() -> BotStatus {
 /// has to be handed to the default browser.
 #[tauri::command]
 fn open_external(url: String) -> Result<(), String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("only http(s) URLs may be opened".into());
+    // This command is reachable from the webview, so the URL is untrusted
+    // input. Allow-list the hosts rather than trusting the scheme: the only
+    // thing that ever needs opening is Spotify's authorisation page, and a
+    // scheme-only check would hand any http(s) address to the OS.
+    const ALLOWED_HOSTS: [&str; 2] = ["accounts.spotify.com", "open.spotify.com"];
+
+    let parsed = url::Url::parse(&url).map_err(|_| "not a valid URL".to_string())?;
+    if parsed.scheme() != "https" {
+        return Err("only https URLs may be opened".into());
+    }
+    let host = parsed.host_str().unwrap_or("");
+    if !ALLOWED_HOSTS.contains(&host) {
+        return Err(format!("refusing to open {}", host));
     }
 
     #[cfg(target_os = "macos")]

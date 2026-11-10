@@ -45,18 +45,29 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-export async function readFromClipboard(): Promise<string> {
+/** Why a clipboard read came back empty — the two cases look identical to the UI otherwise. */
+export type ClipboardResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: "denied" | "unavailable" };
+
+export async function readFromClipboard(): Promise<ClipboardResult> {
   const invoke = await tauri();
   if (invoke) {
     try {
-      return await invoke<string>("read_from_clipboard");
+      return { ok: true, text: await invoke<string>("read_from_clipboard") };
     } catch {
-      // fall through
+      // fall through to the web API
     }
   }
+  if (typeof navigator === "undefined" || !navigator.clipboard?.readText) {
+    return { ok: false, reason: "unavailable" };
+  }
   try {
-    return await navigator.clipboard.readText();
+    return { ok: true, text: await navigator.clipboard.readText() };
   } catch {
-    return "";
+    // readText rejects with NotAllowedError when there's no user gesture, and
+    // on some platforms for a permission the user hasn't granted. Either way
+    // the clipboard isn't empty — we were never allowed to look.
+    return { ok: false, reason: "denied" };
   }
 }

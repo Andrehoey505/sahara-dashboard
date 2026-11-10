@@ -357,8 +357,13 @@ export default function App() {
     }, life);
   }, []);
 
-  const notify = (msg: any, type = "info") => {
-    playSound(type);
+  const notify = (msg: any, type = "info", opts?: { sound?: boolean }) => {
+    // Repeated status chatter ("No new notifications", "Feed cleared") shouldn't
+    // chirp every time; anything that reports an outcome or a failure keeps its
+    // cue. Callers can force either way with opts.sound.
+    const quietTypes = new Set(["info"]);
+    const shouldSound = opts?.sound ?? !quietTypes.has(type);
+    if (shouldSound) playSound(type);
     const id = ++toastSeq.current;
     setNotifications((n) => {
       // Cap the stack so a burst can't fill the screen; drop the oldest.
@@ -437,7 +442,7 @@ export default function App() {
     setTrollSweepDone(true);
   };
 
-  const clearFeed = () => { setMessages([]); notify("Feed cleared", "info"); };
+  const clearFeed = () => { setMessages([]); notify("Feed cleared", "info", { sound: false }); };
 
   const fmtTime = (ts: string) => {
     if (!ts) return "";
@@ -461,9 +466,9 @@ export default function App() {
       } catch (e) { notify("Failed", "error"); }
     } else if (action === "delete") {
       setMessages((m) => m.filter((x) => x.id !== msg.id));
-      notify("Deleted", "info");
+      notify("Deleted", "success");
     } else {
-      notify(action + " " + msg.user, "info");
+      notify(action + " " + msg.user, "success");
     }
   };
 
@@ -690,7 +695,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex gap-2 mt-2">
-          <button onClick={() => { setLocked(true); notify("Locked", "info"); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Lock</button>
+          <button onClick={() => { setLocked(true); notify("Locked", "success"); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Lock</button>
           <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Sign Out</button>
           </div>
           {isAndre && (
@@ -750,7 +755,7 @@ export default function App() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 w-64" />
             </div>
-            <button onClick={() => notify("No new notifications", "info")} className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 relative">
+            <button onClick={() => notify("No new notifications", "info", { sound: false })} className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 relative">
               <Bell className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
@@ -797,7 +802,7 @@ export default function App() {
                 <h3 className="font-semibold mb-4 flex items-center gap-2"><Zap className="w-4 h-4 text-amber-400" /> Quick Actions</h3>
                 <div className="space-y-2">
                   {[
-                    { label: "Restart Bot", action: () => notify("Bot restart requested", "info") },
+                    { label: "Restart Bot", action: () => notify("Bot restart requested", "success") },
                     { label: "Clear Feed", action: clearFeed },
                     { label: "Run Troll Sweep", action: () => runTrollSweep() },
                     { label: "Export Logs", action: () => notify("Logs exported", "success") },

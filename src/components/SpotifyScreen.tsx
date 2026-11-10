@@ -62,26 +62,48 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   const clientId = settings.spotifyClientId;
   const configured = !!clientId;
 
+  // The device list changes rarely — on connect, on transfer, and when a phone
+  // or desktop app opens or closes. It doesn't belong on the polling path, and
+  // fetching it every tick doubled our Spotify traffic for no benefit.
+  const refreshDevices = useCallback(async () => {
+    if (!clientId || !loadToken()) return;
+    const ds = await getDevices(clientId).catch(() => [] as Device[]);
+    if (ds.length === 0) return; // keep the last good list; Spotify returns [] mid-switch
+    setDevices(ds);
+    setDeviceId((cur) => cur || ds.find((d) => d.is_active)?.id || ds[0]?.id || "");
+  }, [clientId]);
+
   const refresh = useCallback(async () => {
     if (!clientId || !loadToken()) return;
     try {
       const np = await getNowPlaying(clientId);
       setNow(np);
-      const ds = await getDevices(clientId).catch(() => [] as Device[]);
-      setDevices(ds);
-      setDeviceId((cur) => cur || ds.find((d) => d.is_active)?.id || ds[0]?.id || "");
       setError("");
     } catch (e: any) {
       setError(e?.message || "Couldn't reach Spotify");
     }
   }, [clientId]);
 
+  // Poll now-playing for track, playing state and duration. Position is
+  // interpolated locally at 100ms, so the poll rate only affects how quickly a
+  // change made elsewhere shows up. 5s while playing is plenty; 2s while paused
+  // makes pressing play in another client feel immediate. Combined with
+  // refreshDevices off the loop, this is ~1,400 requests/hour instead of ~7,200.
   useEffect(() => {
     if (!connected) return;
     refresh();
-    const t = setInterval(refresh, 1000);
+    refreshDevices();
+    const period = now?.is_playing ? 5000 : 2000;
+    const t = setInterval(refresh, period);
     return () => clearInterval(t);
-  }, [connected, refresh]);
+  }, [connected, refresh, refreshDevices, now?.is_playing]);
+
+  // Pick up a device appearing or disappearing without a manual refresh.
+  useEffect(() => {
+    if (!connected) return;
+    const t = setInterval(refreshDevices, 30000);
+    return () => clearInterval(t);
+  }, [connected, refreshDevices]);
 
   // Anchor playback position to the wall clock at each poll, then interpolate.
   // Incrementing a counter drifts between polls; anchoring means the estimate
@@ -206,12 +228,23 @@ export default function SpotifyScreen({ settings, notify }: Props) {
             </p>
             <button
               onClick={async () => {
-                const text = await readFromClipboard();
-                if (text) {
-                  setPastedUrl(text);
+                const result = await readFromClipboard();
+                if (!result.ok) {
+                  // "Denied" and "empty" need different words: one means the OS
+                  // never let us look, the other means the user copied nothing.
+                  notify(
+                    result.reason === "denied"
+                      ? "Couldn't read the clipboard — paste it into the box below instead"
+                      : "Clipboard isn't available here — paste it into the box below instead",
+                    "error"
+                  );
+                  return;
+                }
+                if (result.text.trim()) {
+                  setPastedUrl(result.text.trim());
                   notify("Pasted from clipboard", "success");
                 } else {
-                  notify("Nothing in the clipboard", "error");
+                  notify("Clipboard is empty — copy the address bar first", "error");
                 }
               }}
               className="mb-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-700/50 text-slate-300 hover:bg-slate-600/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
@@ -316,7 +349,7 @@ export default function SpotifyScreen({ settings, notify }: Props) {
                     await transferTo(clientId, d.id, true);
                     setDeviceId(d.id);
                     notify(`Playing on ${d.name}`, "success");
-                    await refresh();
+                    await Promise.all([refresh(), refreshDevices()]);
                   } catch (e: any) {
                     notify(e?.message || "Couldn't switch device", "error");
                   } finally {
