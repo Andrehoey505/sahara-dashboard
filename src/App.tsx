@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, FileText, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import SleepMode from "./components/SleepMode";
@@ -12,6 +12,8 @@ import CatchUpBanner from "./components/CatchUpBanner";
 import SpotifyScreen from "./components/SpotifyScreen";
 import ActivitiesScreen from "./components/ActivitiesScreen";
 import ReactionRoles from "./components/ReactionRoles";
+import TrollsScreen from "./components/TrollsScreen";
+import AuditLog from "./components/AuditLog";
 import { SCREENS } from "./lib/screens";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
@@ -654,6 +656,8 @@ export default function App() {
     { id: "members", label: "Members", icon: Users },
     { id: "moderation", label: "Moderation", icon: Shield },
     { id: "trollwatch", label: "Troll Watch", icon: ShieldAlert },
+    { id: "trolls", label: "Troll List", icon: Shield },
+    { id: "audit", label: "Server Log", icon: FileText },
     { id: "music", label: "Music", icon: Music },
     { id: "spotify", label: "Spotify", icon: Music2 },
     { id: "activities", label: "Activities", icon: Trophy },
@@ -1170,6 +1174,8 @@ export default function App() {
             )}
             {active === "music" && <MusicScreen apiUrl={apiUrl} notify={notify} />}
             {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
+            {active === "trolls" && <TrollsScreen apiUrl={apiUrl} notify={notify} />}
+            {active === "audit" && <AuditLog apiUrl={apiUrl} notify={notify} />}
             {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
             {active === "activities" && <ActivitiesScreen apiUrl={apiUrl} />}
             {active === "reactionroles" && (

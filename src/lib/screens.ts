@@ -13,6 +13,8 @@ export const SCREENS = [
   "members",
   "moderation",
   "trollwatch",
+  "trolls",
+  "audit",
   "music",
   "spotify",
   "activities",
