@@ -184,7 +184,7 @@ export default function App() {
   const [sleepMode, setSleepMode] = useState(false);
   useEffect(() => {
     if (!isAndre || !loggedIn || !slingOn || sleepMode) return;
-    const show = () => { setArmReminder(true); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/arm_reminder.ogg'); b.play().catch(()=>{}); }, 700); } catch {} };
+    const show = () => { setArmReminder(true); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/arm_reminder.ogg'); b.play().catch(()=>{}); }, 700); setTimeout(()=>{ const c=new Audio('/sounds/sling_back_on.ogg'); c.play().catch(()=>{}); }, 8*60*1000); } catch {} };
     const t = setTimeout(show, 90 * 60 * 1000);
     return () => clearTimeout(t);
   }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
