@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import SleepMode from "./components/SleepMode";
@@ -10,7 +10,9 @@ import MusicScreen from "./components/MusicScreen";
 import TrollWatch from "./components/TrollWatch";
 import CatchUpBanner from "./components/CatchUpBanner";
 import SpotifyScreen from "./components/SpotifyScreen";
+import ActivitiesScreen from "./components/ActivitiesScreen";
 import { handleCallback, loadToken } from "./lib/spotify";
+import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 
 export default function App() {
   // Finish the Spotify handshake if we came back from the authorise screen.
@@ -156,33 +158,18 @@ export default function App() {
   }, [apiUrl]);
 
   const playSound = (type: string) => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      if (type === "success") { osc.frequency.value = 880; gain.gain.value = 0.1; }
-      else if (type === "error") { osc.frequency.value = 220; gain.gain.value = 0.15; }
-      else if (type === "violation") { osc.frequency.value = 660; gain.gain.value = 0.12; }
-      else if (type === "join") { osc.frequency.value = 523; gain.gain.value = 0.1; }
-      else { osc.frequency.value = 440; gain.gain.value = 0.08; }
-      osc.start();
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-      osc.stop(ctx.currentTime + 0.2);
-    } catch {}
+    const map: Record<string, any> = {
+      success: "success",
+      error: "error",
+      violation: "violation",
+      join: "join",
+      sleep: "sleep",
+      wake: "wake",
+    };
+    playCue(map[type] || "success", soundEnabled);
   };
 
-  const speak = (text: string) => {
-    try {
-      if (!("speechSynthesis" in window)) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.05;
-      u.pitch = 1.0;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch {}
-  };
+  const speak = (text: string) => speakText(text, settings.ttsVoice !== "off");
 
   const [prevViolationIds, setPrevViolationIds] = useState<Set<any>>(new Set());
   const [prevMemberIds, setPrevMemberIds] = useState<Set<any>>(new Set());
@@ -205,6 +192,10 @@ export default function App() {
   // Sleep mode: shown before the Mac is closed. Posts to the bot so anything
   // missed overnight can be surfaced on wake.
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+
+  useEffect(() => {
+    primeVoices();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -237,8 +228,8 @@ export default function App() {
     if (!isAndre || !loggedIn) return;
     const interval = setInterval(() => {
       setArmReminder(true);
-      if (soundEnabled) playSound("join");
-      speak("Time to take your arm out of the sling and do gentle wrist movements.");
+      if (soundEnabled) playSound("sleep");
+      if (settings.ttsArmReminder) speak("Time to take your arm out of the sling and do gentle wrist movements.");
     }, 2 * 60 * 60 * 1000); // every 2 hours, gentle
     return () => clearInterval(interval);
   }, [isAndre, loggedIn, soundEnabled]);
@@ -253,7 +244,7 @@ export default function App() {
       if (data.waits && Object.keys(data.waits).length) {
         // Check if waits dropped (only if not in sleep mode)
         try {
-          if (!sleepMode) {
+          if (!sleepMode && settings.ttsEdDrop) {
             const prev = prevWaitsRef.current;
             const drops: {key:string; start:string; amount:number}[] = [];
             if (prev && data.waits.Mater != null && prev.Mater != null && data.waits.Mater < prev.Mater) {
@@ -342,7 +333,7 @@ export default function App() {
       const added = (m || []).filter((x: any) => !prevMemberIds.has(x.id) && prevMemberIds.size > 0);
       if (added.length > 0) {
         if (soundEnabled) playSound("join");
-        if (ttsEnabled) speak(`New member joined: ${added[0].display_name || added[0].name}`);
+        if (settings.ttsNewMember) speak(`New member joined: ${added[0].display_name || added[0].name}`);
         notify(`New member: ${added[0].display_name || added[0].name}`, "info");
       }
       setPrevMemberIds(newIds);
@@ -516,6 +507,7 @@ export default function App() {
     { id: "trollwatch", label: "Troll Watch", icon: ShieldAlert },
     { id: "music", label: "Music", icon: Music },
     { id: "spotify", label: "Spotify", icon: Music2 },
+    { id: "activities", label: "Activities", icon: Trophy },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -612,6 +604,7 @@ export default function App() {
               setSlingOn(true);
               localStorage.setItem("sahara_sling", "on");
               notify("Welcome back — sling mode re-enabled", "success");
+              if (soundEnabled) playSound("wake");
               fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -929,6 +922,7 @@ export default function App() {
             {active === "music" && <MusicScreen apiUrl={apiUrl} notify={notify} />}
             {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
             {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
+            {active === "activities" && <ActivitiesScreen apiUrl={apiUrl} />}
             {active === "settings" && (
               <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Settings</h3>
@@ -1031,6 +1025,7 @@ export default function App() {
           setSleepMode(true);
           setArmReminder(false);
           notify("Sleep mode on — sling off, goodnight 🌙", "success");
+          if (soundEnabled) playSound("sleep");
           fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
