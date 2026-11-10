@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import SleepMode from "./components/SleepMode";
@@ -11,6 +11,7 @@ import TrollWatch from "./components/TrollWatch";
 import CatchUpBanner from "./components/CatchUpBanner";
 import SpotifyScreen from "./components/SpotifyScreen";
 import ActivitiesScreen from "./components/ActivitiesScreen";
+import ReactionRoles from "./components/ReactionRoles";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 
@@ -508,6 +509,7 @@ export default function App() {
     { id: "music", label: "Music", icon: Music },
     { id: "spotify", label: "Spotify", icon: Music2 },
     { id: "activities", label: "Activities", icon: Trophy },
+    { id: "reactionroles", label: "Reaction Roles", icon: Smile }, 
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -923,6 +925,9 @@ export default function App() {
             {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
             {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
             {active === "activities" && <ActivitiesScreen apiUrl={apiUrl} />}
+            {active === "reactionroles" && (
+              <ReactionRoles apiUrl={apiUrl} servers={servers} notify={notify} />
+            )}
             {active === "settings" && (
               <div className="glass rounded-xl p-4 space-y-4">
                 <h3 className="font-semibold mb-3">Settings</h3>
