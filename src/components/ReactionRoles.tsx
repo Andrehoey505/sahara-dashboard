@@ -103,7 +103,7 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
         if (cancelled) return;
         setRoles([]);
         setRolesError(
-          "Couldn't load roles — the bot needs the /api/roles endpoint (update Babblebot), or it isn't connected."
+          "Couldn't load the role list. The bot needs the /api/roles endpoint — it lives on Babblebot's abacus/roles-endpoint branch and won't exist until that's merged and the bot restarted. Falling back to raw role IDs."
         );
       });
     return () => {
