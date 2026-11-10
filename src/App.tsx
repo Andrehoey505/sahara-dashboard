@@ -827,7 +827,8 @@ export default function App() {
                       <button onClick={async () => {
                         if (!moreOptionsReason) { notify("Enter a reason", "error"); return; }
                         try {
-                          const res = await fetch(apiUrl + "/api/moderation-action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server, reason: moreOptionsReason, duration: 10 }) });
+                          const warnOnly = moreOptionsAction === "warn";
+                          const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server, reason: moreOptionsReason, duration: 10 }) });
                           const data = await res.json();
                           if (data.success) { notify(data.action + " applied to " + data.user, "success"); setMoreOptionsMsg(null); }
                           else { notify(data.error || "Failed", "error"); }
@@ -927,7 +928,8 @@ export default function App() {
                   <button onClick={async () => {
                     if (!modTarget || !modServer || !modReason) { notify("Fill in user ID, server, and reason", "error"); return; }
                     try {
-                      const res = await fetch(apiUrl + "/api/moderation-action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: modAction, target_id: modTarget, server: modServer, reason: modReason, duration: modDuration }) });
+                      const warnOnly = modAction === "warn";
+                      const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: modAction, target_id: modTarget, server: modServer, reason: modReason, duration: modDuration }) });
                       const data = await res.json();
                       if (data.success) { notify(data.action + " applied to " + data.user, "success"); setModTarget(""); setModReason(""); }
                       else { notify(data.error || "Failed", "error"); }
