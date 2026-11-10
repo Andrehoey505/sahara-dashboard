@@ -201,16 +201,29 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      let spotifyError = "";
       try {
         if (window.location.search.includes("code=")) {
           const current = loadSettings();
-          if (current.spotifyClientId) {
+          if (!current.spotifyClientId) {
+            spotifyError = "Spotify returned a code, but no Client ID is saved.";
+          } else {
             await handleCallback(current.spotifyClientId, current.spotifyRedirectUri);
+            // Land on the Spotify screen so the result is visible.
+            setActive("spotify");
           }
         }
-      } catch (e) {
+      } catch (e: any) {
+        // Surface it rather than only logging — this is the one place a silent
+        // failure leaves the user staring at a screen that never changes.
+        spotifyError = e?.message || "Spotify connection failed";
         console.warn("Spotify callback failed", e);
       } finally {
+        if (spotifyError) {
+          try {
+            sessionStorage.setItem("sahara_spotify_error", spotifyError);
+          } catch {}
+        }
         setSpotifyReady(true);
       }
     })();

@@ -33,6 +33,15 @@ export default function SpotifyScreen({ settings, notify }: Props) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [pasteMode, setPasteMode] = useState(false);
+  const [callbackError, setCallbackError] = useState<string>(() => {
+    try {
+      const e = sessionStorage.getItem("sahara_spotify_error") || "";
+      if (e) sessionStorage.removeItem("sahara_spotify_error");
+      return e;
+    } catch {
+      return "";
+    }
+  });
   const [pastedUrl, setPastedUrl] = useState("");
 
   const clientId = settings.spotifyClientId;
@@ -116,6 +125,11 @@ export default function SpotifyScreen({ settings, notify }: Props) {
           Control your own Spotify playback from here. Needs a Premium account, and a Client ID from
           the Spotify developer dashboard — add that in setup first.
         </p>
+        {callbackError && (
+          <p className="text-sm text-rose-300 mb-4 max-w-[65ch]">
+            Last attempt failed: {callbackError}
+          </p>
+        )}
         {!configured && (
           <p className="text-sm text-amber-300 mb-4">
             No Client ID saved yet — open setup and add your Spotify credentials.
