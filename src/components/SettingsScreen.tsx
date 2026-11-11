@@ -49,6 +49,8 @@ type UpdateState =
   | { status: "checking" }
   | { status: "none" }
   | { status: "found"; version: string }
+  | { status: "downloading"; version: string; pct: number | null }
+  | { status: "installed"; version: string }
   | { status: "error"; message: string };
 
 const RELEASES = "https://github.com/Andrehoey505/sahara-dashboard/releases/latest";
@@ -131,6 +133,7 @@ export default function SettingsScreen({
 }: Props) {
   const [appVersion, setAppVersion] = useState("");
   const [update, setUpdate] = useState<UpdateState>({ status: "idle" });
+  const [pending, setPending] = useState<{ version: string; downloadAndInstall: (cb?: any) => Promise<void> } | null>(null);
   const [apiDraft, setApiDraft] = useState(apiUrl);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
@@ -153,15 +156,59 @@ export default function SettingsScreen({
       const found = await check();
       if (found?.available) {
         setUpdate({ status: "found", version: found.version });
-        const go = window.confirm(`Update ${found.version} available. Install now?`);
-        if (go) {
-          const { relaunch } = await import("@tauri-apps/plugin-process");
-          await found.downloadAndInstall();
-          await relaunch();
-        }
+        // Keep the handle so the Install button can act on this exact update.
+        setPending(found);
       } else {
         setUpdate({ status: "none" });
       }
+    } catch (e) {
+      setUpdate({ status: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  /**
+   * Download and install, reporting progress the whole way.
+   *
+   * The old version asked for confirmation and then did the work inside the
+   * same try block as the check, so any failure after the check looked like a
+   * dead button: the version line stayed up and nothing else happened.
+   */
+  const installUpdate = async () => {
+    if (!pending) return;
+    const version = pending.version;
+    setUpdate({ status: "downloading", version, pct: null });
+    try {
+      let total = 0;
+      let done = 0;
+      await pending.downloadAndInstall((event: any) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+          setUpdate({ status: "downloading", version, pct: total ? 0 : null });
+        } else if (event.event === "Progress") {
+          done += event.data.chunkLength;
+          setUpdate({
+            status: "downloading",
+            version,
+            pct: total ? Math.min(100, Math.round((done / total) * 100)) : null,
+          });
+        } else if (event.event === "Finished") {
+          setUpdate({ status: "downloading", version, pct: 100 });
+        }
+      });
+      setUpdate({ status: "installed", version });
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      // Give the success state a moment to be seen before the window goes.
+      setTimeout(() => {
+        relaunch().catch((e) => {
+          setUpdate({
+            status: "error",
+            message:
+              "Installed, but couldn't restart automatically. Quit and reopen the app. (" +
+              (e instanceof Error ? e.message : String(e)) +
+              ")",
+          });
+        });
+      }, 900);
     } catch (e) {
       setUpdate({ status: "error", message: e instanceof Error ? e.message : String(e) });
     }
@@ -240,8 +287,43 @@ export default function SettingsScreen({
           </p>
         )}
         {update.status === "found" && (
-          <p className="mt-3 text-sm text-indigo-300 flex items-center gap-2">
-            <Download className="w-4 h-4" /> Version {update.version} is available.
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl p-3 bg-indigo-500/10 border border-indigo-500/30">
+            <p className="text-sm text-indigo-200 flex items-center gap-2">
+              <Download className="w-4 h-4" /> Version {update.version} is available.
+            </p>
+            <button
+              onClick={installUpdate}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              Install and restart
+            </button>
+          </div>
+        )}
+        {update.status === "downloading" && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-sm text-indigo-200 mb-1.5">
+              <span className="flex items-center gap-2">
+                <Download className="w-4 h-4" />
+                Downloading {update.version}
+              </span>
+              <span className="tabular-nums text-slate-400">
+                {update.pct == null ? "" : update.pct + "%"}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300"
+                style={{ width: (update.pct ?? 8) + "%" }}
+              />
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">
+              Keep the app open — it restarts itself when it's done.
+            </p>
+          </div>
+        )}
+        {update.status === "installed" && (
+          <p className="mt-3 text-sm text-emerald-300 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" /> Installed — restarting…
           </p>
         )}
         {update.status === "error" && (
