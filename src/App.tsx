@@ -1114,6 +1114,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             }
           />
         )}
+
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <span className={"w-1.5 h-9 rounded-full bg-gradient-to-b " + areaFor(active).grad} />

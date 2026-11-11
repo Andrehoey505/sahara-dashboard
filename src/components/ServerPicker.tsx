@@ -125,7 +125,10 @@ export default function ServerPicker({ servers, active, onSelect, full }: Props)
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={motionTokens.enter}
             role="listbox"
-            className="absolute z-40 mt-2 w-full min-w-[18rem] rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700 shadow-2xl shadow-black/50 overflow-hidden"
+            /* min-w made the dropdown wider than the chip it hangs from, so on a
+               narrow chip it spilled sideways over the screen header. It matches
+               the button's width now and only grows when there is room. */
+            className="absolute z-40 mt-2 left-0 w-full sm:min-w-[16rem] max-w-[min(22rem,calc(100vw-4rem))] rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700 shadow-2xl shadow-black/50 overflow-hidden"
           >
             {servers.length > 6 && (
               <div className="p-2 border-b border-slate-800">
