@@ -202,22 +202,48 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
             )}
           </div>
 
-          {/* Progress */}
-          <div className="flex gap-1.5 mt-5" aria-hidden="true">
-            {STEPS.map((s, i) => (
-              <div
-                key={s.id}
-                className={
-                  "h-1 flex-1 rounded-full transition-colors " +
-                  (i <= stepIndex ? "bg-indigo-500" : "bg-slate-700")
-                }
-              />
-            ))}
-          </div>
           <p className="sr-only" aria-live="polite">
             Step {stepIndex + 1} of {STEPS.length}: {step.title}
           </p>
         </header>
+
+        <div className="flex flex-1 min-h-0">
+          {/* Section rail — jump straight to any section instead of paging */}
+          <nav className="w-44 shrink-0 border-r border-slate-700/50 p-3 space-y-1 overflow-y-auto hidden sm:block">
+            {STEPS.map((s, i) => {
+              const SIcon = s.icon;
+              const isCurrent = i === stepIndex;
+              const isDone = i < stepIndex;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setStepIndex(i)}
+                  className={
+                    "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left text-sm transition-colors " +
+                    (isCurrent
+                      ? "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30"
+                      : isDone
+                      ? "text-slate-300 hover:bg-slate-800/50 border border-transparent"
+                      : "text-slate-500 hover:bg-slate-800/50 border border-transparent")
+                  }
+                >
+                  <span
+                    className={
+                      "w-6 h-6 rounded-lg flex items-center justify-center shrink-0 " +
+                      (isCurrent
+                        ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
+                        : isDone
+                        ? "bg-emerald-500/20 text-emerald-300"
+                        : "bg-slate-800/60 text-slate-500")
+                    }
+                  >
+                    {isDone ? <CheckCircle2 className="w-3.5 h-3.5" /> : <SIcon className="w-3.5 h-3.5" />}
+                  </span>
+                  <span className="truncate">{s.title}</span>
+                </button>
+              );
+            })}
+          </nav>
 
         {/* Body */}
         <div className="px-6 py-6 overflow-y-auto flex-1">
@@ -472,6 +498,7 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
               )}
             </motion.div>
           </AnimatePresence>
+        </div>
         </div>
 
         {/* Footer */}

@@ -3,6 +3,7 @@ import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, T
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import MigraineScreen from "./components/MigraineScreen";
+import SettingsScreen from "./components/SettingsScreen";
 import ArmCareScreen from "./components/ArmCareScreen";
 import SleepMode from "./components/SleepMode";
 import MembersScreen from "./components/MembersScreen";
@@ -1342,45 +1343,34 @@ export default function App() {
               <ReactionRoles apiUrl={apiUrl} servers={servers} notify={notify} />
             )}
             {active === "settings" && (
-              <div className="glass rounded-xl p-4 space-y-4">
-                <h3 className="font-semibold mb-3">Settings</h3>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/40">
-                  <div>
-                    <p className="text-sm text-slate-300">Connection &amp; Spotify</p>
-                    <p className="text-xs text-slate-500">API address, Spotify credentials, announcement toggles</p>
-                  </div>
-                  <button onClick={() => setShowSetup(true)} className="px-3 py-1.5 rounded-lg text-xs bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors">Open setup</button>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Bot API URL</label>
-                  <input value={apiUrl} onChange={(e) => { setApiUrl(e.target.value); localStorage.setItem("sahara_api_url", e.target.value); }} placeholder="http://192.168.1.128:8080" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
-                  <p className="text-xs text-slate-500 mt-1">Local IP for same-network, or tunnel URL for remote access.</p>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">Theme</label>
-                  <select value={theme} onChange={(e) => setTheme(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm">
-                    <option value="dark">Dark (default)</option>
-                    <option value="light">Light</option>
-                    <option value="midnight">Midnight</option>
-                  </select>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Sound alerts</span>
-                  <button onClick={() => { setSoundEnabled(!soundEnabled); localStorage.setItem("sahara_sound", !soundEnabled ? "on" : "off"); }} className={"px-3 py-1 rounded text-xs " + (soundEnabled ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700/50 text-slate-400")}>{soundEnabled ? "On" : "Off"}</button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">TTS announcements</span>
-                  <button onClick={() => { setTtsEnabled(!ttsEnabled); localStorage.setItem("sahara_tts", !ttsEnabled ? "on" : "off"); }} className={"px-3 py-1 rounded text-xs " + (ttsEnabled ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700/50 text-slate-400")}>{ttsEnabled ? "On" : "Off"}</button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Auto-refresh interval</span>
-                  <select className="px-3 py-1 rounded bg-slate-800/50 border border-slate-700 text-xs">
-                    <option>5s</option>
-                    <option>10s</option>
-                    <option>30s</option>
-                  </select>
-                </div>
-              </div>
+              <SettingsScreen
+                settings={settings}
+                onSaveSettings={(next) => {
+                  saveSettings(next);
+                  setSettings(next);
+                }}
+                apiUrl={apiUrl}
+                onSaveApiUrl={(url) => {
+                  setApiUrl(url);
+                  localStorage.setItem("sahara_api_url", url);
+                  notify("API address saved", "success");
+                }}
+                theme={theme}
+                onSaveTheme={setTheme}
+                soundEnabled={soundEnabled}
+                onToggleSound={() => {
+                  const next = !soundEnabled;
+                  setSoundEnabled(next);
+                  localStorage.setItem("sahara_sound", next ? "on" : "off");
+                }}
+                ttsEnabled={ttsEnabled}
+                onToggleTts={() => {
+                  const next = !ttsEnabled;
+                  setTtsEnabled(next);
+                  localStorage.setItem("sahara_tts", next ? "on" : "off");
+                }}
+                onOpenSetup={() => setShowSetup(true)}
+              />
             )}
           </motion.div>
         )}
