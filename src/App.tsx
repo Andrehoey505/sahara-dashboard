@@ -297,14 +297,14 @@ export default function App() {
   const [showSetup, setShowSetup] = useState(false);
   const [showSleep, setShowSleep] = useState(false);
   const [catchUp, setCatchUp] = useState<{ flags: number; since?: string | null } | null>(null);
-  // Seed from cache only if it is recent: an hours-old baseline would report a
-  // drop that already happened, or hide one that just did.
+  // Seed from cache only if it is recent: a stale baseline would report a drop
+  // that already happened, or hide one that just did.
   const _cachedWaits = (() => {
     try {
       const raw = JSON.parse(localStorage.getItem("sahara_ed_waits") || "null");
       if (!raw || !raw.waits) return {};
       const age = Date.now() - (raw.fetch || 0);
-      return age <= 20 * 60 * 1000 ? raw.waits : {};
+      return age <= 10 * 60 * 1000 ? raw.waits : {};
     } catch {
       return {};
     }
@@ -404,9 +404,9 @@ export default function App() {
   useEffect(() => {
     if (!isAndre || !loggedIn) return;
     fetchEd();
-    // The source page updates roughly every 10 minutes, so poll at half that
-    // to catch every published change rather than jumping over several at once.
-    const interval = setInterval(fetchEd, 5 * 60 * 1000);
+    // A hospital's time can move every 20 minutes, so poll well inside that
+    // window to catch each published change rather than jumping over several.
+    const interval = setInterval(fetchEd, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isAndre, loggedIn, fetchEd]);
 
