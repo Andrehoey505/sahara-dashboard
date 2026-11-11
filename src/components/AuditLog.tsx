@@ -29,7 +29,9 @@ type Props = {
 
 const FILTERS: { id: string; label: string; types: string }[] = [
   { id: "all", label: "Everything", types: "" },
-  { id: "bans", label: "Bans & kicks", types: "member_banned,member_unbanned,troll_banned,action_taken" },
+  { id: "bans", label: "Bans & kicks", types: "member_banned,member_unbanned,troll_banned,member_kicked" },
+  { id: "actions", label: "Mod actions", types: "action_taken,action_failed" },
+  { id: "decisions", label: "Violation decisions", types: "violation_resolved" },
   { id: "flags", label: "Flags", types: "violation_detected,flag_for_review" },
   { id: "messages", label: "Messages", types: "message_deleted,message_edited" },
   { id: "members", label: "Joins & leaves", types: "member_joined,member_left" },
@@ -73,10 +75,27 @@ function describe(e: Entry): { title: string; detail: string; tone: string; targ
         targetName: e.author_name,
       };
     }
-    case "message_deleted":
-      return { title: "Message deleted", detail: `${e.author_name || ""}${e.content_snippet ? `: "${String(e.content_snippet).slice(0, 80)}"` : ""}`, tone: toneOf("medium"), target: e.author_id, targetName: e.author_name };
-    case "message_edited":
-      return { title: "Message edited", detail: `${e.author_name || ""}${e.before_content ? `: "${String(e.before_content).slice(0, 60)}"` : ""}`, tone: toneOf("low"), target: e.author_id, targetName: e.author_name };
+    case "message_deleted": {
+      const text = e.content_snippet || e.content || e.message_content || "";
+      return {
+        title: "Message deleted",
+        detail: `${e.author_name || "someone"}${e.channel_name ? ` in #${e.channel_name}` : ""}${text ? `: “${String(text).slice(0, 120)}”` : " — content not recorded"}`,
+        tone: toneOf("medium"),
+        target: e.author_id,
+        targetName: e.author_name,
+      };
+    }
+    case "message_edited": {
+      const before = e.before_content || e.content_snippet || e.content || "";
+      const after = e.after_content || "";
+      return {
+        title: "Message edited",
+        detail: `${e.author_name || "someone"}${e.channel_name ? ` in #${e.channel_name}` : ""}${before ? `: was “${String(before).slice(0, 100)}”` : ""}${after ? ` → now “${String(after).slice(0, 100)}”` : ""}`,
+        tone: toneOf("low"),
+        target: e.author_id,
+        targetName: e.author_name,
+      };
+    }
     case "member_joined":
       return { title: "Member joined", detail: `${e.member_name || ""}${e.account_age_hours != null ? ` — account ${Math.round(e.account_age_hours)}h old` : ""}`, tone: toneOf("low"), target: e.member_id, targetName: e.member_name };
     case "member_left":
@@ -89,6 +108,14 @@ function describe(e: Entry): { title: string; detail: string; tone: string; targ
       return { title: "Channel created", detail: `#${e.channel_name || ""}`, tone: toneOf("low") };
     case "channel_deleted":
       return { title: "Channel deleted", detail: `#${e.channel_name || ""}`, tone: toneOf("high") };
+    case "violation_resolved":
+      return {
+        title: e.action === "deny" ? "Violation denied" : "Violation approved",
+        detail: `${e.author_name || "someone"}${e.violation_type ? ` — ${e.violation_type}` : ""}${e.reason ? `: “${String(e.reason).slice(0, 100)}”` : ""}`,
+        tone: toneOf(e.action === "deny" ? "low" : "medium"),
+        target: e.author_id,
+        targetName: e.author_name,
+      };
     case "verification_complete":
       return { title: "Verified", detail: `${e.verified_user_name || ""} by ${e.verifier_name || ""}`, tone: toneOf("low"), target: e.verified_user_id, targetName: e.verified_user_name };
     default:
@@ -250,7 +277,18 @@ export default function AuditLog({ apiUrl, notify }: Props) {
                     <span className="text-xs text-slate-500">#{e.channel_name}</span>
                   )}
                 </div>
-                {d.detail && <p className="text-sm text-slate-400 mt-0.5 truncate">{d.detail}</p>}
+                {d.detail && (
+                  <p
+                    className={
+                      "text-sm text-slate-400 mt-0.5 " +
+                      (e.type === "message_deleted" || e.type === "message_edited"
+                        ? "break-words"
+                        : "truncate")
+                    }
+                  >
+                    {d.detail}
+                  </p>
+                )}
               </div>
 
               <span className="shrink-0 text-xs text-slate-600 tabular-nums">
