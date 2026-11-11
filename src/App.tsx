@@ -1,5 +1,38 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, FileText, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info, Brain, HeartPulse, SlidersHorizontal } from "lucide-react";
+import {
+  LayoutDashboard,
+  Activity,
+  Users,
+  Shield,
+  ShieldAlert,
+  Music,
+  Music2,
+  Trophy,
+  Smile,
+  FileText,
+  Settings,
+  Sparkles,
+  Bell,
+  Search,
+  ChevronRight,
+  Zap,
+  MessageSquare,
+  AlertTriangle,
+  Lock,
+  LogIn,
+  X,
+  Trash2,
+  Eye,
+  VolumeX,
+  Ban,
+  CheckCircle,
+  RefreshCw,
+  Info,
+  Brain,
+  HeartPulse,
+  SlidersHorizontal,
+  Ticket,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import MigraineScreen from "./components/MigraineScreen";
@@ -15,6 +48,7 @@ import CatchUpBanner from "./components/CatchUpBanner";
 import SpotifyScreen from "./components/SpotifyScreen";
 import ActivitiesScreen from "./components/ActivitiesScreen";
 import ReactionRoles from "./components/ReactionRoles";
+import TicketScreen from "./components/TicketScreen";
 import TrollsScreen from "./components/TrollsScreen";
 import AuditLog from "./components/AuditLog";
 import { SCREENS } from "./lib/screens";
@@ -785,7 +819,10 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
     },
     {
       group: "Bot",
-      items: [{ id: "config", label: "Server Settings", icon: SlidersHorizontal }],
+      items: [
+        { id: "config", label: "Server Settings", icon: SlidersHorizontal },
+        { id: "tickets", label: "Tickets", icon: Ticket },
+      ],
     },
     {
       group: "Media",
@@ -1428,6 +1465,15 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 servers={servers}
                 server={servers.find((s: any) => s.id === activeServer)}
                 notify={notify}
+              />
+            )}
+            {active === "tickets" && (
+              <TicketScreen
+                apiUrl={apiUrl}
+                server={servers.find((s: any) => s.id === activeServer)}
+                servers={servers}
+                notify={notify}
+                onOpenConfig={() => setActive("config")}
               />
             )}
             {active === "trolls" && <TrollsScreen apiUrl={apiUrl} notify={notify} />}
