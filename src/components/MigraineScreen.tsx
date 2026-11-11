@@ -17,22 +17,42 @@ import type { Match } from "../lib/headache";
 type Region = { id: string; label: string; d: string };
 
 // Head drawn as a rounded shape split into tappable areas. Coordinates are on
-// a 100x120 viewBox; each path is one region.
+// a 100x140 viewBox, front of the head at the top. Each path is one region, so
+// a migraine can be marked on the front, both sides, the top, or the back
+// independently — which is how they actually present.
 const REGIONS: Region[] = [
-  { id: "forehead", label: "Forehead", d: "M50 6 C34 6 24 16 22 28 L78 28 C76 16 66 6 50 6 Z" },
-  { id: "temple_left", label: "Left temple", d: "M22 30 L34 30 L34 44 L20 44 C19 39 20 34 22 30 Z" },
-  { id: "temple_right", label: "Right temple", d: "M78 30 L66 30 L66 44 L80 44 C81 39 80 34 78 30 Z" },
-  { id: "eye_left", label: "Around left eye", d: "M34 31 L48 31 L48 46 L34 46 Z" },
-  { id: "eye_right", label: "Around right eye", d: "M52 31 L66 31 L66 46 L52 46 Z" },
-  { id: "vertex", label: "Top of head", d: "M24 29 L76 29 C76 20 66 9 50 9 C34 9 24 20 24 29 Z" },
-  { id: "behind_left", label: "Behind left eye", d: "M34 48 L48 48 L48 58 L34 58 Z" },
-  { id: "behind_right", label: "Behind right eye", d: "M52 48 L66 48 L66 58 L52 58 Z" },
-  { id: "occipital_left", label: "Back left", d: "M22 46 L34 46 L34 62 L23 62 C21 56 21 51 22 46 Z" },
-  { id: "occipital_right", label: "Back right", d: "M66 46 L78 46 C79 51 79 56 77 62 L66 62 Z" },
-  { id: "neck", label: "Neck", d: "M36 66 L64 66 L60 84 L40 84 Z" },
-  { id: "jaw_left", label: "Left jaw", d: "M30 62 L38 62 L40 78 L31 74 C29 70 29 66 30 62 Z" },
-  { id: "jaw_right", label: "Right jaw", d: "M62 62 L70 62 C71 66 71 70 69 74 L60 78 Z" },
+  // Front
+  { id: "forehead_left", label: "Left forehead", d: "M50 8 C38 8 30 14 27 22 L50 22 Z" },
+  { id: "forehead_right", label: "Right forehead", d: "M50 8 C62 8 70 14 73 22 L50 22 Z" },
+  { id: "vertex", label: "Top of head", d: "M27 22 C30 14 38 8 50 8 C62 8 70 14 73 22 Z" },
+  // Sides — temples and above the ears
+  { id: "temple_left", label: "Left temple", d: "M27 22 L45 22 L45 36 L24 36 C24 31 25 26 27 22 Z" },
+  { id: "temple_right", label: "Right temple", d: "M73 22 L55 22 L55 36 L76 36 C76 31 75 26 73 22 Z" },
+  { id: "eye_left", label: "Behind left eye", d: "M45 22 L50 22 L50 36 L45 36 Z" },
+  { id: "eye_right", label: "Behind right eye", d: "M50 22 L55 22 L55 36 L50 36 Z" },
+  // Sides — ear level
+  { id: "ear_left", label: "Left ear / jaw", d: "M24 36 L45 36 L45 54 L24 54 C22 48 22 42 24 36 Z" },
+  { id: "ear_right", label: "Right ear / jaw", d: "M76 36 L55 36 L55 54 L76 54 C78 48 78 42 76 36 Z" },
+  { id: "cheek_left", label: "Left cheek", d: "M45 36 L50 36 L50 54 L45 54 Z" },
+  { id: "cheek_right", label: "Right cheek", d: "M50 36 L55 36 L55 54 L50 54 Z" },
+  // Back
+  { id: "occipital_left", label: "Back left", d: "M24 54 L45 54 L45 70 L26 70 C24 65 23 59 24 54 Z" },
+  { id: "occipital_right", label: "Back right", d: "M76 54 L55 54 L55 70 L74 70 C76 65 77 59 76 54 Z" },
+  { id: "back_centre", label: "Back of head", d: "M45 54 L55 54 L55 70 L45 70 Z" },
+  // Neck
+  { id: "neck_left", label: "Left neck", d: "M32 72 L46 72 L46 90 L34 88 C32 83 31 77 32 72 Z" },
+  { id: "neck_right", label: "Right neck", d: "M68 72 L54 72 L54 90 L66 88 C68 83 69 77 68 72 Z" },
+  { id: "neck_back", label: "Back of neck", d: "M46 72 L54 72 L54 92 L46 92 Z" },
 ];
+
+/** Colour ramp for how often an area is affected, used on the heat map. */
+const heat = (n: number, max: number) => {
+  if (n === 0) return "fill-slate-700/50";
+  const ratio = max > 0 ? n / max : 0;
+  if (ratio >= 0.66) return "fill-rose-500/80";
+  if (ratio >= 0.33) return "fill-orange-500/70";
+  return "fill-amber-500/60";
+};
 
 const TYPES = [
   "Migraine with aura",
@@ -346,7 +366,7 @@ export default function MigraineScreen({ apiUrl }: Props) {
               Tap where it hurts {regions.length > 0 && `· ${regions.length} selected`}
             </p>
             <div className="flex gap-4 items-start">
-              <svg viewBox="0 0 100 90" className="w-40 h-36 shrink-0">
+              <svg viewBox="0 0 100 100" className="w-44 h-44 shrink-0">
                 {REGIONS.map((r) => {
                   const on = regions.includes(r.id);
                   return (
@@ -557,6 +577,36 @@ export default function MigraineScreen({ apiUrl }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Where it hits most often */}
+      {summary && Object.keys(summary.regions || {}).length > 0 && (
+        <div className="card p-5">
+          <p className="text-sm font-medium mb-1">Where it hits most</p>
+          <p className="text-xs text-slate-500 mb-3">
+            Warmer areas come up more often across your logged episodes.
+          </p>
+          <div className="flex gap-5 items-start">
+            <svg viewBox="0 0 100 100" className="w-36 h-36 shrink-0">
+              {REGIONS.map((r) => {
+                const max = Math.max(...Object.values(summary.regions));
+                const n = summary.regions[r.id] || 0;
+                return <path key={r.id} d={r.d} className={heat(n, max) + " stroke-slate-900/60"} strokeWidth="0.8" />;
+              })}
+            </svg>
+            <div className="flex-1 space-y-1.5 min-w-0">
+              {Object.entries(summary.regions)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([id, n]) => (
+                  <div key={id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-400 truncate">{regionLabel[id] || id}</span>
+                    <span className="text-slate-500 tabular-nums shrink-0">{n}×</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* History */}
       {loading && !error && <p className="text-sm text-slate-500">Loading…</p>}

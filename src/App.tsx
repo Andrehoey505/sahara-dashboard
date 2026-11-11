@@ -17,6 +17,7 @@ import ReactionRoles from "./components/ReactionRoles";
 import TrollsScreen from "./components/TrollsScreen";
 import AuditLog from "./components/AuditLog";
 import { SCREENS } from "./lib/screens";
+import { areaFor, areaTone } from "./lib/design";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 
@@ -909,25 +910,35 @@ export default function App() {
           {NAV.map((group, gi) => (
             <div key={group.group || "root-" + gi} className="space-y-0.5">
               {group.group && (
-                <p className="px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                <p className="flex items-center gap-2 px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                  <span className={"w-1.5 h-1.5 rounded-full " + (areaTone[group.group.toLowerCase() as keyof typeof areaTone]?.dot ?? "bg-slate-500")} />
                   {group.group}
                 </p>
               )}
               {group.items.map((n) => {
                 const Icon = n.icon;
                 const isActive = active === n.id;
+                const tone = areaFor(n.id);
                 return (
                   <button
                     key={n.id}
                     onClick={() => setActive(n.id)}
                     className={
-                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all " +
+                      "group relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-150 " +
                       (isActive
-                        ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                        : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200")
+                        ? tone.soft + " " + tone.text + " border " + tone.border
+                        : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border border-transparent")
                     }
                   >
-                    <Icon className="w-4 h-4 shrink-0" /> <span className="truncate">{n.label}</span>
+                    <span
+                      className={
+                        "w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors " +
+                        (isActive ? "bg-gradient-to-br " + tone.grad + " text-white" : "bg-slate-800/60 text-slate-400 group-hover:text-slate-200")
+                      }
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="truncate">{n.label}</span>
                     {isActive && <ChevronRight className="w-3 h-3 ml-auto shrink-0" />}
                   </button>
                 );
@@ -982,7 +993,7 @@ export default function App() {
         )}
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto thin-scroll p-6">
         {catchUp && (
           <div className="mb-4">
             <CatchUpBanner
@@ -993,9 +1004,12 @@ export default function App() {
           </div>
         )}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold capitalize">{active.replace("livefeed", "Live Messages")}</h2>
-            <p className="text-sm text-slate-400">Real-time Discord bot control</p>
+          <div className="flex items-center gap-3">
+            <span className={"w-1.5 h-9 rounded-full bg-gradient-to-b " + areaFor(active).grad} />
+            <div>
+              <h2 className="screen-title capitalize">{active.replace("livefeed", "Live Messages")}</h2>
+              <p className={"text-sm " + areaFor(active).text}>{areaFor(active).name}</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
