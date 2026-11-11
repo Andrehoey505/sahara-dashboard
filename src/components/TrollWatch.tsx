@@ -60,16 +60,28 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
         body: JSON.stringify({ id: req.id, action }),
       });
       const data = await res.json();
+
+      // The bot used to leave the request sitting in the pending list after it
+      // was answered, so the card stayed put and the button looked broken.
+      // Drop it locally whatever the answer, then re-read the server.
       if (data.success) {
-        notify(`${action === "dismiss" ? "Dismissed" : "Queued: " + data.queued}`, "success");
         setPending((p) => p.filter((x) => x.id !== req.id));
+        notify(
+          data.already
+            ? `Already queued: ${data.queued}`
+            : action === "dismiss"
+            ? "Dismissed"
+            : `Queued: ${data.queued}`,
+          "success"
+        );
       } else {
-        notify(data.error || "Failed", "error");
+        notify(data.error || "Couldn't send that decision", "error");
       }
     } catch {
-      notify("Connection failed", "error");
+      notify("Connection failed — is the bot reachable?", "error");
     } finally {
       setBusy(null);
+      load();
     }
   };
 
@@ -144,7 +156,8 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
                   disabled={busy === req.id}
                   className={btn + " bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"}
                 >
-                  <Check className="w-3.5 h-3.5" /> Approve {req.suggested_action}
+                  <Check className="w-3.5 h-3.5" />
+                  {busy === req.id ? "Sending…" : `Approve ${req.suggested_action}`}
                 </button>
                 <button
                   onClick={() => respond(req, "dismiss")}
