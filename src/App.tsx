@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, FileText, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info, Brain, HeartPulse } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, FileText, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info, Brain, HeartPulse, SlidersHorizontal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
 import MigraineScreen from "./components/MigraineScreen";
@@ -20,6 +20,7 @@ import AuditLog from "./components/AuditLog";
 import { SCREENS } from "./lib/screens";
 import { areaFor, areaTone } from "./lib/design";
 import ServerPicker from "./components/ServerPicker";
+import ConfigScreen from "./components/ConfigScreen";
 import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
@@ -739,6 +740,10 @@ export default function App() {
       ],
     },
     {
+      group: "Bot",
+      items: [{ id: "config", label: "Server Settings", icon: SlidersHorizontal }],
+    },
+    {
       group: "Media",
       items: [
         { id: "music", label: "Music", icon: Music },
@@ -1352,6 +1357,14 @@ export default function App() {
             )}
             {active === "music" && <MusicScreen apiUrl={apiUrl} notify={notify} />}
             {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
+            {active === "config" && (
+              <ConfigScreen
+                apiUrl={apiUrl}
+                servers={servers}
+                server={servers.find((s: any) => s.id === activeServer)}
+                notify={notify}
+              />
+            )}
             {active === "trolls" && <TrollsScreen apiUrl={apiUrl} notify={notify} />}
             {active === "audit" && <AuditLog apiUrl={apiUrl} notify={notify} />}
             {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
