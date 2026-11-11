@@ -1481,7 +1481,12 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
             {active === "activities" && <ActivitiesScreen apiUrl={apiUrl} notify={notify} />}
             {active === "reactionroles" && (
-              <ReactionRoles apiUrl={apiUrl} servers={servers} notify={notify} />
+              <ReactionRoles
+                apiUrl={apiUrl}
+                server={servers.find((s: any) => s.id === activeServer)}
+                servers={servers}
+                notify={notify}
+              />
             )}
             {active === "settings" && (
               <SettingsScreen

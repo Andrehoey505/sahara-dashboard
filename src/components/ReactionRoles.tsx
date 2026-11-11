@@ -1,138 +1,214 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Plus, Trash2, Save, RefreshCw, Smile } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plus,
+  Trash2,
+  Save,
+  RefreshCw,
+  Smile,
+  BadgeCheck,
+  Bell,
+  Tags,
+  AlertTriangle,
+  Check,
+  Copy,
+  Hash,
+  Lock,
+  ChevronDown,
+  ShieldQuestion,
+} from "lucide-react";
 import { motionTokens } from "../lib/design";
+import type { Server } from "../lib/servers";
 
-type RoleMapping = { emoji: string; role_id: string };
+type RoleMapping = { emoji: string; role_id: string; label?: string };
 
-type ServerConfig = {
+type Panel = {
   message_id: string;
   channel_id: string;
   reaction_type: string;
   toggle: boolean;
   role_mappings: RoleMapping[];
+  updated_at?: string;
 };
+
+type Role = { id: string; name: string; assignable?: boolean; color?: string | null };
 
 type Props = {
   apiUrl: string;
-  servers: { id: string; name: string }[];
+  server: Server | undefined;
+  servers: Server[];
   notify: (msg: string, type?: string) => void;
 };
 
-const REACTION_TYPES = [
-  { id: "role_assignment", label: "Role assignment" },
-  { id: "verification", label: "Verification" },
-  { id: "notification", label: "Notification toggle" },
+const TYPES = [
+  {
+    id: "role_assignment",
+    label: "Role assignment",
+    icon: Tags,
+    hint: "React to get a role, unreact to lose it. The usual self-roles setup.",
+    accent: "text-indigo-300",
+    bg: "bg-indigo-500/10",
+    border: "border-indigo-500/40",
+  },
+  {
+    id: "verification",
+    label: "Verification",
+    icon: BadgeCheck,
+    hint: "React once to be let in. The role stays even if they remove the reaction.",
+    accent: "text-emerald-300",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/40",
+  },
+  {
+    id: "notification",
+    label: "Notification toggle",
+    icon: Bell,
+    hint: "React to subscribe, react again to unsubscribe.",
+    accent: "text-amber-300",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/40",
+  },
 ];
 
-const field =
-  "w-full px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 transition";
+const typeOf = (id: string) => TYPES.find((t) => t.id === id) || TYPES[0];
 
-const emptyConfig: ServerConfig = {
+const field =
+  "w-full px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/30 transition";
+
+const card = "rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur";
+
+const emptyPanel = (): Panel => ({
   message_id: "",
   channel_id: "",
   reaction_type: "role_assignment",
   toggle: false,
-  role_mappings: [{ emoji: "", role_id: "" }],
-};
+  role_mappings: [{ emoji: "", role_id: "", label: "" }],
+});
 
-/**
- * Editor for reaction-role config.
- *
- * The bot reads reaction_roles.json on every reaction, so saving here takes
- * effect immediately — no restart needed.
- */
-export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
-  const [configs, setConfigs] = useState<Record<string, ServerConfig>>({});
-  const [selected, setSelected] = useState<string>("");
-  const [draft, setDraft] = useState<ServerConfig>(emptyConfig);
-  const [roles, setRoles] = useState<{ id: string; name: string; assignable?: boolean; color?: string | null }[]>([]);
+export default function ReactionRoles({ apiUrl, server, servers, notify }: Props) {
+  const [panels, setPanels] = useState<Panel[]>([]);
+  const [draft, setDraft] = useState<Panel>(emptyPanel());
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [rolesError, setRolesError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const serverId = server?.id || "";
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
       const res = await fetch(apiUrl + "/api/reaction-roles");
-      if (!res.ok) throw new Error("bad status");
+      if (!res.ok) throw new Error(`the bot answered ${res.status}`);
       const data = await res.json();
-      setConfigs(data?.servers || {});
-      setError("");
-    } catch {
-      setError("Couldn't reach the bot API — is the Windows laptop awake?");
+      const entry = data?.servers?.[serverId];
+      // Both store shapes: an old single config, or a list of panels.
+      const list: Panel[] = Array.isArray(entry?.panels)
+        ? entry.panels
+        : entry?.message_id
+        ? [entry]
+        : [];
+      setPanels(list);
+    } catch (e: any) {
+      setError(
+        e?.message?.includes("fetch")
+          ? "Couldn't reach the bot — check the API address in Settings."
+          : e?.message || "Couldn't load reaction roles."
+      );
+      setPanels([]);
     } finally {
       setLoading(false);
     }
-  }, [apiUrl]);
+  }, [apiUrl, serverId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
-
-  // Pick a server by default once the list arrives.
-  useEffect(() => {
-    if (!selected && servers.length > 0) setSelected(servers[0].id);
-  }, [servers, selected]);
-
-  // Load that server's config into the editor.
-  useEffect(() => {
-    if (!selected) return;
-    const existing = configs[selected];
-    setDraft(existing ? { ...existing, role_mappings: existing.role_mappings.length ? existing.role_mappings : [{ emoji: "", role_id: "" }] } : { ...emptyConfig });
-  }, [selected, configs]);
-
-  // Roles for the dropdown, from /api/roles.
-  const [rolesError, setRolesError] = useState("");
-  const [canManage, setCanManage] = useState(true);
+    if (serverId) load();
+  }, [load, serverId]);
 
   useEffect(() => {
-    if (!selected) return;
+    if (!serverId) return;
     let cancelled = false;
     setRolesError("");
-    fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(selected))
+    fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(serverId))
       .then((r) => {
-        if (!r.ok) throw new Error("bad status");
+        if (!r.ok) throw new Error(`the bot answered ${r.status}`);
         return r.json();
       })
       .then((data) => {
         if (cancelled) return;
-        setRoles(data.roles || []);
-        setCanManage(data.can_manage_roles !== false);
+        setRoles(Array.isArray(data.roles) ? data.roles : []);
       })
-      .catch(() => {
+      .catch((e) => {
         if (cancelled) return;
         setRoles([]);
+        // The old copy told people to merge a branch that is already merged.
         setRolesError(
-          "Couldn't load the role list. The bot needs the /api/roles endpoint — it lives on Babblebot's abacus/roles-endpoint branch and won't exist until that's merged and the bot restarted. Falling back to raw role IDs."
+          e?.message?.includes("fetch")
+            ? "Couldn't reach the bot, so role names aren't available. You can still type a role id."
+            : "The bot didn't return a role list. You can still type a role id."
         );
       });
     return () => {
       cancelled = true;
     };
-  }, [apiUrl, selected]);
+  }, [apiUrl, serverId]);
 
-  const setMapping = (i: number, patch: Partial<RoleMapping>) => {
+  const roleName = (id: string) => roles.find((r) => r.id === id)?.name;
+  const roleUsable = (id: string) => {
+    const r = roles.find((x) => x.id === id);
+    return !r || r.assignable !== false;
+  };
+
+  const duplicateEmoji = useMemo(() => {
+    const seen = new Set<string>();
+    for (const m of draft.role_mappings) {
+      const e = m.emoji.trim();
+      if (!e) continue;
+      if (seen.has(e)) return e;
+      seen.add(e);
+    }
+    return null;
+  }, [draft.role_mappings]);
+
+  const startNew = () => {
+    setDraft(emptyPanel());
+    setEditingIndex(null);
+  };
+
+  const startEdit = (i: number) => {
+    setDraft({ ...panels[i], role_mappings: panels[i].role_mappings.map((m) => ({ ...m })) });
+    setEditingIndex(i);
+  };
+
+  const setMapping = (i: number, patch: Partial<RoleMapping>) =>
     setDraft((d) => ({
       ...d,
       role_mappings: d.role_mappings.map((m, idx) => (idx === i ? { ...m, ...patch } : m)),
     }));
-  };
 
   const addRow = () =>
-    setDraft((d) => ({ ...d, role_mappings: [...d.role_mappings, { emoji: "", role_id: "" }] }));
+    setDraft((d) => ({ ...d, role_mappings: [...d.role_mappings, { emoji: "", role_id: "", label: "" }] }));
 
   const removeRow = (i: number) =>
     setDraft((d) => ({ ...d, role_mappings: d.role_mappings.filter((_, idx) => idx !== i) }));
 
   const save = async () => {
-    if (!selected) return;
-    const cleaned = draft.role_mappings.filter((m) => m.emoji.trim() && m.role_id.trim());
+    if (!serverId) return;
     if (!draft.message_id.trim()) {
-      notify("A message ID is required", "error");
+      notify("A message ID is required — right-click the message and Copy Message ID", "error");
       return;
     }
+    if (duplicateEmoji) {
+      notify(`${duplicateEmoji} is used twice — one emoji can only give one role`, "error");
+      return;
+    }
+    const cleaned = draft.role_mappings.filter((m) => m.emoji.trim() && m.role_id.trim());
     if (cleaned.length === 0) {
-      notify("Add at least one emoji and role ID", "error");
+      notify("Add at least one emoji and role", "error");
       return;
     }
     setSaving(true);
@@ -141,21 +217,49 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          server_id: selected,
+          server_id: serverId,
           message_id: draft.message_id.trim(),
           channel_id: draft.channel_id.trim(),
           reaction_type: draft.reaction_type,
           toggle: draft.toggle,
-          role_mappings: cleaned,
+          role_mappings: cleaned.map((m) => ({
+            emoji: m.emoji.trim(),
+            role_id: m.role_id.trim(),
+            label: (m.label || "").trim(),
+          })),
         }),
       });
-      const data = await res.json();
-      if (data.success) {
-        notify("Reaction roles saved", "success");
-        setConfigs(data.servers || {});
-      } else {
-        notify(data.error || "Failed", "error");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        notify(data.error || "Couldn't save", "error");
+        return;
       }
+      notify(editingIndex === null ? "Panel added" : "Panel updated", "success");
+      startNew();
+      await load();
+    } catch {
+      notify("Connection failed — is the bot reachable?", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (messageId: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch(
+        apiUrl + "/api/reaction-roles/" + encodeURIComponent(serverId) + "/" + encodeURIComponent(messageId),
+        { method: "DELETE" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        notify(data.error || "Couldn't remove it", "error");
+        return;
+      }
+      notify("Panel removed", "success");
+      setConfirmDelete(null);
+      if (editingIndex !== null && panels[editingIndex]?.message_id === messageId) startNew();
+      await load();
     } catch {
       notify("Connection failed", "error");
     } finally {
@@ -163,156 +267,281 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
     }
   };
 
-  const label = "block text-sm font-medium text-slate-300 mb-2";
+  const copyId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+      notify("Copied", "success");
+    } catch {
+      notify("Couldn't copy", "error");
+    }
+  };
+
+  if (!server) {
+    return (
+      <div className={card + " p-8 text-center text-sm text-slate-400"}>
+        Pick a server above to manage its reaction roles.
+      </div>
+    );
+  }
 
   return (
-    <motion.section
+    <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={motionTokens.enter}
-      className="space-y-4"
+      className="space-y-5"
     >
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">Reaction roles</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Assign roles when members react to a message. Saves take effect immediately.
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700">
+            <Tags className="w-3.5 h-3.5 text-indigo-300" />
+            <span className="text-sm text-slate-200">
+              {panels.length} panel{panels.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700">
+            <Smile className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-sm text-slate-300">
+              {panels.reduce((n, p) => n + p.role_mappings.length, 0)} reactions
+            </span>
+          </div>
         </div>
-        <button
-          onClick={load}
-          aria-label="Refresh reaction roles"
-          className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={load}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-200 hover:bg-slate-700/60 transition"
+          >
+            <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} />
+            Refresh
+          </button>
+          <button
+            onClick={startNew}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-600/30 transition"
+          >
+            <Plus className="w-4 h-4" />
+            New panel
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="rounded-xl p-4 bg-rose-500/10 border border-rose-500/30 text-sm text-rose-200">
-          {error}
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-sm text-rose-200">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      {!loading && servers.length === 0 && (
-        <p className="text-sm text-slate-500">No servers available.</p>
+      {/* Existing panels */}
+      {loading && panels.length === 0 ? (
+        <div className={card + " p-8 text-center text-sm text-slate-400"}>Loading…</div>
+      ) : panels.length === 0 ? (
+        <div className={card + " p-8 flex flex-col items-center gap-2 text-center"}>
+          <Smile className="w-8 h-8 text-slate-600" />
+          <p className="text-sm text-slate-400">No reaction-role panels on this server yet.</p>
+          <p className="text-xs text-slate-500">
+            Post a message in Discord, then add it here with its message ID.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {panels.map((p, i) => {
+            const t = typeOf(p.reaction_type);
+            const Icon = t.icon;
+            return (
+              <motion.div
+                key={p.message_id}
+                layout
+                className={
+                  card + " p-4 flex flex-wrap items-center gap-4 " + (editingIndex === i ? t.border : "")
+                }
+              >
+                <div className={"p-2 rounded-xl " + t.bg}>
+                  <Icon className={"w-4 h-4 " + t.accent} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-slate-100 flex items-center gap-2">
+                    {t.label}
+                    {p.toggle && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300">
+                        one at a time
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                    <Hash className="w-3 h-3" />
+                    {p.message_id}
+                    <button
+                      onClick={() => copyId(p.message_id)}
+                      className="hover:text-slate-300 transition"
+                      title="Copy message id"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {p.role_mappings.map((m) => (
+                      <span
+                        key={m.emoji + m.role_id}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800/70 border border-slate-700 text-xs text-slate-300"
+                        title={roleUsable(m.role_id) ? undefined : "The bot can't assign this role"}
+                      >
+                        <span>{m.emoji}</span>
+                        <span className="text-slate-500">→</span>
+                        <span className={roleUsable(m.role_id) ? "" : "text-amber-300"}>
+                          {m.label || roleName(m.role_id) || m.role_id}
+                        </span>
+                        {!roleUsable(m.role_id) && <Lock className="w-3 h-3 text-amber-400" />}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => startEdit(i)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700/60 transition"
+                  >
+                    Edit
+                  </button>
+                  {confirmDelete === p.message_id ? (
+                    <button
+                      onClick={() => remove(p.message_id)}
+                      disabled={saving}
+                      className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-xs text-rose-200 hover:bg-rose-500/30 transition"
+                    >
+                      {saving ? "Removing…" : "Really remove"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(p.message_id)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 transition"
+                      title="Remove this panel"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       )}
 
-      {servers.length > 0 && (
-        <div className="glass rounded-2xl p-5 space-y-5">
-          <div>
-            <label htmlFor="rr-server" className={label}>
-              Server
-            </label>
-            <select
-              id="rr-server"
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
+      {/* Editor */}
+      <div className={card + " p-5 space-y-4"}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-100">
+            {editingIndex === null ? "New panel" : "Editing panel"}
+          </h3>
+          {editingIndex !== null && (
+            <button onClick={startNew} className="text-xs text-slate-400 hover:text-slate-200 transition">
+              Cancel
+            </button>
+          )}
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="block text-xs font-medium text-slate-400 mb-1.5">Message ID</span>
+            <input
+              value={draft.message_id}
+              onChange={(e) => setDraft({ ...draft, message_id: e.target.value })}
+              placeholder="Right-click the message → Copy Message ID"
               className={field}
-            >
-              {servers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-slate-400 mb-1.5">
+              Channel ID <span className="text-slate-600">(optional)</span>
+            </span>
+            <input
+              value={draft.channel_id}
+              onChange={(e) => setDraft({ ...draft, channel_id: e.target.value })}
+              placeholder="Only needed if two messages share an id"
+              className={field}
+            />
+          </label>
+        </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="rr-message" className={label}>
-                Message ID
-              </label>
-              <input
-                id="rr-message"
-                value={draft.message_id}
-                onChange={(e) => setDraft((d) => ({ ...d, message_id: e.target.value }))}
-                placeholder="Right-click the message → Copy ID"
-                spellCheck={false}
-                className={field}
-              />
-            </div>
-            <div>
-              <label htmlFor="rr-channel" className={label}>
-                Channel ID <span className="text-slate-500 font-normal">(optional)</span>
-              </label>
-              <input
-                id="rr-channel"
-                value={draft.channel_id}
-                onChange={(e) => setDraft((d) => ({ ...d, channel_id: e.target.value }))}
-                spellCheck={false}
-                className={field}
-              />
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="rr-type" className={label}>
-                Behaviour
-              </label>
-              <select
-                id="rr-type"
-                value={draft.reaction_type}
-                onChange={(e) => setDraft((d) => ({ ...d, reaction_type: e.target.value }))}
-                className={field}
-              >
-                {REACTION_TYPES.map((t) => (
-                  <option key={t.id} value={t.id}>
+        <div>
+          <span className="block text-xs font-medium text-slate-400 mb-1.5">What reacting does</span>
+          <div className="grid sm:grid-cols-3 gap-2">
+            {TYPES.map((t) => {
+              const Icon = t.icon;
+              const on = draft.reaction_type === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setDraft({ ...draft, reaction_type: t.id })}
+                  className={
+                    "text-left p-3 rounded-xl border transition " +
+                    (on ? t.bg + " " + t.border : "border-slate-700/60 hover:border-slate-600")
+                  }
+                >
+                  <span className="flex items-center gap-2 text-sm text-slate-100">
+                    <Icon className={"w-4 h-4 " + (on ? t.accent : "text-slate-500")} />
                     {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="flex items-end gap-3 pb-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={draft.toggle}
-                onChange={(e) => setDraft((d) => ({ ...d, toggle: e.target.checked }))}
-                className="w-4 h-4 accent-indigo-500 rounded"
-              />
-              <span className="text-sm text-slate-300">
-                Exclusive — picking one removes the others
-              </span>
-            </label>
+                  </span>
+                  <span className="block text-[11px] text-slate-400 mt-1 leading-snug">{t.hint}</span>
+                </button>
+              );
+            })}
           </div>
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className={label + " mb-0"}>Emoji → role</span>
-              <button
-                onClick={addRow}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add
-              </button>
-            </div>
+        {draft.reaction_type === "role_assignment" && (
+          <button
+            onClick={() => setDraft({ ...draft, toggle: !draft.toggle })}
+            className={
+              "flex items-center gap-3 w-full p-3 rounded-xl border text-left transition " +
+              (draft.toggle ? "border-indigo-500/40 bg-indigo-500/10" : "border-slate-700/60")
+            }
+          >
+            <span
+              className={
+                "w-9 h-5 rounded-full relative transition " + (draft.toggle ? "bg-indigo-500" : "bg-slate-700")
+              }
+            >
+              <span
+                className={
+                  "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all " +
+                  (draft.toggle ? "left-4.5" : "left-0.5")
+                }
+              />
+            </span>
+            <span className="flex-1">
+              <span className="block text-sm text-slate-100">One role at a time</span>
+              <span className="block text-[11px] text-slate-400">
+                Picking one takes the others in this panel away.
+              </span>
+            </span>
+          </button>
+        )}
 
-            <div className="space-y-2">
-              {draft.role_mappings.map((m, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="relative w-24 shrink-0">
-                    <Smile className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      value={m.emoji}
-                      onChange={(e) => setMapping(i, { emoji: e.target.value })}
-                      placeholder="🎮"
-                      aria-label={`Emoji ${i + 1}`}
-                      className={field + " pl-8 text-center"}
-                    />
-                  </div>
+        <div>
+          <span className="block text-xs font-medium text-slate-400 mb-1.5">Emoji → role</span>
+          <div className="space-y-2">
+            {draft.role_mappings.map((m, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <input
+                  value={m.emoji}
+                  onChange={(e) => setMapping(i, { emoji: e.target.value })}
+                  placeholder="👍"
+                  className={field + " w-16 text-center"}
+                  aria-label="Emoji"
+                />
+                <div className="relative flex-1 min-w-[160px]">
                   {roles.length > 0 ? (
                     <select
                       value={m.role_id}
                       onChange={(e) => setMapping(i, { role_id: e.target.value })}
-                      aria-label={`Role ${i + 1}`}
-                      className={field}
+                      className={field + " appearance-none pr-8"}
+                      aria-label="Role"
                     >
-                      <option value="">Pick a role…</option>
+                      <option value="">Choose a role…</option>
                       {roles.map((r) => (
-                        <option key={r.id} value={r.id} disabled={r.assignable === false}>
+                        <option key={r.id} value={r.id}>
                           {r.name}
-                          {r.assignable === false ? " — can't assign" : ""}
+                          {r.assignable === false ? " (the bot can't assign this)" : ""}
                         </option>
                       ))}
                     </select>
@@ -321,47 +550,71 @@ export default function ReactionRoles({ apiUrl, servers, notify }: Props) {
                       value={m.role_id}
                       onChange={(e) => setMapping(i, { role_id: e.target.value })}
                       placeholder="Role ID"
-                      aria-label={`Role ID ${i + 1}`}
-                      spellCheck={false}
                       className={field}
+                      aria-label="Role ID"
                     />
                   )}
-                  <button
-                    onClick={() => removeRow(i)}
-                    aria-label={`Remove mapping ${i + 1}`}
-                    className="shrink-0 p-2 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {roles.length > 0 && (
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                  )}
                 </div>
-              ))}
-            </div>
-
-            {rolesError && (
-              <p className="text-xs text-amber-300 mt-3 max-w-[65ch]">{rolesError}</p>
-            )}
-            {!canManage && (
-              <p className="text-xs text-amber-300 mt-3 max-w-[65ch]">
-                The bot is missing Manage Roles in this server, so reactions won't actually assign
-                anything until that permission is granted.
-              </p>
-            )}
-            <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
-              Roles the bot can&apos;t assign are greyed out — usually they sit above the bot&apos;s
-              own role, or are managed by an integration. Custom emoji need the full form, e.g.{" "}
-              <code className="text-slate-400">name:id</code>.
-            </p>
+                <input
+                  value={m.label || ""}
+                  onChange={(e) => setMapping(i, { label: e.target.value })}
+                  placeholder="Label (optional)"
+                  className={field + " w-36"}
+                  aria-label="Label"
+                />
+                <button
+                  onClick={() => removeRow(i)}
+                  className="p-2 rounded-lg text-slate-500 hover:text-rose-300 transition"
+                  title="Remove this row"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
-
           <button
-            onClick={save}
-            disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold text-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 transition"
+            onClick={addRow}
+            className="mt-2 flex items-center gap-1.5 text-xs text-indigo-300 hover:text-indigo-200 transition"
           >
-            <Save className="w-4 h-4" /> {saving ? "Saving…" : "Save"}
+            <Plus className="w-3.5 h-3.5" />
+            Add another emoji
           </button>
         </div>
+
+        {rolesError && (
+          <p className="flex items-start gap-2 text-xs text-amber-300/90">
+            <ShieldQuestion className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            {rolesError}
+          </p>
+        )}
+        {duplicateEmoji && (
+          <p className="flex items-center gap-2 text-xs text-rose-300">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {duplicateEmoji} is used twice — one emoji can only give one role.
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={save}
+            disabled={saving || !!duplicateEmoji}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition"
+          >
+            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? "Saving…" : editingIndex === null ? "Add panel" : "Save changes"}
+          </button>
+          <span className="text-xs text-slate-500">Takes effect immediately — no restart.</span>
+        </div>
+      </div>
+
+      {servers.length > 1 && (
+        <p className="text-xs text-slate-500">
+          Showing {server.name}. Change it in the bar above.
+        </p>
       )}
-    </motion.section>
+    </motion.div>
   );
 }
