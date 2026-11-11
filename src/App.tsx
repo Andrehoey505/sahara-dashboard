@@ -25,6 +25,19 @@ import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 
+// Screens whose content belongs to one server. Everything else must not show a
+// server picker — it was in the global header before, in the way everywhere.
+const SERVER_SCOPED = [
+  "config",
+  "reactionroles",
+  "trollwatch",
+  "trolls",
+  "audit",
+  "members",
+  "moderation",
+  "tickets",
+];
+
 export default function App() {
   // Finish the Spotify handshake if we came back from the authorise screen.
   const [spotifyReady, setSpotifyReady] = useState(false);
@@ -49,9 +62,6 @@ export default function App() {
   const [selectedChannel, setSelectedChannel] = useState("");
   const [servers, setServers] = useState<any[]>([]);
   const [activeServer, setActiveServer] = useState<string>(() => loadActiveServer());
-  // Screens whose content belongs to one server. The picker only appears on
-  // these — it was in the global header before, in the way on every screen.
-  const SERVER_SCOPED = ["config", "reactionroles", "trollwatch", "trolls", "audit", "members", "moderation", "tickets"];
   const chooseServer = (id: string) => {
     setActiveServer(id);
     saveActiveServer(id);
@@ -741,7 +751,7 @@ export default function App() {
 
   // Sidebar is grouped rather than one flat list: at 14 entries it had stopped
   // being scannable. Each group is a heading with its items under it.
-  const NAV: { group: string; items: { id: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
+const NAV: { group: string; items: { id: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
     {
       group: "Overview",
       items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
@@ -1041,6 +1051,10 @@ export default function App() {
       </aside>
 
       <main className="flex-1 overflow-y-auto thin-scroll p-6">
+        {/* Keyed on the screen so the whole body is replaced on navigation.
+            Without this a stale subtree could survive a tab change and leave the
+            server bar sitting over screens that have nothing to do with it. */}
+        <div key={active}>
         {catchUp && (
           <div className="mb-4">
             <CatchUpBanner
@@ -1455,6 +1469,7 @@ export default function App() {
             )}
           </motion.div>
         )}
+        </div>
       </main>
 
       {trollSweepActive && (
