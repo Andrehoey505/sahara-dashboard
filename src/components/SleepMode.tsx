@@ -14,7 +14,6 @@ type Props = {
  * Sleep mode.
  *
  * The Mac gets closed overnight, so this is the last thing shown. Its job is
- * the sling warning (a sling left on in bed is a strangulation risk) and
  * telling the bot that Andre is going to sleep so anything missed can be
  * surfaced on wake.
  */
@@ -42,11 +41,6 @@ export default function SleepMode({ open, onClose, onSleep }: Props) {
         className="glass rounded-2xl w-full max-w-lg overflow-hidden"
       >
         <div className="relative">
-          <img
-            src="/images/sleep-sling-warning.png"
-            alt="Someone asleep in bed with their arm sling set aside on the bedside table"
-            className="w-full h-56 object-cover"
-          />
           <button
             onClick={onClose}
             aria-label="Close sleep mode"
@@ -64,10 +58,6 @@ export default function SleepMode({ open, onClose, onSleep }: Props) {
             </h3>
           </div>
           <p className="text-sm text-slate-300 leading-relaxed max-w-[65ch]">
-            Take the sling off before bed. Wearing it overnight is a strangulation risk — the
-            strap can catch on the bed frame or tighten while you move in your sleep.
-          </p>
-          <p className="text-sm text-slate-400 leading-relaxed mt-3 max-w-[65ch]">
             Sleeping will also tell Babblebot you&apos;re away, so anything missed overnight is
             waiting for you in the morning.
           </p>
@@ -77,7 +67,7 @@ export default function SleepMode({ open, onClose, onSleep }: Props) {
               onClick={engage}
               className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition"
             >
-              Sling&apos;s off — sleep
+              Go to sleep
             </button>
             <button
               onClick={onClose}

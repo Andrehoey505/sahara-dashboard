@@ -18,6 +18,8 @@ export const SCREENS = [
   "music",
   "spotify",
   "activities",
+  "migraine",
+  "armcare",
   "reactionroles",
   "settings",
 ] as const;

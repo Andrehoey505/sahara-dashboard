@@ -23,7 +23,7 @@ export type AppSettings = {
   spotifyClientSecret: string;
   spotifyRedirectUri: string;
   ttsEdDrop: boolean;
-  ttsArmReminder: boolean;
+  edWaitsEnabled: boolean;
   ttsNewMember: boolean;
   ttsVoice: string;
 };
@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spotifyClientSecret: "",
   spotifyRedirectUri: "http://127.0.0.1:5173/callback",
   ttsEdDrop: true,
-  ttsArmReminder: true,
+  edWaitsEnabled: true,
   ttsNewMember: false,
   ttsVoice: "calm",
 };
@@ -323,21 +323,39 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                     Spoken alerts use a calm voice. Choose which ones you actually want to hear —
                     you can change these any time.
                   </p>
+                  <label className="flex items-center justify-between gap-4 p-3.5 rounded-lg bg-slate-800/40 border border-indigo-500/30 cursor-pointer hover:bg-slate-800/60 transition-colors">
+                    <span>
+                      <span className="text-sm text-slate-200 block">Emergency department waits</span>
+                      <span className="text-xs text-slate-500 block mt-0.5">
+                        Shows the ED Waits tab and turns its spoken alerts on. Off hides both.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={draft.edWaitsEnabled}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setDraft({ ...draft, edWaitsEnabled: on, ttsEdDrop: on });
+                      }}
+                      className="w-4 h-4 accent-indigo-500 rounded shrink-0"
+                    />
+                  </label>
+
                   {[
-                    { key: "ttsEdDrop" as const, text: "Emergency department wait drops" },
-                    { key: "ttsArmReminder" as const, text: "Arm care reminders" },
+                    { key: "ttsEdDrop" as const, text: "Emergency department wait drops", dep: "edWaitsEnabled" as const },
                     { key: "ttsNewMember" as const, text: "New member joins" },
-                  ].map(({ key, text }) => (
+                  ].map(({ key, text, dep }) => (
                     <label
                       key={key}
                       className="flex items-center justify-between gap-4 p-3.5 rounded-lg bg-slate-800/40 border border-slate-700/40 cursor-pointer hover:bg-slate-800/60 transition-colors"
                     >
-                      <span className="text-sm text-slate-300">{text}</span>
+                      <span className={"text-sm " + (dep && !draft[dep] ? "text-slate-600" : "text-slate-300")}>{text}</span>
                       <input
                         type="checkbox"
                         checked={draft[key]}
+                        disabled={!!(dep && !draft[dep])}
                         onChange={(e) => set(key, e.target.checked)}
-                        className="w-4 h-4 accent-indigo-500 rounded"
+                        className="w-4 h-4 accent-indigo-500 rounded disabled:opacity-40"
                       />
                     </label>
                   ))}

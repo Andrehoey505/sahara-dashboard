@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, FileText, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Shield, ShieldAlert, Music, Music2, Trophy, Smile, FileText, Settings, Sparkles, Bell, Search, ChevronRight, Zap, MessageSquare, AlertTriangle, Lock, LogIn, X, Trash2, Eye, VolumeX, Ban, CheckCircle, RefreshCw, Info, Brain, HeartPulse } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
+import MigraineScreen from "./components/MigraineScreen";
+import ArmCareScreen from "./components/ArmCareScreen";
 import SleepMode from "./components/SleepMode";
 import MembersScreen from "./components/MembersScreen";
 import SetupScreen, { loadSettings, saveSettings, type AppSettings } from "./components/SetupScreen";
@@ -246,17 +248,7 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(localStorage.getItem("sahara_sound") !== "off");
 
   const isAndre = userId === "264680643013771265";
-  const [armReminder, setArmReminder] = useState(false);
-  const [slingOn, setSlingOn] = useState(() => localStorage.getItem("sahara_sling") !== "off");
-  const [slingStatusAsked, setSlingStatusAsked] = useState(() => sessionStorage.getItem("sahara_sling_asked_session") === "1");
   const [sleepMode, setSleepMode] = useState(false);
-  const slingBackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!isAndre || !loggedIn || !slingOn || sleepMode) return;
-    const show = () => { setArmReminder(true); try { const a=new Audio('/sounds/alarm_beep.wav'); a.play().catch(()=>{}); setTimeout(()=>{ const b=new Audio('/sounds/arm_reminder.ogg'); b.play().catch(()=>{}); }, 700); if (slingBackTimerRef.current) clearTimeout(slingBackTimerRef.current); slingBackTimerRef.current = setTimeout(()=>{ const c=new Audio('/sounds/sling_back_on.ogg'); c.play().catch(()=>{}); }, 8*60*1000); } catch {} };
-    const t = setTimeout(show, 90 * 60 * 1000);
-    return () => { clearTimeout(t); if (slingBackTimerRef.current) { clearTimeout(slingBackTimerRef.current); slingBackTimerRef.current = null; } };
-  }, [isAndre, loggedIn, slingOn, sleepMode, armReminder]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   // Sleep mode: shown before the Mac is closed. Posts to the bot so anything
   // missed overnight can be surfaced on wake.
@@ -316,17 +308,6 @@ export default function App() {
   const [edLastFetch, setEdLastFetch] = useState<number>(0);
   const [edNow, setEdNow] = useState<number>(Date.now());
 
-  // Arm care reminder (only for Andre's profile)
-  useEffect(() => {
-    if (!isAndre || !loggedIn) return;
-    const interval = setInterval(() => {
-      setArmReminder(true);
-      if (soundEnabled) playSound("sleep");
-      if (settings.ttsArmReminder) speak("Time to take your arm out of the sling and do gentle wrist movements.");
-    }, 2 * 60 * 60 * 1000); // every 2 hours, gentle
-    return () => clearInterval(interval);
-  }, [isAndre, loggedIn, soundEnabled]);
-
   // Live ED waiting times
   const fetchEd = useCallback(async () => {
     if (!isAndre || !loggedIn) return;
@@ -337,7 +318,7 @@ export default function App() {
       if (data.waits && Object.keys(data.waits).length) {
         // Check if waits dropped (only if not in sleep mode)
         try {
-          if (!sleepMode && settings.ttsEdDrop) {
+          if (!sleepMode && settings.edWaitsEnabled && settings.ttsEdDrop) {
             const prev = prevWaitsRef.current;
             const drops: {key:string; start:string; amount:number}[] = [];
             if (prev && data.waits.Mater != null && prev.Mater != null && data.waits.Mater < prev.Mater) {
@@ -705,7 +686,7 @@ export default function App() {
 
   const NAV = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "edwaits", label: "ED Waits", icon: Activity },
+    ...(settings.edWaitsEnabled ? [{ id: "edwaits", label: "ED Waits", icon: Activity }] : []),
     { id: "livefeed", label: "Live Messages", icon: MessageSquare },
     { id: "violations", label: "Violations", icon: AlertTriangle },
     { id: "members", label: "Members", icon: Users },
@@ -716,6 +697,8 @@ export default function App() {
     { id: "music", label: "Music", icon: Music },
     { id: "spotify", label: "Spotify", icon: Music2 },
     { id: "activities", label: "Activities", icon: Trophy },
+    { id: "migraine", label: "Migraine Diary", icon: Brain },
+    { id: "armcare", label: "Arm Care", icon: HeartPulse },
     { id: "reactionroles", label: "Reaction Roles", icon: Smile }, 
     { id: "settings", label: "Settings", icon: Settings },
   ];
@@ -911,9 +894,7 @@ export default function App() {
               setShowSleep(true);
             } else {
               setSleepMode(false);
-              setSlingOn(true);
-              localStorage.setItem("sahara_sling", "on");
-              notify("Welcome back — sling mode re-enabled", "success");
+              notify("Welcome back", "success");
               if (soundEnabled) playSound("wake");
               fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
                 method: "POST",
@@ -928,7 +909,7 @@ export default function App() {
                 })
                 .catch(() => {});
             }
-          }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up (sling on)" : "🌙 Going to sleep"}</button>
+          }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up" : "🌙 Going to sleep"}</button>
           )}
         </div>
         {!pinSet && (
@@ -1072,7 +1053,11 @@ export default function App() {
           </motion.div>
         )}
 
-        {active === "edwaits" && (
+        {active === "migraine" && <MigraineScreen apiUrl={apiUrl} />}
+
+        {active === "armcare" && <ArmCareScreen />}
+
+        {active === "edwaits" && settings.edWaitsEnabled && (
           <div className="space-y-4">
             <EdWaits apiUrl={apiUrl} variant="page" />
           </div>
@@ -1365,26 +1350,12 @@ export default function App() {
           </div>
         </div>
       )}
-      {isAndre && loggedIn && !slingStatusAsked && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-2xl p-6 w-96 text-center">
-            <div className="text-4xl mb-3">🦴</div>
-            <h3 className="font-bold text-lg mb-2">Sling status?</h3>
-            <p className="text-sm text-slate-300 mb-4">Are you wearing the sling right now? This controls the reminders.</p>
-            <div className="flex gap-2">
-              <button onClick={() => { setSlingOn(true); localStorage.setItem("sahara_sling","on"); sessionStorage.setItem("sahara_sling_asked_session","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Yes, sling on</button>
-              <button onClick={() => { setSlingOn(false); localStorage.setItem("sahara_sling","off"); sessionStorage.setItem("sahara_sling_asked_session","1"); setSlingStatusAsked(true); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">No, it's off</button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
       <SleepMode
         open={showSleep}
         onClose={() => setShowSleep(false)}
         onSleep={() => {
           setSleepMode(true);
-          setArmReminder(false);
-          notify("Sleep mode on — sling off, goodnight 🌙", "success");
+          notify("Sleep mode on, goodnight 🌙", "success");
           if (soundEnabled) playSound("sleep");
           fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
             method: "POST",
@@ -1393,19 +1364,6 @@ export default function App() {
           }).catch(() => {});
         }}
       />
-      {armReminder && isAndre && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setArmReminder(false)}>
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-2xl p-6 w-96 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="text-4xl mb-3">💪</div>
-            <h3 className="font-bold text-lg mb-2">Gentle Arm Care</h3>
-            <p className="text-sm text-slate-300 mb-4">Time to take your arm out of the sling for a bit — gentle shoulder/elbow movement, then back in. Ice ~10 min if sore.</p>
-            <div className="flex gap-2">
-              <button onClick={() => { setArmReminder(false); setTimeout(() => setArmReminder(true), 2 * 60 * 60 * 1000); }} className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 transition">Done</button>
-              <button onClick={() => { setArmReminder(false); setTimeout(() => setArmReminder(true), 30 * 60 * 1000); }} className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition">Snooze 30m</button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
     </div>
   );
 }
