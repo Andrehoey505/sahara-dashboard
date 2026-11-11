@@ -29,7 +29,7 @@ export type AppSettings = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  apiUrl: "http://192.168.1.131:8080",
+  apiUrl: "http://192.168.1.128:8080",
   spotifyClientId: "",
   spotifyClientSecret: "",
   spotifyRedirectUri: "http://127.0.0.1:5173/callback",
@@ -213,7 +213,7 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                         id="apiUrl"
                         value={draft.apiUrl}
                         onChange={(e) => set("apiUrl", e.target.value)}
-                        placeholder="http://192.168.1.131:8080"
+                        placeholder="http://192.168.1.128:8080"
                         spellCheck={false}
                         autoComplete="off"
                         className={field}
