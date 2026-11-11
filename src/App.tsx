@@ -695,30 +695,58 @@ export default function App() {
     );
   }
 
-  const NAV = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    ...(settings.edWaitsEnabled ? [{ id: "edwaits", label: "ED Waits", icon: Activity }] : []),
-    { id: "livefeed", label: "Live Messages", icon: MessageSquare },
-    { id: "violations", label: "Violations", icon: AlertTriangle },
-    { id: "members", label: "Members", icon: Users },
-    { id: "moderation", label: "Moderation", icon: Shield },
-    { id: "trollwatch", label: "Troll Watch", icon: ShieldAlert },
-    { id: "trolls", label: "Troll List", icon: Shield },
-    { id: "audit", label: "Server Log", icon: FileText },
-    { id: "music", label: "Music", icon: Music },
-    { id: "spotify", label: "Spotify", icon: Music2 },
-    { id: "activities", label: "Activities", icon: Trophy },
-    { id: "migraine", label: "Migraine Diary", icon: Brain },
-    { id: "armcare", label: "Arm Care", icon: HeartPulse },
-    { id: "reactionroles", label: "Reaction Roles", icon: Smile }, 
-    { id: "settings", label: "Settings", icon: Settings },
+  // Sidebar is grouped rather than one flat list: at 14 entries it had stopped
+  // being scannable. Each group is a heading with its items under it.
+  const NAV: { group: string; items: { id: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
+    {
+      group: "Overview",
+      items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
+    },
+    {
+      group: "Health",
+      items: [
+        { id: "migraine", label: "Migraine Diary", icon: Brain },
+        { id: "armcare", label: "Arm Care", icon: HeartPulse },
+        ...(settings.edWaitsEnabled ? [{ id: "edwaits", label: "ED Waits", icon: Activity }] : []),
+      ],
+    },
+    {
+      group: "Server",
+      items: [
+        { id: "livefeed", label: "Live Messages", icon: MessageSquare },
+        { id: "members", label: "Members", icon: Users },
+        { id: "activities", label: "Activities", icon: Trophy },
+        { id: "reactionroles", label: "Reaction Roles", icon: Smile },
+      ],
+    },
+    {
+      group: "Moderation",
+      items: [
+        { id: "moderation", label: "Moderation", icon: Shield },
+        { id: "violations", label: "Violations", icon: AlertTriangle },
+        { id: "trollwatch", label: "Troll Watch", icon: ShieldAlert },
+        { id: "trolls", label: "Troll List", icon: Shield },
+        { id: "audit", label: "Server Log", icon: FileText },
+      ],
+    },
+    {
+      group: "Media",
+      items: [
+        { id: "music", label: "Music", icon: Music },
+        { id: "spotify", label: "Spotify", icon: Music2 },
+      ],
+    },
+    {
+      group: "",
+      items: [{ id: "settings", label: "Settings", icon: Settings }],
+    },
   ];
 
   // Dev-time safety net: every nav item must have a screen defined below.
   // (A screen that exists in NAV but has no render block used to fail silently,
   // showing a heading with nothing under it.)
   if ((import.meta as any).env?.DEV) {
-    NAV.forEach(({ id, label }) => {
+    NAV.flatMap((g) => g.items).forEach(({ id, label }) => {
       if (!(SCREENS as readonly string[]).includes(id)) {
         console.warn(
           `[sahara] "${label}" (${id}) is in the nav but has no screen. ` +
@@ -877,15 +905,35 @@ export default function App() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"><Sparkles className="w-5 h-5" /></div>
           <div><h1 className="font-bold text-lg">Sahara</h1><p className="text-xs text-slate-400">Control Center</p></div>
         </div>
-        <nav className="flex-1 space-y-1">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const isActive = active === n.id;
-            return <button key={n.id} onClick={() => setActive(n.id)} className={"w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all " + (isActive ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200")}>
-              <Icon className="w-4 h-4" /> {n.label}
-              {isActive && <ChevronRight className="w-3 h-3 ml-auto" />}
-            </button>;
-          })}
+        <nav className="flex-1 overflow-y-auto space-y-4 pr-1">
+          {NAV.map((group, gi) => (
+            <div key={group.group || "root-" + gi} className="space-y-0.5">
+              {group.group && (
+                <p className="px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                  {group.group}
+                </p>
+              )}
+              {group.items.map((n) => {
+                const Icon = n.icon;
+                const isActive = active === n.id;
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => setActive(n.id)}
+                    className={
+                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all " +
+                      (isActive
+                        ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                        : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200")
+                    }
+                  >
+                    <Icon className="w-4 h-4 shrink-0" /> <span className="truncate">{n.label}</span>
+                    {isActive && <ChevronRight className="w-3 h-3 ml-auto shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="mt-4 p-3 rounded-xl bg-slate-800/40 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-2">

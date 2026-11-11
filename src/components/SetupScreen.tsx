@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Server,
@@ -14,6 +14,8 @@ import {
   Volume2,
   Sparkles,
   ArrowRight,
+  RefreshCw,
+  Download,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 
@@ -63,13 +65,14 @@ type Props = {
   firstRun?: boolean;
 };
 
-type StepId = "welcome" | "bot" | "spotify" | "voice" | "done";
+type StepId = "welcome" | "bot" | "spotify" | "voice" | "about" | "done";
 
 const STEPS: { id: StepId; title: string; blurb: string; icon: typeof Server }[] = [
   { id: "welcome", title: "Welcome", blurb: "Two minutes to get Sahara talking to Babblebot", icon: Sparkles },
   { id: "bot", title: "Babblebot", blurb: "Where the bot's API is listening", icon: Server },
   { id: "spotify", title: "Spotify", blurb: "Optional — control your own music here", icon: Music },
   { id: "voice", title: "Announcements", blurb: "Which spoken alerts you actually want", icon: Volume2 },
+  { id: "about", title: "About", blurb: "Version and updates", icon: RefreshCw },
   { id: "done", title: "Ready", blurb: "You're set up", icon: CheckCircle2 },
 ];
 
@@ -83,6 +86,43 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
   const [showSecret, setShowSecret] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
+  const [appVersion, setAppVersion] = useState("");
+  const [updateState, setUpdateState] = useState<
+    { status: "idle" } | { status: "checking" } | { status: "none" } | { status: "found"; version: string } | { status: "error"; message: string }
+  >({ status: "idle" });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { getVersion } = await import("@tauri-apps/api/app");
+        setAppVersion(await getVersion());
+      } catch {
+        setAppVersion("");
+      }
+    })();
+  }, []);
+
+  const checkForUpdates = async () => {
+    setUpdateState({ status: "checking" });
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update?.available) {
+        setUpdateState({ status: "found", version: update.version });
+        const go = window.confirm(`Update ${update.version} available. Install now?`);
+        if (go) {
+          const { relaunch } = await import("@tauri-apps/plugin-process");
+          await update.downloadAndInstall();
+          await relaunch();
+        }
+      } else {
+        setUpdateState({ status: "none" });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setUpdateState({ status: "error", message });
+    }
+  };
 
   const step = STEPS[stepIndex];
   const isFirst = stepIndex === 0;
@@ -359,6 +399,62 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                       />
                     </label>
                   ))}
+                </div>
+              )}
+
+              {step.id === "about" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3.5 rounded-lg bg-slate-800/40 border border-slate-700/40">
+                    <span className="text-sm text-slate-300">Installed version</span>
+                    <span className="text-sm font-mono text-slate-100">{appVersion || "unknown"}</span>
+                  </div>
+
+                  <button
+                    onClick={checkForUpdates}
+                    disabled={updateState.status === "checking"}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-slate-800/60 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/15 disabled:opacity-50 transition"
+                  >
+                    <RefreshCw className={"w-4 h-4 " + (updateState.status === "checking" ? "animate-spin" : "")} />
+                    {updateState.status === "checking" ? "Checking…" : "Check for updates"}
+                  </button>
+
+                  {updateState.status === "none" && (
+                    <p className="text-sm text-emerald-300 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> You're on the latest version.
+                    </p>
+                  )}
+                  {updateState.status === "found" && (
+                    <p className="text-sm text-indigo-300 flex items-center gap-2">
+                      <Download className="w-4 h-4" /> Version {updateState.version} is available.
+                    </p>
+                  )}
+                  {updateState.status === "error" && (
+                    <div className="rounded-lg p-3 bg-rose-500/10 border border-rose-500/30">
+                      <p className="text-sm text-rose-200">Update check failed</p>
+                      <p className="text-xs text-rose-300/80 mt-1 break-words">{updateState.message}</p>
+                      <p className="text-xs text-slate-400 mt-2">
+                        You can always download the latest installer from the GitHub releases page.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-700/50">
+                    <p className="text-sm font-medium text-slate-300 mb-1">Emergency department waits</p>
+                    <label className="flex items-center justify-between gap-4 p-3.5 rounded-lg bg-slate-800/40 border border-slate-700/40 cursor-pointer hover:bg-slate-800/60 transition-colors">
+                      <span className="text-sm text-slate-400">
+                        Show the ED Waits tab and its spoken alerts
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={draft.edWaitsEnabled}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          setDraft({ ...draft, edWaitsEnabled: on, ttsEdDrop: on });
+                        }}
+                        className="w-4 h-4 accent-indigo-500 rounded shrink-0"
+                      />
+                    </label>
+                  </div>
                 </div>
               )}
 
