@@ -78,21 +78,32 @@ export default function App() {
     localStorage.setItem("sahara_theme", theme);
   }, [theme]);
 
+  // Update check. Reports failures instead of swallowing them: a silent catch
+  // here is why "no update offered" was indistinguishable from "update check
+  // crashed" the first time round.
   useEffect(() => {
     (async () => {
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const { relaunch } = await import("@tauri-apps/plugin-process");
         const update = await check();
-        if (update?.available) {
-          const ok = window.confirm(`Update ${update.version} available. Install now?`);
-          if (ok) {
-            await update.downloadAndInstall();
-            await relaunch();
-          }
+        if (!update?.available) {
+          console.info("[sahara] updater: already up to date");
+          return;
+        }
+        const ok = window.confirm(`Update ${update.version} available. Install now?`);
+        if (ok) {
+          await update.downloadAndInstall();
+          await relaunch();
         }
       } catch (e) {
-        // Not running in Tauri or no update endpoint configured — ignore
+        console.error("[sahara] updater check failed:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        // Don't nag on every launch in the browser dev server, where there is
+        // no Tauri runtime and the check cannot work at all.
+        if ("__TAURI_INTERNALS__" in window) {
+          notify("Update check failed — " + msg, "error");
+        }
       }
     })();
   }, []);
