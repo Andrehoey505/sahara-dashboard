@@ -5,8 +5,19 @@ import { motionTokens } from "../lib/design";
 
 type Activities = {
   guild_id: string;
-  counting: { last_count: number; last_counter_id?: string | null };
-  wordchain: { active?: boolean; last_word?: string; used_words?: string[]; last_user_id?: string };
+  counting: {
+    last_count: number;
+    last_counter_id?: string | null;
+    last_counter_name?: string | null;
+    next_number?: number;
+  };
+  wordchain: {
+    active?: boolean;
+    last_word?: string;
+    used_words?: string[];
+    last_user_id?: string;
+    last_user_name?: string | null;
+  };
   giveaways: { prize?: string; ends_at?: string; host?: string; [k: string]: unknown }[];
 };
 
@@ -78,7 +89,12 @@ export default function ActivitiesScreen({ apiUrl }: Props) {
               {data.counting?.last_count ?? 0}
             </p>
             <p className="text-xs text-slate-500 mt-2">
-              {data.counting?.last_counter_id ? "last counted by a member" : "no counts yet"}
+              {data.counting?.last_counter_id
+                ? `counted by ${data.counting?.last_counter_name || "a member"}`
+                : "no counts yet"}
+            </p>
+            <p className="text-xs text-indigo-300/80 mt-1">
+              next is {data.counting?.next_number ?? (data.counting?.last_count ?? 0) + 1}
             </p>
           </div>
 
@@ -90,11 +106,25 @@ export default function ActivitiesScreen({ apiUrl }: Props) {
             <p className="text-2xl font-semibold">
               {data.wordchain?.last_word || "—"}
             </p>
-            <p className="text-xs text-slate-500 mt-2">
-              {data.wordchain?.active
-                ? `${data.wordchain?.used_words?.length ?? 0} words used`
-                : "not running"}
-            </p>
+            {data.wordchain?.active && data.wordchain?.last_word ? (
+              <>
+                <p className="text-xs text-slate-500 mt-2">
+                  played by {data.wordchain?.last_user_name || "a member"}
+                </p>
+                <p className="text-xs text-indigo-300/80 mt-1">
+                  next must start with{" "}
+                  <span className="font-semibold uppercase">
+                    {data.wordchain.last_word.slice(-1)}
+                  </span>
+                  {" · "}
+                  {data.wordchain?.used_words?.length ?? 0} words used
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500 mt-2">
+                {data.wordchain?.active ? "waiting for the first word" : "not running"}
+              </p>
+            )}
           </div>
 
           <div className={card + " sm:col-span-2"}>
