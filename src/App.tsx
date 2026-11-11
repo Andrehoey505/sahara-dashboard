@@ -19,6 +19,8 @@ import TrollsScreen from "./components/TrollsScreen";
 import AuditLog from "./components/AuditLog";
 import { SCREENS } from "./lib/screens";
 import { areaFor, areaTone } from "./lib/design";
+import ServerPicker from "./components/ServerPicker";
+import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 
@@ -45,6 +47,7 @@ export default function App() {
   const [selectedServer, setSelectedServer] = useState("");
   const [selectedChannel, setSelectedChannel] = useState("");
   const [servers, setServers] = useState<any[]>([]);
+  const [activeServer, setActiveServer] = useState<string>(() => loadActiveServer());
   const [channels, setChannels] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [staffOnly, setStaffOnly] = useState(false);
@@ -193,7 +196,11 @@ export default function App() {
         setPrevViolationIds(newIds);
         setViolations(newViols.filter((v: any) => !hiddenViolations.has(String(v.id))));
       }
-      if (srvRes.ok) setServers(await srvRes.json());
+      if (srvRes.ok) {
+        const list = await srvRes.json();
+        setServers(Array.isArray(list) ? list : []);
+        setActiveServer((prev) => resolveActive(Array.isArray(list) ? list : [], prev));
+      }
       if (statsRes.ok) {
         const d = await statsRes.json();
         setMessagesToday(d.messages_today ?? 0);
@@ -1013,6 +1020,16 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="w-56">
+              <ServerPicker
+                servers={servers}
+                active={activeServer}
+                onSelect={(id) => {
+                  setActiveServer(id);
+                  saveActiveServer(id);
+                }}
+              />
+            </div>
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 w-64" />
