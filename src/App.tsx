@@ -591,16 +591,43 @@ export default function App() {
 
   const handleContextAction = async (action: any, msg: any) => {
     setContextMenu(null);
-    if (action === "approve" || action === "deny") {
+    if (action === "approve" || action === "deny" || action === "undo") {
+      // The old version never checked the response, so a failed save still
+      // looked like it worked and came back wrong on the next refresh.
       try {
-        await fetch(apiUrl + "/api/violation/" + encodeURIComponent(msg.id) + "/resolve", {
+        const res = await fetch(apiUrl + "/api/violation/" + encodeURIComponent(msg.id) + "/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, user: msg.user, server: msg.server, channel: msg.channel || "", type: msg.type, words: msg.words || [], message: msg.full_message || msg.message || "" }),
+          body: JSON.stringify({
+            action: action === "undo" ? "pending" : action,
+            user: msg.user,
+            server: msg.server,
+            channel: msg.channel || "",
+            type: msg.type,
+            words: msg.words || [],
+            message: msg.full_message || msg.message || "",
+          }),
         });
-        setViolations((v) => v.map((x) => x.id === msg.id ? { ...x, status: action === "approve" ? "resolved" : "denied" } : x));
-        notify(action === "approve" ? "Approved" : "Denied", action === "approve" ? "success" : "error");
-      } catch (e) { notify("Failed", "error"); }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          notify(data.error || "Couldn't save that decision", "error");
+          return;
+        }
+        const status = data.status === "resolved" ? "resolved" : data.status === "denied" ? "denied" : "pending";
+        setViolations((v) =>
+          v.map((x) =>
+            x.id === msg.id
+              ? { ...x, status, decided_at: status === "pending" ? undefined : new Date().toISOString() }
+              : x
+          )
+        );
+        notify(
+          status === "pending" ? "Undone" : status === "resolved" ? "Approved" : "Denied",
+          status === "denied" ? "error" : "success"
+        );
+      } catch {
+        notify("Connection failed — is the bot reachable?", "error");
+      }
     } else if (action === "delete") {
       setMessages((m) => m.filter((x) => x.id !== msg.id));
       notify("Deleted", "success");
@@ -1288,7 +1315,21 @@ export default function App() {
                       </>
                     )}
                     {v.status !== "pending" && (
-                      <span className={"text-xs px-2 py-1 rounded " + (v.status === "resolved" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300")}>{v.status}</span>
+                      <>
+                        <span
+                          className={"text-xs px-2 py-1 rounded " + (v.status === "resolved" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300")}
+                          title={v.decided_at ? "Decided " + new Date(v.decided_at).toLocaleString("en-GB") : undefined}
+                        >
+                          {v.status}
+                        </span>
+                        <button
+                          onClick={() => handleContextAction("undo", v)}
+                          className="px-2 py-1 rounded-lg bg-slate-700/50 text-slate-300 text-xs hover:bg-slate-600/50 transition"
+                          title="Put this back to pending"
+                        >
+                          Undo
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
