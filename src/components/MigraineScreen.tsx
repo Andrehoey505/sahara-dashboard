@@ -160,8 +160,12 @@ export default function MigraineScreen({ apiUrl }: Props) {
           const nd = await nres.json();
           setGeneralNotes(nd.notes || "");
           setNotesSaved(true);
+        } else {
+          setError("Couldn't load your doctor notes — the rest of the diary loaded fine.");
         }
-      } catch {}
+      } catch {
+        setError("Couldn't load your doctor notes — the rest of the diary loaded fine.");
+      }
     } catch {
       setError("Couldn't reach the bot API — is the Windows machine awake?");
     } finally {
@@ -550,7 +554,9 @@ export default function MigraineScreen({ apiUrl }: Props) {
                     body: JSON.stringify({ notes: "" }),
                   });
                   setNotesSaved(true);
-                } catch {}
+                } catch {
+                  setError("Couldn't clear your notes — check the bot is running.");
+                }
               }}
               className="px-3 py-1.5 rounded-lg text-xs bg-slate-800/60 border border-slate-700 text-slate-400 hover:text-rose-300 hover:bg-rose-500/10"
             >
