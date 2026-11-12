@@ -1576,7 +1576,15 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 selectedServer={servers.find((x: any) => x.id === activeServer)?.name || ""}
               />
             )}
-            {active === "music" && <MusicScreen apiUrl={apiUrl} notify={notify} />}
+            {active === "music" && (
+              <MusicScreen
+                apiUrl={apiUrl}
+                notify={notify}
+                userId={userId}
+                servers={servers}
+                selectedServer={servers.find((x: any) => x.id === activeServer)?.name || ""}
+              />
+            )}
             {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
             {active === "config" && (
               <ConfigScreen
