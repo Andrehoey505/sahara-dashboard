@@ -50,7 +50,7 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
       try {
         const res = await fetch(apiUrl + "/api/members");
         if (!res.ok) throw new Error("bad status");
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!cancelled) setMembers(Array.isArray(data) ? data : data.members || []);
       } catch {
         if (!cancelled) setError("Couldn't reach the bot API — is the Windows laptop awake?");

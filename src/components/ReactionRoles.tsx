@@ -104,7 +104,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
     try {
       const res = await fetch(apiUrl + "/api/reaction-roles");
       if (!res.ok) throw new Error(`the bot answered ${res.status}`);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       const entry = data?.servers?.[serverId];
       // Both store shapes: an old single config, or a list of panels.
       const list: Panel[] = Array.isArray(entry?.panels)

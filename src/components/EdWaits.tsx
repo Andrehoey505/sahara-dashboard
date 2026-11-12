@@ -34,7 +34,7 @@ export default function EdWaits({ apiUrl, variant = "page" }: Props) {
     try {
       const res = await fetch(apiUrl + "/api/ed-waits");
       if (!res.ok) throw new Error("bad status");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.waits && Object.keys(data.waits).length) {
         setWaits(data.waits);
         if (data.last_updated) setLastUpdated(data.last_updated);

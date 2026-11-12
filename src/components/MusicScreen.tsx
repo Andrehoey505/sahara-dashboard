@@ -27,7 +27,7 @@ export default function MusicScreen({ apiUrl, notify }: Props) {
     try {
       const res = await fetch(apiUrl + "/api/music");
       if (!res.ok) throw new Error("bad status");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       setGuilds(Array.isArray(data) ? data : []);
       setError("");
     } catch {
@@ -51,7 +51,7 @@ export default function MusicScreen({ apiUrl, notify }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, guild_id: guildId, ...extra }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.success) {
         notify(action === "stop" ? "Stopped" : action[0].toUpperCase() + action.slice(1), "success");
         load();

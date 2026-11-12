@@ -38,7 +38,7 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
     try {
       const res = await fetch(apiUrl + "/api/troll-watch");
       if (!res.ok) throw new Error("bad status");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       setPending(data.pending || []);
       setTrolls(data.trolls || []);
       setError("");
@@ -63,7 +63,13 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: req.id, action }),
       });
-      const data = await res.json();
+      // A 500 or a proxy error page is not JSON, so .json() threw and the
+      // catch below reported "connection failed" — wrong, and it hid what the
+      // bot actually said.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && !data.error) {
+        data.error = `The bot rejected that (HTTP ${res.status}).`;
+      }
 
       // The bot used to leave the request sitting in the pending list after it
       // was answered, so the card stayed put and the button looked broken.

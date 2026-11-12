@@ -414,7 +414,7 @@ export default function App() {
     try {
       const res = await fetch(apiUrl + "/api/ed-waits");
       if (!res.ok) throw new Error("not ok");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.waits && Object.keys(data.waits).length) {
         // Check if waits dropped (only if not in sleep mode)
         try {
@@ -554,7 +554,8 @@ export default function App() {
     localStorage.setItem("sahara_user", userId);
     try {
       const res = await fetch(apiUrl + "/api/user/" + userId);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && !data.error) data.error = `HTTP ${res.status}`;
       if (data.name) setUserProfile({ name: data.name, avatar: "👤", id: userId, avatarUrl: data.avatar });
       else setUserProfile({ name: "User " + userId.slice(-4), avatar: "👤", id: userId });
     } catch (e) {
@@ -581,14 +582,38 @@ export default function App() {
     setTrollSweepDone(false);
     setTrollSweepProgress(0);
     setTrollSweepResults([]);
-    const srvs = servers.length ? servers : await (await fetch(apiUrl + "/api/servers")).json();
+    // Both of these assumed the reply was a JSON list. An error reply is an
+    // object, so `srvs.length` was undefined and the loop either skipped
+    // silently or threw on a non-array — the sweep looked like it had found
+    // nothing rather than like it had failed.
+    let srvs: any[] = servers;
+    if (!srvs.length) {
+      try {
+        const r = await fetch(apiUrl + "/api/servers");
+        const body = await r.json().catch(() => null);
+        srvs = Array.isArray(body) ? body : [];
+      } catch {
+        srvs = [];
+      }
+    }
+    if (!srvs.length) {
+      notify("Couldn't read the server list — check the bot is reachable.", "error");
+      setTrollSweepDone(true);
+      return;
+    }
     const total = srvs.length;
     for (let i = 0; i < srvs.length; i++) {
       const s = srvs[i];
       setTrollSweepServer(s.name);
       setTrollSweepProgress(Math.round(((i) / total) * 100));
       try {
-        const members = await (await fetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.name))).json();
+        const mres = await fetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.name));
+        const mbody = await mres.json().catch(() => null);
+        const members = Array.isArray(mbody) ? mbody : [];
+        if (!Array.isArray(mbody)) {
+          // Name the server that failed instead of quietly counting zero.
+          notify(`Couldn't read members for ${s.name}`, "error");
+        }
         setTrollSweepMembers((prev) => prev + (members?.length || 0));
         // Check for suspicious patterns (new accounts, no avatar, etc.)
         // Only things the bot actually knows are suspicious. No avatar and a
@@ -1408,7 +1433,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                         try {
                           const warnOnly = moreOptionsAction === "warn";
                           const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server, reason: moreOptionsReason, duration: 10 }) });
-                          const data = await res.json();
+                          const data = await res.json().catch(() => ({}));
                           if (data.success) { notify(data.action + " applied to " + data.user, "success"); setMoreOptionsMsg(null); }
                           else { notify(data.error || "Failed", "error"); }
                         } catch (e) { notify("Connection failed", "error"); }
@@ -1546,7 +1571,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                     try {
                       const warnOnly = modAction === "warn";
                       const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: modAction, target_id: modTarget, server: modServer, reason: modReason, duration: modDuration }) });
-                      const data = await res.json();
+                      const data = await res.json().catch(() => ({}));
                       if (data.success) { notify(data.action + " applied to " + data.user, "success"); setModTarget(""); setModReason(""); }
                       else { notify(data.error || "Failed", "error"); }
                     } catch (e) { notify("Connection failed", "error"); }
@@ -1556,13 +1581,13 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                   <h4 className="font-semibold mb-2 text-sm">Send DM to User</h4>
                   <input value={dmTarget} onChange={(e) => setDmTarget(e.target.value)} placeholder="User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
                   <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} placeholder="Message (sent as SocialLink.io Staff)" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={async () => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } try { const res = await fetch(apiUrl + "/api/dm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: dmTarget, message: dmMessage }) }); const data = await res.json(); if (data.success) { notify("DM sent to " + data.sent_to, "success"); setDmTarget(""); setDmMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
+                  <button onClick={async () => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } try { const res = await fetch(apiUrl + "/api/dm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: dmTarget, message: dmMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("DM sent to " + data.sent_to, "success"); setDmTarget(""); setDmMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
                 </div>
                 <div className="border-t border-slate-700/50 pt-4">
                   <h4 className="font-semibold mb-2 text-sm">Send Message to Channel</h4>
                   <input value={channelTarget} onChange={(e) => setChannelTarget(e.target.value)} placeholder="Server/Channel (e.g. Babble Playpen / general)" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
                   <textarea value={channelMessage} onChange={(e) => setChannelMessage(e.target.value)} placeholder="Message to send to channel" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={async () => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } const parts = channelTarget.split("/"); try { const res = await fetch(apiUrl + "/api/channel-message", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ server: parts[0]?.trim(), channel: parts[1]?.trim(), message: channelMessage }) }); const data = await res.json(); if (data.success) { notify("Message sent to " + data.channel, "success"); setChannelTarget(""); setChannelMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition">Send to Channel</button>
+                  <button onClick={async () => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } const parts = channelTarget.split("/"); try { const res = await fetch(apiUrl + "/api/channel-message", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ server: parts[0]?.trim(), channel: parts[1]?.trim(), message: channelMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("Message sent to " + data.channel, "success"); setChannelTarget(""); setChannelMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition">Send to Channel</button>
                 </div>
               </div>
             )}

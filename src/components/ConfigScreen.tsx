@@ -178,7 +178,7 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ settings: changes }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         setValues(data.settings);
         setSaved(data.settings);
@@ -197,7 +197,7 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
     if (!guildId) return;
     try {
       const res = await fetch(apiUrl + `/api/config/${guildId}`, { method: "DELETE" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         setValues(data.settings);
         setSaved(data.settings);

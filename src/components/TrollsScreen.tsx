@@ -36,7 +36,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
     try {
       const res = await fetch(apiUrl + "/api/trolls");
       if (!res.ok) throw new Error("bad status");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       setTrolls(Array.isArray(data) ? data : data.trolls || []);
       setHistory(Array.isArray(data.removal_history) ? data.removal_history : []);
       setError("");

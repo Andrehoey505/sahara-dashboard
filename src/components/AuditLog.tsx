@@ -140,7 +140,7 @@ export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverI
     try {
       const res = await fetch(apiUrl + "/api/audit?" + params.toString());
       if (!res.ok) throw new Error("bad status");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       setEntries(data.entries || []);
       setError("");
     } catch {
@@ -170,7 +170,7 @@ export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverI
           reason: `${e.type}${e.reason ? `: ${e.reason}` : ""}`.slice(0, 200),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         notify(`${name || target} added to the troll list`, "success");
       } else {

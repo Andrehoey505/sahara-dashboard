@@ -43,7 +43,7 @@ export default function ActivitiesScreen({ apiUrl, notify }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ which }),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (res.ok && body.ok) {
         notify?.(body.message || "Reset", "success");
         setConfirming(null);

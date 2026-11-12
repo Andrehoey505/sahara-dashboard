@@ -150,14 +150,14 @@ export default function MigraineScreen({ apiUrl }: Props) {
     try {
       const res = await fetch(apiUrl + "/api/migraines");
       if (!res.ok) throw new Error("bad status");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       setEntries(Array.isArray(data.migraines) ? data.migraines : []);
       setSummary(data.summary || null);
       setError("");
       try {
         const nres = await fetch(apiUrl + "/api/migraines/notes");
         if (nres.ok) {
-          const nd = await nres.json();
+          const nd = await nres.json().catch(() => ({}));
           setGeneralNotes(nd.notes || "");
           setNotesSaved(true);
         } else {
@@ -223,7 +223,10 @@ export default function MigraineScreen({ apiUrl }: Props) {
 
   const remove = async (id: string) => {
     try {
-      await fetch(apiUrl + "/api/migraines/" + id, { method: "DELETE" });
+      const res = await fetch(apiUrl + "/api/migraines/" + id, { method: "DELETE" });
+      // fetch only rejects on a network failure. A 500 resolves, so without this
+      // the entry stayed on screen and the app said nothing.
+      if (!res.ok) throw new Error(String(res.status));
       await load();
     } catch {
       setError("Couldn't delete that entry.");
@@ -548,11 +551,12 @@ export default function MigraineScreen({ apiUrl }: Props) {
               onClick={async () => {
                 setGeneralNotes("");
                 try {
-                  await fetch(apiUrl + "/api/migraines/notes", {
+                  const res = await fetch(apiUrl + "/api/migraines/notes", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ notes: "" }),
                   });
+                  if (!res.ok) throw new Error(String(res.status));
                   setNotesSaved(true);
                 } catch {
                   setError("Couldn't clear your notes — check the bot is running.");
