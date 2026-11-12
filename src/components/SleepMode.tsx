@@ -66,13 +66,13 @@ export default function SleepMode({ open, onClose, onSleep }: Props) {
             <button
               onClick={engage}
               className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition"
-            >
+             data-tip="Put the dashboard to sleep">
               Go to sleep
             </button>
             <button
               onClick={onClose}
               className="flex-1 py-2.5 rounded-lg bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-            >
+             data-tip="Stay awake">
               Not yet
             </button>
           </div>

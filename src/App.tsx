@@ -835,7 +835,7 @@ export default function App() {
           </div>
           <label htmlFor="userId" className="text-sm text-slate-300 mb-2 block">Discord User ID</label>
           <input id="userId" value={userId} onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleLogin()} placeholder="Your Discord User ID" className="w-full px-4 py-2.5 rounded-lg bg-slate-800/60 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/40 mb-4 transition" />
-          <button onClick={handleLogin} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition flex items-center justify-center gap-2"><LogIn className="w-4 h-4" /> Sign In</button>
+          <button onClick={handleLogin} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition flex items-center justify-center gap-2" data-tip="Sign in to the dashboard"><LogIn className="w-4 h-4" /> Sign In</button>
           <p className="text-xs text-slate-500 mt-3 max-w-[65ch]">
             Your user ID links this app to you across sessions. The PIN lock is separate and asked on launch.
           </p>
@@ -975,7 +975,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                             {m.flagged && m.deleted && (
                               <span
                                 className="px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 text-[10px]"
-                                title="The bot deleted this message, so the text shown is the copy from the log"
+                                title="The bot deleted this message, so the text shown is the copy from the log" data-tip="The bot deleted this message, so the text shown is the copy from the log"
                               >
                                 deleted
                               </span>
@@ -1020,8 +1020,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={() => { handleContextAction("approve", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-sm hover:bg-emerald-500/30">Approve</button>
-                <button onClick={() => { handleContextAction("deny", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30">Deny</button>
+                <button onClick={() => { handleContextAction("approve", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-sm hover:bg-emerald-500/30" data-tip="Approve — action the member as suggested">Approve</button>
+                <button onClick={() => { handleContextAction("deny", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30" data-tip="Deny — leave the member alone">Deny</button>
               </div>
             </div>
           </div>
@@ -1061,7 +1061,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                     onClick={() => dismissToast(n.id)}
                     aria-label="Dismiss"
                     className="shrink-0 -mr-1 -mt-1 p-1 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-700/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-                  >
+                   data-tip="Dismiss this notification">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1088,7 +1088,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             { action: "delete", label: "Delete Message", icon: Trash2 },
           ].map((a) => {
             const Icon = a.icon;
-            return <button key={a.action} onClick={() => handleContextAction(a.action, contextMenu.msg)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-700/50 transition text-left"><Icon className="w-3.5 h-3.5" /> {a.label}</button>;
+            return <button key={a.action} onClick={() => handleContextAction(a.action, contextMenu.msg)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-700/50 transition text-left" data-tip="Apply this action to the message"><Icon className="w-3.5 h-3.5" /> {a.label}</button>;
           })}
         </div>
       )}
@@ -1147,8 +1147,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             </div>
           </div>
           <div className="flex gap-2 mt-2">
-          <button onClick={() => { setLocked(true); notify("Locked", "success"); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Lock</button>
-          <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition">Sign Out</button>
+          <button onClick={() => { setLocked(true); notify("Locked", "success"); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition" data-tip="Lock the app — needs your PIN to unlock">Lock</button>
+          <button onClick={() => { localStorage.removeItem("sahara_user"); setLoggedIn(false); }} className="flex-1 text-xs py-1 rounded bg-slate-700/50 hover:bg-slate-600/50 transition" data-tip="Sign out and forget this login">Sign Out</button>
           </div>
           {isAndre && (
           <button onClick={() => {
@@ -1179,7 +1179,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             <p className="text-xs text-amber-300 mb-2">Set a PIN to lock the app</p>
             <div className="flex gap-2">
               <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN" className="flex-1 px-2 py-1 rounded bg-slate-800/50 border border-slate-700 text-xs focus:outline-none" />
-              <button onClick={handleSetPin} className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 text-xs hover:bg-amber-500/30">Set</button>
+              <button onClick={handleSetPin} className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 text-xs hover:bg-amber-500/30" data-tip="Save this PIN">Set</button>
             </div>
           </div>
         )}
@@ -1226,7 +1226,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 w-64" />
             </div>
-            <button onClick={() => notify("No new notifications", "info", { sound: false })} className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 relative">
+            <button onClick={() => notify("No new notifications", "info", { sound: false })} className="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:bg-slate-700/50 relative" data-tip="Notifications">
               <Bell className="w-4 h-4" />
             </button>
             <div
@@ -1379,8 +1379,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       <span className="text-xs text-slate-500">{fmtTime(m.time)}</span>
                       {m.flagged && <div className="text-xs text-rose-400 mt-1">flagged</div>}
                       <div className="flex gap-1 mt-1">
-                        <button onClick={() => hideMessage(String(m.id))} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20" title="Delete from feed">🗑</button>
-                        <button onClick={() => { setMoreOptionsMsg(m); setMoreOptionsAction("warn"); setMoreOptionsReason(""); }} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" title="More options">⋯</button>
+                        <button onClick={() => hideMessage(String(m.id))} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20" title="Delete from feed" data-tip="Remove this message from the feed">🗑</button>
+                        <button onClick={() => { setMoreOptionsMsg(m); setMoreOptionsAction("warn"); setMoreOptionsReason(""); }} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" title="More options" data-tip="Cancel and close">⋯</button>
                       </div>
                     </div>
                   </motion.div>
@@ -1415,7 +1415,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       <textarea value={moreOptionsReason} onChange={(e) => setMoreOptionsReason(e.target.value)} placeholder="Reason..." rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 resize-none" />
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setMoreOptionsMsg(null)} className="px-4 py-2 rounded-lg bg-slate-700/50 text-slate-300 text-sm hover:bg-slate-600/50 transition">Cancel</button>
+                      <button onClick={() => setMoreOptionsMsg(null)} className="px-4 py-2 rounded-lg bg-slate-700/50 text-slate-300 text-sm hover:bg-slate-600/50 transition" data-tip="Cancel and close">Cancel</button>
                       <button onClick={async () => {
                         if (!moreOptionsReason) { notify("Enter a reason", "error"); return; }
                         try {
@@ -1425,7 +1425,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                           if (data.success) { notify(data.action + " applied to " + data.user, "success"); setMoreOptionsMsg(null); }
                           else { notify(data.error || "Failed", "error"); }
                         } catch (e) { notify("Connection failed", "error"); }
-                      }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition">Execute</button>
+                      }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition" data-tip="Run this action">Execute</button>
                     </div>
                   </div>
                 </div>
@@ -1480,11 +1480,11 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                     {v.full_message && <p className="text-xs text-slate-300 mt-1 italic">"{v.full_message}"</p>}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => { setContextViolation(v); }} className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 text-xs hover:bg-slate-600/50 transition">View Context</button>
+                    <button onClick={() => { setContextViolation(v); }} className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 text-xs hover:bg-slate-600/50 transition" data-tip="See the flagged message in context">View Context</button>
                     {v.status === "pending" && (
                       <>
-                        <button onClick={() => handleContextAction("approve", v)} className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-300 text-xs hover:bg-emerald-500/20 transition">Approve</button>
-                        <button onClick={() => handleContextAction("deny", v)} className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-300 text-xs hover:bg-rose-500/20 transition">Deny</button>
+                        <button onClick={() => handleContextAction("approve", v)} className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-300 text-xs hover:bg-emerald-500/20 transition" data-tip="Approve — action the member as suggested">Approve</button>
+                        <button onClick={() => handleContextAction("deny", v)} className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-300 text-xs hover:bg-rose-500/20 transition" data-tip="Deny — leave the member alone">Deny</button>
                       </>
                     )}
                     {v.status !== "pending" && (
@@ -1498,7 +1498,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                         <button
                           onClick={() => handleContextAction("undo", v)}
                           className="px-2 py-1 rounded-lg bg-slate-700/50 text-slate-300 text-xs hover:bg-slate-600/50 transition"
-                          title="Put this back to pending"
+                          title="Put this back to pending" data-tip="Put this back to pending"
                         >
                           Undo
                         </button>
@@ -1563,19 +1563,19 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       if (data.success) { notify(data.action + " applied to " + data.user, "success"); setModTarget(""); setModReason(""); }
                       else { notify(data.error || "Failed", "error"); }
                     } catch (e) { notify("Connection failed", "error"); }
-                  }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition">Execute Action</button>
+                  }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition" data-tip="Run this action">Execute Action</button>
                 </div>
                 <div className="border-t border-slate-700/50 pt-4">
                   <h4 className="font-semibold mb-2 text-sm">Send DM to User</h4>
                   <input value={dmTarget} onChange={(e) => setDmTarget(e.target.value)} placeholder="User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
                   <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} placeholder="Message (sent as SocialLink.io Staff)" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={async () => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } try { const res = await fetch(apiUrl + "/api/dm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: dmTarget, message: dmMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("DM sent to " + data.sent_to, "success"); setDmTarget(""); setDmMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Send DM</button>
+                  <button onClick={async () => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } try { const res = await fetch(apiUrl + "/api/dm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: dmTarget, message: dmMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("DM sent to " + data.sent_to, "success"); setDmTarget(""); setDmMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition" data-tip="Send this message as a direct message">Send DM</button>
                 </div>
                 <div className="border-t border-slate-700/50 pt-4">
                   <h4 className="font-semibold mb-2 text-sm">Send Message to Channel</h4>
                   <input value={channelTarget} onChange={(e) => setChannelTarget(e.target.value)} placeholder="Server/Channel (e.g. Babble Playpen / general)" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
                   <textarea value={channelMessage} onChange={(e) => setChannelMessage(e.target.value)} placeholder="Message to send to channel" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={async () => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } const parts = channelTarget.split("/"); try { const res = await fetch(apiUrl + "/api/channel-message", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ server: parts[0]?.trim(), channel: parts[1]?.trim(), message: channelMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("Message sent to " + data.channel, "success"); setChannelTarget(""); setChannelMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition">Send to Channel</button>
+                  <button onClick={async () => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } const parts = channelTarget.split("/"); try { const res = await fetch(apiUrl + "/api/channel-message", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ server: parts[0]?.trim(), channel: parts[1]?.trim(), message: channelMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("Message sent to " + data.channel, "success"); setChannelTarget(""); setChannelMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition" data-tip="Post this message in that channel">Send to Channel</button>
                 </div>
               </div>
             )}
@@ -1679,7 +1679,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                     </div>
                   ))
                 )}
-                <button onClick={() => { setTrollSweepActive(false); setTrollSweepMembers(0); }} className="w-full mt-4 px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition">Close</button>
+                <button onClick={() => { setTrollSweepActive(false); setTrollSweepMembers(0); }} className="w-full mt-4 px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition" data-tip="Close the sweep summary">Close</button>
               </div>
             )}
           </div>

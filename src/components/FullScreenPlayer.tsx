@@ -80,7 +80,7 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                       ? "bg-indigo-500/15 text-indigo-300"
                       : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/60")
                   }
-                >
+                 data-tip="Show or hide the lyrics">
                   <Mic2 className="w-4 h-4" /> Lyrics
                 </button>
                 <button

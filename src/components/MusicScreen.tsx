@@ -132,28 +132,28 @@ export default function MusicScreen({ apiUrl, notify }: Props) {
               onClick={() => control(g.guild_id, "resume")}
               disabled={busy !== null || !g.now_playing}
               className={btn + " bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"}
-            >
+             data-tip="Resume">
               <Play className="w-4 h-4" /> Play
             </button>
             <button
               onClick={() => control(g.guild_id, "pause")}
               disabled={busy !== null || !g.now_playing}
               className={btn + " bg-slate-700/50 text-slate-300 hover:bg-slate-600/60"}
-            >
+             data-tip="Pause">
               <Pause className="w-4 h-4" /> Pause
             </button>
             <button
               onClick={() => control(g.guild_id, "skip")}
               disabled={busy !== null || !g.now_playing}
               className={btn + " bg-slate-700/50 text-slate-300 hover:bg-slate-600/60"}
-            >
+             data-tip="Skip this track">
               <SkipForward className="w-4 h-4" /> Skip
             </button>
             <button
               onClick={() => control(g.guild_id, "stop")}
               disabled={busy !== null}
               className={btn + " bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"}
-            >
+             data-tip="Stop and clear the queue">
               <Square className="w-4 h-4" /> Stop
             </button>
 

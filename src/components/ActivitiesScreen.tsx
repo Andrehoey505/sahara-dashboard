@@ -72,7 +72,7 @@ export default function ActivitiesScreen({ apiUrl, notify }: Props) {
             ? "bg-rose-500/25 border-rose-500/50 text-rose-100"
             : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-rose-300 hover:border-rose-500/40")
         }
-      >
+       data-tip="Reset — asks again before wiping">
         {armed ? "Tap again to confirm" : label}
       </button>
     );

@@ -99,7 +99,7 @@ export default function ServerPicker({ servers, active, onSelect, full }: Props)
           "flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 " +
           (full ? "w-full px-4 py-3" : "px-3 py-2")
         }
-      >
+       data-tip="Choose a server">
         {current ? <Avatar server={current} size={full ? 36 : 28} /> : <ShieldAlert className="w-4 h-4 text-slate-500" />}
         <span className="min-w-0 text-left">
           <span className="block text-sm font-medium text-slate-100 truncate">

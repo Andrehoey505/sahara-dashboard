@@ -158,9 +158,7 @@ export default function TicketScreen({ apiUrl, server, servers, notify, onOpenCo
             onClick={load}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-200 hover:bg-slate-700/60 transition"
           >
-            <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} />
-            Refresh
-          </button>
+            <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} data-tip="Refresh" />Refresh</button>
           {onOpenConfig && (
             <button
               onClick={onOpenConfig}
@@ -215,7 +213,7 @@ export default function TicketScreen({ apiUrl, server, servers, notify, onOpenCo
                   ? "bg-indigo-600/30 text-indigo-100"
                   : "text-slate-400 hover:text-slate-200")
               }
-            >
+             data-tip="Switch tab">
               {t}
               {t === "open" && openCount > 0 && (
                 <span className="ml-1.5 text-xs text-emerald-300">{openCount}</span>

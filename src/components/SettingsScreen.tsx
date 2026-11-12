@@ -274,7 +274,7 @@ export default function SettingsScreen({
               rel="noreferrer"
               className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
               aria-label="Open releases page"
-              title="Open releases page"
+              title="Open releases page" data-tip="Open releases page"
             >
               <ExternalLink className="w-4 h-4" />
             </a>
@@ -294,7 +294,7 @@ export default function SettingsScreen({
             <button
               onClick={installUpdate}
               className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 text-sm font-semibold hover:opacity-90 transition-opacity"
-            >
+             data-tip="Install this update and restart">
               Install and restart
             </button>
           </div>
@@ -339,7 +339,7 @@ export default function SettingsScreen({
         )}
       </motion.section>
 
-      <Card icon={Server} title="Babblebot connection" blurb="Where the bot's API is listening" tone="text-sky-300">
+      <Card icon={Server} title="Babblebot connection" data-tip="Babblebot connection" blurb="Where the bot's API is listening" tone="text-sky-300">
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             value={apiDraft}
@@ -352,15 +352,13 @@ export default function SettingsScreen({
             onClick={testConnection}
             disabled={testing}
             className="px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-300 hover:bg-slate-700/60 disabled:opacity-40 transition-colors"
-          >
+           data-tip="Test this connection">
             {testing ? "Testing…" : "Test"}
           </button>
           <button
             onClick={saveApi}
             className="px-3 py-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/30 transition-colors"
-          >
-            Save
-          </button>
+           data-tip="Save these settings">Save</button>
         </div>
         <div className="mt-2 flex items-center gap-2 text-xs">
           {testResult === "ok" && (
@@ -385,7 +383,7 @@ export default function SettingsScreen({
         </button>
       </Card>
 
-      <Card icon={Activity} title="Health features" blurb="What appears in the Health section" tone="text-rose-300">
+      <Card icon={Activity} title="Health features" data-tip="Health features" blurb="What appears in the Health section" tone="text-rose-300">
         <Row
           label="Emergency department waits"
           hint="Shows the ED Waits tab and turns its spoken alerts on"
@@ -398,7 +396,7 @@ export default function SettingsScreen({
         </Row>
       </Card>
 
-      <Card icon={Volume2} title="Announcements" blurb="Which spoken alerts you actually want" tone="text-amber-300">
+      <Card icon={Volume2} title="Announcements" data-tip="Announcements" blurb="Which spoken alerts you actually want" tone="text-amber-300">
         <Row label="Voice announcements" hint="Master switch for all spoken alerts">
           <Switch on={ttsEnabled} onChange={onToggleTts} label="Voice announcements" />
         </Row>
@@ -421,7 +419,7 @@ export default function SettingsScreen({
         </Row>
       </Card>
 
-      <Card icon={Palette} title="Appearance" blurb="How the app looks" tone="text-fuchsia-300">
+      <Card icon={Palette} title="Appearance" data-tip="Appearance" blurb="How the app looks" tone="text-fuchsia-300">
         <div className="grid grid-cols-3 gap-2">
           {[
             { id: "dark", label: "Dark" },
@@ -444,7 +442,7 @@ export default function SettingsScreen({
         </div>
       </Card>
 
-      <Card icon={Music} title="Spotify" blurb="Optional — control your own music here" tone="text-emerald-300">
+      <Card icon={Music} title="Spotify" data-tip="Spotify" blurb="Optional — control your own music here" tone="text-emerald-300">
         <Row label="Client ID" hint={settings.spotifyClientId ? "Saved" : "Not set"}>
           <span className="text-xs font-mono text-slate-500">
             {settings.spotifyClientId ? settings.spotifyClientId.slice(0, 8) + "…" : "—"}
@@ -458,7 +456,7 @@ export default function SettingsScreen({
         </button>
       </Card>
 
-      <Card icon={Bell} title="About" tone="text-slate-300">
+      <Card icon={Bell} title="About" data-tip="About" tone="text-slate-300">
         <Row label="Sahara Dashboard" hint="Front end for Babblebot">
           <span className="text-xs font-mono text-slate-400">{appVersion || "—"}</span>
         </Row>

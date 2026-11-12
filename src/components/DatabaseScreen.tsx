@@ -176,7 +176,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
           <button
             onClick={() => setOpenNs(null)}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 hover:border-indigo-500/50 text-sm text-slate-200"
-          >
+           data-tip="Back to the list of tables">
             <ArrowLeft className="w-4 h-4" /> All namespaces
           </button>
           <div className="flex items-center gap-2">
@@ -190,7 +190,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
           <button
             onClick={() => loadRows(openNs, offset, query)}
             className="ml-auto flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 hover:border-indigo-500/50 text-sm text-slate-200"
-          >
+           data-tip="Search this table">
             <RefreshCw className={"w-4 h-4 " + (rowsLoading ? "animate-spin" : "")} />
           </button>
         </div>
@@ -244,7 +244,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
                 <button
                   onClick={() => setExpanded(isOpen ? null : i)}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/70"
-                >
+                 data-tip="Expand or collapse this row">
                   <ChevronRight
                     className={"w-4 h-4 text-slate-500 shrink-0 transition-transform " + (isOpen ? "rotate-90" : "")}
                   />
@@ -274,7 +274,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
                             notify?.("Copied", "success");
                           }}
                           className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-700/60"
-                        >
+                         data-tip="Copy this value">
                           <Copy className="w-3.5 h-3.5" /> Copy
                         </button>
                       </div>
@@ -295,7 +295,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
               onClick={() => page(-1)}
               disabled={offset === 0}
               className="px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-200 disabled:opacity-40"
-            >
+             data-tip="Previous page">
               Previous
             </button>
             <span className="text-xs text-slate-500">
@@ -303,7 +303,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
             </span>
             <button
               onClick={() => page(1)}
-              disabled={offset + rows.length >= total}
+              disabled={offset + rows.length >= total} data-tip="Next page"
               className="px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-200 disabled:opacity-40"
             >
               Next
@@ -327,8 +327,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
           onClick={load}
           className="ml-auto flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 hover:border-indigo-500/50 text-sm text-slate-200"
         >
-          <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} /> Refresh
-        </button>
+          <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} data-tip="Refresh" />Refresh</button>
       </div>
 
       {error && (

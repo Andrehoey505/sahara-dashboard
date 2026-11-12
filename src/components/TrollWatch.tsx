@@ -197,7 +197,7 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
                       : undefined
                   }
                   className={btn + " bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"}
-                >
+                 data-tip="Approve the suggested action">
                   <Check className="w-3.5 h-3.5" />
                   {busy === req.id
                     ? "Sending…"
@@ -209,14 +209,14 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
                   onClick={() => respond(req, "dismiss")}
                   disabled={busy === req.id}
                   className={btn + " bg-slate-700/50 text-slate-300 hover:bg-slate-600/60"}
-                >
+                 data-tip="Dismiss — do nothing to this member">
                   <X className="w-3.5 h-3.5" /> Dismiss
                 </button>
                 <button
                   onClick={() => respond(req, "ban")}
                   disabled={busy === req.id}
                   className={btn + " bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"}
-                >
+                 data-tip="Ban this member now">
                   <UserX className="w-3.5 h-3.5" /> Ban instead
                 </button>
               </div>

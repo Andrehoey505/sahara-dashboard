@@ -214,7 +214,7 @@ export default function SpotifyScreen({ settings, notify }: Props) {
             onClick={() => setPasteMode((v) => !v)}
             disabled={!configured}
             className="text-sm text-slate-400 hover:text-slate-200 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 rounded transition-colors"
-          >
+           data-tip="Paste a link instead of signing in">
             {pasteMode ? "Cancel" : "Already approved? Paste the link"}
           </button>
         </div>
@@ -315,7 +315,7 @@ export default function SpotifyScreen({ settings, notify }: Props) {
               notify("Disconnected from Spotify", "info");
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-          >
+           data-tip="Disconnect Spotify">
             <LogOut className="w-4 h-4" /> Disconnect
           </button>
         </div>

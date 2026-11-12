@@ -165,13 +165,13 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
                 ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
                 : "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-700/50")
             }
-          >
+           data-tip="Show or hide the join history">
             History{history.length ? ` (${history.length})` : ""}
           </button>
           <button
             onClick={() => setAdding((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-          >
+           data-tip="Add someone to the troll list">
             <Plus className="w-4 h-4" /> Add
           </button>
         </div>

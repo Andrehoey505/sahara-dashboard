@@ -162,7 +162,7 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
               <button
                 onClick={() => onLookupViolations?.(m.id)}
                 className="shrink-0 px-3 py-1.5 rounded-lg text-xs bg-slate-700/50 text-slate-300 hover:bg-slate-600/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-              >
+               data-tip="Look up this member's violations">
                 Violations
                 {typeof m.violation_count === "number" && m.violation_count > 0 && (
                   <span className="ml-1.5 text-rose-300">{m.violation_count}</span>

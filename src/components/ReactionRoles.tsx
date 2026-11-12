@@ -311,9 +311,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
             onClick={load}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-200 hover:bg-slate-700/60 transition"
           >
-            <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} />
-            Refresh
-          </button>
+            <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} data-tip="Refresh" />Refresh</button>
           <button
             onClick={startNew}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-600/30 transition"
@@ -373,8 +371,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
                     <button
                       onClick={() => copyId(p.message_id)}
                       className="hover:text-slate-300 transition"
-                      title="Copy message id"
-                    >
+                      title="Copy message id" data-tip="Copy message id">
                       <Copy className="w-3 h-3" />
                     </button>
                   </p>
@@ -399,7 +396,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
                   <button
                     onClick={() => startEdit(i)}
                     className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700/60 transition"
-                  >
+                   data-tip="Edit this panel">
                     Edit
                   </button>
                   {confirmDelete === p.message_id ? (
@@ -414,8 +411,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
                     <button
                       onClick={() => setConfirmDelete(p.message_id)}
                       className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 transition"
-                      title="Remove this panel"
-                    >
+                      title="Remove this panel" data-tip="Remove this panel">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -433,9 +429,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
             {editingIndex === null ? "New panel" : "Editing panel"}
           </h3>
           {editingIndex !== null && (
-            <button onClick={startNew} className="text-xs text-slate-400 hover:text-slate-200 transition">
-              Cancel
-            </button>
+            <button onClick={startNew} className="text-xs text-slate-400 hover:text-slate-200 transition" data-tip="Cancel and close">Cancel</button>
           )}
         </div>
 
@@ -568,7 +562,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
                 <button
                   onClick={() => removeRow(i)}
                   className="p-2 rounded-lg text-slate-500 hover:text-rose-300 transition"
-                  title="Remove this row"
+                  title="Remove this row" data-tip="Remove this row"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

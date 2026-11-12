@@ -308,14 +308,13 @@ export default function MigraineScreen({ apiUrl }: Props) {
           <button
             onClick={() => setWizard(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/60 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-            title="Not sure what kind it is?"
-          >
+            title="Not sure what kind it is?" data-tip="Not sure what kind it is?">
             <Wand2 className="w-4 h-4" /> Not sure?
           </button>
           <button
             onClick={() => setAdding((v) => !v)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-medium hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-          >
+           data-tip="Log a new migraine">
             <Plus className="w-4 h-4" /> Log episode
           </button>
         </div>

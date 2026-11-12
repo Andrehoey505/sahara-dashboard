@@ -162,7 +162,7 @@ export default function ArmCareScreen() {
                   ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-200"
                   : "bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-700/50")
               }
-            >
+             data-tip="Set how often to be reminded">
               {m} min
             </button>
           ))}

@@ -296,7 +296,7 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
                     ? "bg-indigo-500/15 text-indigo-200 border border-indigo-500/30"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent")
                 }
-              >
+               data-tip="Switch section">
                 <Icon className="w-4 h-4" />
                 {SECTION_LABELS[s] || s}
               </button>

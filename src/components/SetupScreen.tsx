@@ -359,7 +359,7 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                         onClick={() => setShowSecret((v) => !v)}
                         aria-label={showSecret ? "Hide client secret" : "Show client secret"}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-                      >
+                       data-tip="Show or hide what you typed">
                         {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
@@ -507,7 +507,7 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
             onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
             disabled={isFirst}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-0 disabled:pointer-events-none transition-colors"
-          >
+           data-tip="Back a step">
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
 

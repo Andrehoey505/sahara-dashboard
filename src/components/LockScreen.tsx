@@ -79,9 +79,7 @@ export default function LockScreen({ value, onChange, onSubmit, error }: Props) 
           <button
             type="submit"
             className="w-full mt-5 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition"
-          >
-            Unlock
-          </button>
+           data-tip="Unlock with your PIN">Unlock</button>
         </form>
       </motion.div>
     </div>

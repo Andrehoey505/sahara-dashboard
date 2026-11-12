@@ -90,8 +90,7 @@ export default function HeadacheWizard({ onAccept, onClose }: Props) {
                         (plain ? "text-indigo-300 bg-indigo-500/15" : "text-slate-500 hover:text-slate-300")
                       }
                       aria-label="Explain in plain words"
-                      title="Explain in plain words"
-                    >
+                      title="Explain in plain words" data-tip="Explain in plain words">
                       <HelpCircle className="w-4 h-4" />
                     </button>
                   )}
@@ -134,9 +133,7 @@ export default function HeadacheWizard({ onAccept, onClose }: Props) {
                   <button
                     onClick={() => answer(typeof answers[q.id] === "number" ? (answers[q.id] as number) : 0)}
                     className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90"
-                  >
-                    Next
-                  </button>
+                   data-tip="Next">Next</button>
                 </div>
               )}
 
@@ -146,14 +143,11 @@ export default function HeadacheWizard({ onAccept, onClose }: Props) {
                   disabled={step === 0}
                   className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 disabled:opacity-30"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" /> Back
-                </button>
+                  <ChevronLeft className="w-3.5 h-3.5" data-tip="Back" />Back</button>
                 <button
                   onClick={onClose}
                   className="text-xs text-slate-500 hover:text-slate-300"
-                >
-                  Cancel
-                </button>
+                 data-tip="Cancel and close">Cancel</button>
               </div>
             </motion.div>
           ) : (
@@ -239,8 +233,7 @@ export default function HeadacheWizard({ onAccept, onClose }: Props) {
                   onClick={back}
                   className="flex items-center gap-1 px-3 py-2.5 rounded-lg bg-slate-800/60 border border-slate-700 text-sm text-slate-300 hover:bg-slate-700/60"
                 >
-                  <ChevronLeft className="w-4 h-4" /> Back
-                </button>
+                  <ChevronLeft className="w-4 h-4" data-tip="Back" />Back</button>
                 <button
                   onClick={() => onAccept(result?.matches[0] ?? null, severity)}
                   className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90"

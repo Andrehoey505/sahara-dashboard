@@ -92,7 +92,7 @@ export default function NowPlayingHero({ now, position, onTransport, onExpand, b
                 disabled={busy || !now}
                 aria-label="Previous track"
                 className="p-2.5 rounded-full bg-slate-800/60 text-slate-300 hover:bg-slate-700/70 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-              >
+               data-tip="Previous track">
                 <SkipBack className="w-5 h-5" />
               </button>
               <button
@@ -107,7 +107,7 @@ export default function NowPlayingHero({ now, position, onTransport, onExpand, b
                 disabled={busy || !now}
                 aria-label="Next track"
                 className="p-2.5 rounded-full bg-slate-800/60 text-slate-300 hover:bg-slate-700/70 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-              >
+               data-tip="Next track">
                 <SkipForward className="w-5 h-5" />
               </button>
             </div>

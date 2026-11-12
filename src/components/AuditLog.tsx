@@ -236,7 +236,7 @@ export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverI
                 ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
                 : "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-700/50")
             }
-          >
+           data-tip="Filter the log">
             {f.label}
           </button>
         ))}
@@ -304,7 +304,7 @@ export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverI
                 <button
                   onClick={() => addTroll(e, String(d.target), d.targetName)}
                   disabled={busy !== null}
-                  title="Add this user to the troll list"
+                  title="Add this user to the troll list" data-tip="Add this user to the troll list"
                   aria-label={`Add ${d.targetName || d.target} to the troll list`}
                   className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 disabled:opacity-40 transition-colors"
                 >
