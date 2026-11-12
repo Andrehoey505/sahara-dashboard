@@ -7,6 +7,8 @@ import {
   Square,
   Volume2,
   Music2,
+  Headphones,
+  LogOut,
   RefreshCw,
   Plus,
   ListMusic,
@@ -133,6 +135,51 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
 
   const canControl = iAmListening || !state?.bot_channel;
 
+  const joinChannel = async () => {
+    if (!state) return notify("Pick a server first", "error");
+    if (!userId) return notify("Add your Discord User ID in Settings first", "error");
+    setBusy("join");
+    try {
+      const res = await fetch(apiUrl + "/api/music/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server: state.guild_name, user_id: userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && !data.error) {
+        notify(data.already ? "Already with you" : `Joined ${data.channel.name}`, "success");
+        loadState();
+      } else {
+        notify(data.error || "Could not join", "error");
+      }
+    } catch {
+      notify("Connection failed — is the bot running?", "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const leaveChannel = async () => {
+    if (!state) return;
+    setBusy("leave");
+    try {
+      const res = await fetch(apiUrl + "/api/music/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server: state.guild_name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && !data.error) {
+        notify(data.queue_kept ? `Left — ${data.queue_kept} songs kept in the queue` : "Left voice", "success");
+        loadState();
+      } else {
+        notify(data.error || "Could not leave", "error");
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const control = async (action: string, extra: Record<string, unknown> = {}) => {
     if (!state) return;
     setBusy(action);
@@ -247,6 +294,26 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           Refresh
         </button>
+        <button
+          onClick={joinChannel}
+          disabled={!state || busy === "join"}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/20 text-indigo-200 text-sm hover:bg-indigo-500/30 transition disabled:opacity-40"
+          data-tip="The bot joins the voice channel you are in, so you don't have to fetch it from Discord"
+        >
+          {busy === "join" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Headphones className="w-4 h-4" />}
+          Join my channel
+        </button>
+        {state?.bot_channel && (
+          <button
+            onClick={leaveChannel}
+            disabled={busy === "leave"}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 text-slate-300 text-sm hover:bg-slate-800 transition disabled:opacity-40"
+            data-tip="Leave voice — the queue is kept, so joining again carries on where it stopped"
+          >
+            <LogOut className="w-4 h-4" />
+            Leave
+          </button>
+        )}
         {state?.bot_channel && (
           <span className="text-xs text-slate-400 flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5" />
