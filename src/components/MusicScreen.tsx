@@ -215,7 +215,14 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && !data.error) {
-        notify(`Queued ${data.title || "that"}`, "success");
+        notify(
+          data.started
+            ? `Playing ${data.title || "that"}`
+            : data.queue_length && !state.bot_channel
+              ? `Queued ${data.title || "that"} — join a voice channel to play it`
+              : `Queued ${data.title || "that"}`,
+          "success",
+        );
         setQuery("");
         loadState();
       } else {
@@ -239,7 +246,12 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && !data.error) {
-        notify(`Added ${data.added} from "${name}"`, "success");
+        notify(
+          data.started
+            ? `Playing ${data.added} from "${name}"`
+            : `Added ${data.added} from "${name}"`,
+          "success",
+        );
         loadState();
       } else {
         notify(data.error || "Could not queue that playlist", "error");
