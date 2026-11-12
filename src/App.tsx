@@ -668,6 +668,15 @@ export default function App() {
     notify("Feed cleared", "info", { sound: false });
   };
 
+  // Clearing hides ids for the session. A violation that still exists on the bot
+  // must always be reachable again, or "clear" is indistinguishable from "gone".
+  const showHiddenViolations = () => {
+    setHiddenViolations(new Set());
+    persistHidden("sahara_hidden_violations", new Set());
+    notify("Hidden violations are showing again", "info", { sound: false });
+  };
+  const hiddenViolationCount = hiddenViolations.size;
+
   const clearViolations = () => {
     setHiddenViolations((prev) => {
       const next = new Set(prev);
@@ -1458,6 +1467,15 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                   </button>
                 );
               })}
+              {hiddenViolationCount > 0 && (
+                <button
+                  onClick={showHiddenViolations}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition"
+                  data-tip={`${hiddenViolationCount} violation(s) hidden by Clear — bring them back`}
+                >
+                  Show {hiddenViolationCount} hidden
+                </button>
+              )}
             </div>
             <div className="space-y-2">
               {[...filteredViolations]
