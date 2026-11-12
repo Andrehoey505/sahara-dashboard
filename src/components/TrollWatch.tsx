@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ShieldAlert, Check, X, RefreshCw, UserX } from "lucide-react";
+import { ShieldAlert, Check, X, RefreshCw, UserX, Clock } from "lucide-react";
 import { motionTokens } from "../lib/design";
 
 type HitlRequest = {
@@ -13,6 +13,10 @@ type HitlRequest = {
   suggested_action: string;
   evidence?: string;
   timestamp?: string;
+  /** "pending" or "expired" — expired stays answerable, but acting is refused. */
+  status?: string;
+  expires_at?: string;
+  expired_at?: string;
 };
 
 type Troll = { id?: string; user_id?: string; name?: string; reason?: string };
@@ -67,12 +71,14 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
       if (data.success) {
         setPending((p) => p.filter((x) => x.id !== req.id));
         notify(
-          data.already
+          data.expired
+            ? data.message || "Expired — not carried out, review manually"
+            : data.already
             ? `Already queued: ${data.queued}`
             : action === "dismiss"
             ? "Dismissed"
             : `Queued: ${data.queued}`,
-          "success"
+          data.expired ? "error" : "success"
         );
       } else {
         notify(data.error || "Couldn't send that decision", "error");
@@ -130,8 +136,26 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
         )}
 
         <div className="space-y-3">
-          {pending.map((req) => (
-            <div key={req.id} className="glass rounded-2xl p-5">
+          {pending.map((req) => {
+            const expired = req.status === "expired";
+            return (
+            <div
+              key={req.id}
+              className={
+                "glass rounded-2xl p-5 " +
+                (expired ? "border border-slate-600/60 opacity-80" : "")
+              }
+            >
+              {expired && (
+                <div className="flex items-start gap-2 rounded-xl bg-slate-700/30 border border-slate-600/50 p-3 mb-4">
+                  <Clock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-300">
+                    Expired unreviewed — this alert is stale, so the action won't be carried
+                    out automatically. Answering it records your decision and asks you to
+                    review the account fresh.
+                  </p>
+                </div>
+              )}
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="font-medium truncate">{req.member_name}</p>
@@ -145,8 +169,15 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
                     </p>
                   )}
                 </div>
-                <span className="shrink-0 text-xs px-2 py-1 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                  suggests {req.suggested_action}
+                <span
+                  className={
+                    "shrink-0 text-xs px-2 py-1 rounded border " +
+                    (expired
+                      ? "bg-slate-600/20 text-slate-300 border-slate-600/50"
+                      : "bg-amber-500/15 text-amber-300 border-amber-500/30")
+                  }
+                >
+                  {expired ? "expired" : `suggests ${req.suggested_action}`}
                 </span>
               </div>
 
@@ -154,10 +185,19 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
                 <button
                   onClick={() => respond(req, "approve")}
                   disabled={busy === req.id}
+                  title={
+                    expired
+                      ? "The action won't be carried out — answering records your decision and asks for a fresh review"
+                      : undefined
+                  }
                   className={btn + " bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"}
                 >
                   <Check className="w-3.5 h-3.5" />
-                  {busy === req.id ? "Sending…" : `Approve ${req.suggested_action}`}
+                  {busy === req.id
+                    ? "Sending…"
+                    : expired
+                    ? `Record ${req.suggested_action} decision`
+                    : `Approve ${req.suggested_action}`}
                 </button>
                 <button
                   onClick={() => respond(req, "dismiss")}
@@ -175,7 +215,8 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
