@@ -1597,10 +1597,10 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             {active === "tickets" && (
               <TicketScreen
                 apiUrl={apiUrl}
-                server={servers.find((s: any) => s.id === activeServer)}
                 servers={servers}
+                selectedServer={servers.find((s: any) => s.id === activeServer)?.name || ""}
+                userId={userId}
                 notify={notify}
-                onOpenConfig={() => setActive("config")}
               />
             )}
             {active === "trolls" && <TrollsScreen apiUrl={apiUrl} notify={notify} />}
