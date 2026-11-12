@@ -238,7 +238,16 @@ export default function App() {
       if (violRes.ok) {
         const newViols = await violRes.json();
         const newIds = new Set(newViols.map((v: any) => v.id));
-        const added = newViols.filter((v: any) => !prevViolationIds.has(v.id) && prevViolationIds.size > 0);
+        // Only something that has not been seen before AND is still waiting on a
+        // decision is new. Announcing every id that appeared since the last poll
+        // meant a resolved violation shouted again whenever its id changed shape
+        // or the list was re-read — the same one "arriving" over and over.
+        const added = newViols.filter(
+          (v: any) =>
+            v.status === "pending" &&
+            !prevViolationIds.has(v.id) &&
+            !hiddenViolations.has(String(v.id))
+        );
         if (added.length > 0) {
           if (soundEnabled) playSound("violation");
           if (ttsEnabled) {
@@ -248,6 +257,14 @@ export default function App() {
           notify(`New violation: ${added[0].user}`, "error");
         }
         setPrevViolationIds(newIds);
+        try {
+          localStorage.setItem(
+            "sahara_seen_violations",
+            JSON.stringify(Array.from(newIds).slice(-500))
+          );
+        } catch {
+          /* storage full or blocked — the in-memory set still works */
+        }
         setViolations(newViols.filter((v: any) => !hiddenViolations.has(String(v.id))));
       }
       if (srvRes.ok) {
@@ -316,7 +333,16 @@ export default function App() {
 
   const speak = (text: string) => speakText(text, settings.ttsVoice !== "off");
 
-  const [prevViolationIds, setPrevViolationIds] = useState<Set<any>>(new Set());
+  // Survives a reload. Held in a ref-like state seeded from localStorage so the
+  // first poll after opening the app does not treat the whole backlog as new.
+  const [prevViolationIds, setPrevViolationIds] = useState<Set<any>>(() => {
+    try {
+      const raw = localStorage.getItem("sahara_seen_violations");
+      return new Set<any>(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set<any>();
+    }
+  });
   const [prevMemberIds, setPrevMemberIds] = useState<Set<any>>(new Set());
   const [ttsEnabled, setTtsEnabled] = useState(localStorage.getItem("sahara_tts") !== "off");
   const [soundEnabled, setSoundEnabled] = useState(localStorage.getItem("sahara_sound") !== "off");
