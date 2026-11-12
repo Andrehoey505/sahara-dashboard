@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Users, ShieldAlert } from "lucide-react";
+import { Search, Users, ShieldAlert, ShieldOff, ShieldCheck } from "lucide-react";
 import { motionTokens } from "../lib/design";
 
 type Member = {
@@ -11,6 +11,8 @@ type Member = {
   joined_at?: string;
   created_at?: string;
   is_troll?: boolean;
+  is_exempt?: boolean;
+  is_staff?: boolean;
   guilds?: string[];
   violation_count?: number;
 };
@@ -38,6 +40,45 @@ function ago(days: number | null): string {
 
 export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
+  // Exempting is a manual, per-person decision: nobody is exempt unless a human
+  // put them on the list, and it is saved in the bot's database so the bot reads
+  // the same list. Two people clicking at once can't half-apply it.
+  const [saving, setSaving] = useState<string>("");
+  const [saveError, setSaveError] = useState("");
+
+  async function toggleExempt(m: Member) {
+    const next = !m.is_exempt;
+    setSaving(m.id);
+    setSaveError("");
+    try {
+      const res = await fetch(apiUrl + `/api/members/${m.id}/exempt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exempt: next,
+          name: m.display_name || m.name,
+          server: (m.guilds || [])[0] || "",
+        }),
+      }).catch(() => null);
+      const data = await res?.json().catch(() => ({}));
+      if (!res || !res.ok) {
+        // Say why. A toggle that silently snaps back is indistinguishable from
+        // one that worked and got forgotten.
+        throw new Error(data?.error || `the bot API said ${res?.status ?? "nothing"}`);
+      }
+      setMembers((prev) =>
+        prev.map((x) => (x.id === m.id ? { ...x, is_exempt: next } : x)),
+      );
+    } catch (e) {
+      setSaveError(
+        `Couldn't ${next ? "exempt" : "un-exempt"} ${m.display_name || m.name}: ${
+          e instanceof Error ? e.message : "unknown error"
+        }`,
+      );
+    } finally {
+      setSaving("");
+    }
+  }
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -106,6 +147,19 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
         </div>
       )}
 
+      {saveError && (
+        <div className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200 mb-4 flex items-start justify-between gap-3">
+          <span>{saveError}</span>
+          <button
+            onClick={() => setSaveError("")}
+            className="text-amber-300/80 hover:text-amber-200 shrink-0"
+            data-tip="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {!loading && !error && filtered.length === 0 && (
         <div className="rounded-xl p-10 text-center border border-dashed border-slate-700">
           <Users className="w-8 h-8 mx-auto text-slate-600 mb-3" />
@@ -144,6 +198,11 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
                       <ShieldAlert className="w-3 h-3" /> Troll
                     </span>
                   )}
+                  {m.is_exempt && (
+                    <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      <ShieldCheck className="w-3 h-3" /> Not flagged
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-500 truncate">
                   {m.name} · {m.id}
@@ -158,6 +217,23 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
               <div className="hidden md:block text-xs text-slate-400 w-40 truncate shrink-0">
                 {(m.guilds || []).join(", ") || "—"}
               </div>
+
+              <button
+                onClick={() => toggleExempt(m)}
+                disabled={saving === m.id}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs border transition-colors disabled:opacity-50 ${
+                  m.is_exempt
+                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
+                    : "bg-slate-700/50 text-slate-300 border-slate-600/40 hover:bg-slate-600/60 hover:text-slate-100"
+                }`}
+                data-tip={
+                  m.is_exempt
+                    ? "Stop exempting — the bot will flag their messages again"
+                    : "Never flag this member. Manual only: nothing here is automatic"
+                }
+              >
+                {saving === m.id ? "Saving…" : m.is_exempt ? <ShieldCheck className="w-3.5 h-3.5" /> : <ShieldOff className="w-3.5 h-3.5" />}
+              </button>
 
               <button
                 onClick={() => onLookupViolations?.(m.id)}
