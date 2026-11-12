@@ -4,6 +4,7 @@ import { Brain, Plus, Download, Trash2, RefreshCw, X, Wand2 } from "lucide-react
 import { motionTokens } from "../lib/design";
 import HeadacheWizard from "./HeadacheWizard";
 import type { Match } from "../lib/headache";
+import { formatShort } from "../lib/time";
 
 /**
  * Migraine diary.
@@ -641,12 +642,7 @@ export default function MigraineScreen({ apiUrl }: Props) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">
-                        {new Date(e.started).toLocaleString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatShort(e.started)}
                       </span>
                       {sev != null && (
                         <span className={"px-2 py-0.5 rounded-full text-xs border " + severityBg(sev)}>

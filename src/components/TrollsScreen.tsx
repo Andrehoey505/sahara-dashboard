@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ShieldAlert, Plus, Trash2, RefreshCw, Search, X } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { formatShort } from "../lib/time";
 
 type Troll = {
   user_id: string;
@@ -244,14 +245,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
                     )}
                   </div>
                   <span className="text-xs text-slate-500 shrink-0">
-                    {h.removed_at
-                      ? new Date(h.removed_at).toLocaleString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : ""}
+                    {formatShort(h.removed_at)}
                   </span>
                 </div>
               ))}

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { formatShort, formatTitle } from "../lib/time";
 import { RefreshCw, UserPlus, ShieldAlert, FileText, Search } from "lucide-react";
 import { motionTokens, severity } from "../lib/design";
 
@@ -295,7 +296,7 @@ export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverI
 
               <span className="shrink-0 text-xs text-slate-600 tabular-nums">
                 {when
-                  ? when.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+                  ? formatShort(e.timestamp)
                   : ""}
               </span>
 

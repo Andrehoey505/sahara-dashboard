@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Hash, Link2, Gift, RefreshCw, Trophy } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { formatDateTime, formatShort } from "../lib/time";
 
 type Activities = {
   guild_id: string;
@@ -210,7 +211,7 @@ export default function ActivitiesScreen({ apiUrl, notify }: Props) {
                     </div>
                     {g.ends_at && (
                       <span className="text-xs text-slate-500 shrink-0">
-                        ends {new Date(g.ends_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}
+                        ends {formatShort(g.ends_at)}
                       </span>
                     )}
                   </div>

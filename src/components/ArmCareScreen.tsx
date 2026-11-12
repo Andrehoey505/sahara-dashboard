@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Activity, Hand, CheckCircle2, AlertCircle } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { formatShort } from "../lib/time";
 
 /**
  * Arm care.
@@ -53,13 +54,7 @@ const levelBg = (n: number) => {
   return "bg-rose-500/15 border-rose-500/40 text-rose-200";
 };
 
-const fmt = (iso: string) =>
-  new Date(iso).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const fmt = (iso: string) => formatShort(iso);
 
 export default function ArmCareScreen() {
   const [log, setLog] = useState<Check[]>(() => load());

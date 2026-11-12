@@ -2,6 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Moon, X } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { formatDateTime } from "../lib/time";
 
 type Props = {
   flags: number;
@@ -29,7 +30,7 @@ export default function CatchUpBanner({ flags, since, onDismiss }: Props) {
         </p>
         {since && (
           <p className="text-xs text-slate-400 mt-1">
-            Since {new Date(since).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}
+            Since {formatDateTime(since)}
           </p>
         )}
       </div>

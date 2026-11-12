@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import type { Server } from "../lib/servers";
+import { formatShort } from "../lib/time";
 
 type Ticket = {
   channel_id: string;
@@ -55,7 +56,7 @@ function timeAgo(iso: string | null): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  return formatShort(iso);
 }
 
 function duration(from: string, to: string | null): string {

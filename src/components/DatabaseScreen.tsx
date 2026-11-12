@@ -13,6 +13,7 @@ import {
   Table2,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { formatShort } from "../lib/time";
 
 type Namespace = {
   ns: string;
@@ -41,14 +42,8 @@ function bytes(n: number) {
 function when(v: unknown) {
   const s = typeof v === "string" ? v : "";
   if (!s || !/^\d{4}-\d{2}-\d{2}T/.test(s)) return null;
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // The shared formatter, so a stored row reads the same as a violation card.
+  return formatShort(s) || null;
 }
 
 /** A one-line summary of a row, so a list of them is readable at a glance. */

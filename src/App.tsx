@@ -60,6 +60,7 @@ import ConfigScreen from "./components/ConfigScreen";
 import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
+import { formatDateTime, formatShort, formatClock, formatTitle } from "./lib/time";
 
 // Screens whose content belongs to one server. Everything else must not show a
 // server picker — it was in the global header before, in the way everywhere.
@@ -678,13 +679,8 @@ export default function App() {
     notify("Violations cleared", "info", { sound: false });
   };
 
-  const fmtTime = (ts: string) => {
-    if (!ts) return "";
-    try {
-      const d = new Date(ts);
-      return d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    } catch { return ts; }
-  };
+  // One shared formatter, so a moment reads the same on every screen.
+  const fmtTime = (ts: string) => formatDateTime(ts) || ts;
 
   const handleContextAction = async (action: any, msg: any) => {
     setContextMenu(null);
@@ -986,10 +982,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                             )}
                             {m.time && (
                               <span className="ml-auto text-[10px] text-slate-500">
-                                {new Date(m.time).toLocaleTimeString("en-GB", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                                {formatClock(m.time)}
                               </span>
                             )}
                           </div>
@@ -1021,12 +1014,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                   <p className="mb-1">Flagged</p>
                   <p className="text-slate-300">
                     {contextViolation.time
-                      ? new Date(contextViolation.time).toLocaleString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
+                      ? formatShort(contextViolation.time) || "—"
                       : "—"}
                   </p>
                 </div>
@@ -1319,7 +1307,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                         <span className="text-xs text-slate-500 ml-2">{m.server}</span>
                         <p className="text-xs text-slate-400 truncate">{m.content}</p>
                       </div>
-                      <span className="text-xs text-slate-600">{m.time}</span>
+                      <span className="text-xs text-slate-600" title={formatTitle(m.time)}>{formatClock(m.time) || m.time}</span>
                     </div>
                   ))}
                 </div>
@@ -1488,7 +1476,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">{v.server}</span>
                       <span className={"text-xs px-1.5 py-0.5 rounded " + (v.severity === "critical" ? "bg-rose-500/20 text-rose-300" : v.severity === "high" ? "bg-orange-500/20 text-orange-300" : "bg-amber-500/20 text-amber-300")}>{v.severity}</span>
                     </div>
-                    <p className="text-xs text-slate-400">{v.type} - words: {v.words.join(", ")} - {v.time}</p>
+                    <p className="text-xs text-slate-400">{v.type} - words: {v.words.join(", ")} - {formatShort(v.time) || v.time}</p>
                     {v.full_message && <p className="text-xs text-slate-300 mt-1 italic">"{v.full_message}"</p>}
                   </div>
                   <div className="flex gap-2">
@@ -1503,7 +1491,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       <>
                         <span
                           className={"text-xs px-2 py-1 rounded " + (v.status === "resolved" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300")}
-                          title={v.decided_at ? "Decided " + new Date(v.decided_at).toLocaleString("en-GB") : undefined}
+                          title={v.decided_at ? "Decided " + formatDateTime(v.decided_at) : undefined}
                         >
                           {v.status}
                         </span>
