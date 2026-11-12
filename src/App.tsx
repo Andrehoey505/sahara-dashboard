@@ -702,13 +702,12 @@ export default function App() {
       return;
     }
     let cancelled = false;
-    const params = new URLSearchParams({
-      channel: String(channel),
-      ts: String(contextViolation.time || ""),
-      before: "6",
-      after: "6",
-    });
-    fetch(apiUrl + "/api/context?" + params.toString())
+    // The violation's own endpoint. The generic /api/context reads the log by
+    // channel and timestamp, which cannot tell two violations in the same
+    // channel apart, and returns no flagged message at all.
+    const params = new URLSearchParams({ before: "4", after: "4" });
+    if (contextViolation.server) params.set("guild_id", String(contextViolation.server));
+    fetch(apiUrl + "/api/violations/" + encodeURIComponent(contextViolation.id) + "/context?" + params.toString())
       .then(async (r) => {
         const body = await r.json().catch(() => null);
         if (!r.ok) return { error: body?.error || "Couldn't read the conversation." };
@@ -885,33 +884,73 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               {contextMessages ? (
                 <div className="space-y-2">
                   <p className="text-xs text-slate-500">
-                    Conversation in {contextViolation.channel ? `#${contextViolation.channel}` : "channel"}
+                    Conversation in{" "}
+                    {contextViolation.channel ? `#${contextViolation.channel}` : "channel"}
+                    <span className="ml-1.5 opacity-60">
+                      {(contextMessages.before || []).length} before ·{" "}
+                      {(contextMessages.after || []).length} after
+                    </span>
                   </p>
-                  <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                  <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                    {(contextMessages.before || []).length === 0 &&
+                      (contextMessages.after || []).length === 0 && (
+                        <p className="text-xs text-slate-500 p-2">
+                          Nothing either side of it — this may be the only message in
+                          the channel that the bot still has.
+                        </p>
+                      )}
                     {[...(contextMessages.before || []), contextMessages.target, ...(contextMessages.after || [])]
                       .filter(Boolean)
                       .map((m: any, i: number) => (
                         <div
                           key={i}
                           className={
-                            "text-xs p-2 rounded " +
+                            "text-xs p-2 rounded border " +
                             (m.flagged
-                              ? "bg-rose-500/10 border border-rose-500/30 text-rose-200"
-                              : "bg-slate-800/30 text-slate-400")
+                              ? "bg-rose-500/15 border-rose-500/40 text-rose-100"
+                              : "bg-slate-800/30 border-transparent text-slate-400")
                           }
                         >
-                          <span className="font-medium text-slate-300">{m.author}</span>
-                          <span className="ml-1.5">{m.content}</span>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span
+                              className={
+                                "font-medium " +
+                                (m.flagged ? "text-rose-200" : "text-slate-300")
+                              }
+                            >
+                              {m.author}
+                            </span>
+                            {m.flagged && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-500/25 text-rose-200 text-[10px] uppercase tracking-wide">
+                                {m.reason || "flagged"}
+                              </span>
+                            )}
+                            {m.flagged && m.deleted && (
+                              <span
+                                className="px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 text-[10px]"
+                                title="The bot deleted this message, so the text shown is the copy from the log"
+                              >
+                                deleted
+                              </span>
+                            )}
+                            {m.time && (
+                              <span className="ml-auto text-[10px] text-slate-500">
+                                {new Date(m.time).toLocaleTimeString("en-GB", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            )}
+                          </div>
+                          <p className="whitespace-pre-wrap break-words">
+                            {m.content || <span className="italic opacity-60">(no text stored)</span>}
+                          </p>
                         </div>
                       ))}
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-slate-500">
-                  {contextMessages?.error
-                    ? contextMessages.error
-                    : "No surrounding messages found for this one."}
-                </p>
+                <p className="text-xs text-slate-500">Reading the conversation…</p>
               )}
 
               <div className="text-xs text-slate-500 grid grid-cols-2 gap-2">
