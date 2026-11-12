@@ -13,6 +13,7 @@ import {
   Settings2,
   AlertTriangle,
   Check,
+  Search,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import type { Server } from "../lib/servers";
@@ -125,6 +126,8 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [channels, setChannels] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
 
   const guildId = server?.id || "";
 
@@ -145,6 +148,19 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
       }
       if (!cRes.ok) throw new Error("bad status");
       const data = await cRes.json();
+      // Names for the ids: a settings screen full of snowflakes is not a settings
+      // screen, it is a database browser.
+      Promise.all([
+        fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(guildId)),
+        fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(guildId)),
+      ])
+        .then(async ([ch, ro]) => {
+          const cd = await ch.json().catch(() => ({}));
+          const rd = await ro.json().catch(() => ({}));
+          setChannels(Array.isArray(cd.channels) ? cd.channels : Array.isArray(cd) ? cd : []);
+          setRoles(Array.isArray(rd.roles) ? rd.roles : []);
+        })
+        .catch(() => {});
       const settings = { ...(data.settings || {}) };
       setValues(settings);
       setSaved(settings);
@@ -213,11 +229,6 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
   };
 
   const set = (key: string, value: any) => setValues((v) => ({ ...v, [key]: value }));
-
-  const channelLabel = (id: string) => {
-    // Channels come back as ids; show a name if we can guess nothing better.
-    return `#${id}`;
-  };
 
   const keys = schema.sections[section] || [];
 
@@ -383,17 +394,13 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
                   return (
                     <div key={key}>
                       <p className="text-sm font-medium text-slate-200 mb-2">{label}</p>
-                      <input
-                        className={field}
+                      <Picker
+                        kind={kind}
                         value={value || ""}
-                        onChange={(e) => set(key, e.target.value.trim())}
-                        placeholder={
-                          kind === "channel" ? "channel id — or #name in Discord" : "role id"
-                        }
+                        onChange={(v) => set(key, v)}
+                        channels={channels}
+                        roles={roles}
                       />
-                      <p className="text-xs text-slate-500 mt-1.5">
-                        {value ? channelLabel(value) : "Not set"}
-                      </p>
                     </div>
                   );
                 }
@@ -428,5 +435,85 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
         </AnimatePresence>
       </div>
     </motion.section>
+  );
+}
+
+/**
+ * A channel or role, chosen from the server's own lists.
+ *
+ * The stored value is the id, always. A name is what you read on screen and what a
+ * rename in Discord changes; the id is what the bot acts on, so renaming a category
+ * or a role can never quietly move a setting somewhere else.
+ */
+function Picker({
+  kind,
+  value,
+  onChange,
+  channels,
+  roles,
+}: {
+  kind: "channel" | "role";
+  value: string;
+  onChange: (v: string) => void;
+  channels: any[];
+  roles: any[];
+}) {
+  const [query, setQuery] = useState("");
+  const options = useMemo(() => {
+    const raw =
+      kind === "channel"
+        ? channels
+            .filter((c) => c.type === 0 || c.type === "text" || c.type === 4 || c.type === "category")
+            .map((c) => ({ id: String(c.id), name: c.name, category: c.type === 4 || c.type === "category" }))
+        : roles.map((r) => ({ id: String(r.id), name: r.name, category: false }));
+    const q = query.trim().toLowerCase();
+    return q ? raw.filter((o) => o.name.toLowerCase().includes(q)) : raw;
+  }, [kind, channels, roles, query]);
+
+  const current = options.find((o) => o.id === value);
+  const known = current || null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+          <select
+            value={known ? value : ""}
+            onChange={(e) => onChange(e.target.value)}
+            className={field + " pl-8"}
+            data-tip={
+              kind === "channel"
+                ? "Pick a channel or category. Stored by ID, so renaming it changes nothing."
+                : "Pick a role. Stored by ID, so renaming it changes nothing."
+            }
+          >
+            <option value="">Not set</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.category ? "📁 " : kind === "channel" ? "# " : "@ "}
+                {o.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="relative w-32">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="filter"
+            className={field + " text-xs"}
+            data-tip="Narrow the list — useful on a big server"
+          />
+        </div>
+      </div>
+      {value && !known && (
+        <p className="text-xs text-amber-300/80 flex items-center gap-1.5" data-tip="The bot can't see this id any more — it may have been deleted in Discord">
+          <AlertTriangle className="w-3 h-3" />
+          Set to {value}, which is not a {kind} the bot can see. It may have been deleted.
+        </p>
+      )}
+      <p className="text-[11px] text-slate-500 font-mono">{value || "—"}</p>
+    </div>
   );
 }
