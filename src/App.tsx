@@ -138,24 +138,28 @@ export default function App() {
     localStorage.setItem("sahara_theme", theme);
   }, [theme]);
 
-  // Update check. Reports failures instead of swallowing them: a silent catch
-  // here is why "no update offered" was indistinguishable from "update check
-  // crashed" the first time round.
+  // Update check on launch. LOOKS only — it never downloads.
+  //
+  // Nothing is fetched until the user asks for it, in Settings → Check for
+  // updates. An automatic download here meant a large file arriving over
+  // whatever connection the machine was on, and a relaunch the user did not
+  // ask for. A one-line notice is enough: it says an update exists and where
+  // to go, and nothing more happens unless they go there.
   useEffect(() => {
     (async () => {
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
-        const { relaunch } = await import("@tauri-apps/plugin-process");
         const update = await check();
         if (!update?.available) {
           console.info("[sahara] updater: already up to date");
           return;
         }
-        const ok = window.confirm(`Update ${update.version} available. Install now?`);
-        if (ok) {
-          await update.downloadAndInstall();
-          await relaunch();
-        }
+        console.info("[sahara] updater: " + update.version + " available");
+        notify(
+          `Version ${update.version} is available — Settings → Check for updates`,
+          "info",
+          { sound: false },
+        );
       } catch (e) {
         console.error("[sahara] updater check failed:", e);
         const msg = e instanceof Error ? e.message : String(e);

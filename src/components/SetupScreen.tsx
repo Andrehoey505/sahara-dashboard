@@ -88,7 +88,12 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
   const [appVersion, setAppVersion] = useState("");
   const [updateState, setUpdateState] = useState<
-    { status: "idle" } | { status: "checking" } | { status: "none" } | { status: "found"; version: string } | { status: "error"; message: string }
+    | { status: "idle" }
+    | { status: "checking" }
+    | { status: "none" }
+    | { status: "found"; version: string }
+    | { status: "downloading"; version: string; pct?: number | null }
+    | { status: "error"; message: string }
   >({ status: "idle" });
 
   useEffect(() => {
@@ -102,19 +107,40 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
     })();
   }, []);
 
+  // The update the check found. Held so the Install button acts on that exact one.
+  const [pendingUpdate, setPendingUpdate] = useState<any>(null);
+
+  // Download and install, with progress, only because the user pressed Install.
+  const installUpdate = async () => {
+    if (!pendingUpdate) return;
+    setUpdateState({ status: "downloading", version: pendingUpdate.version });
+    try {
+      await pendingUpdate.downloadAndInstall((event: any) => {
+        if (event.event === "Started") {
+          setUpdateState({ status: "downloading", version: pendingUpdate.version, pct: 0 });
+        } else if (event.event === "Progress") {
+          setUpdateState((prev: any) => ({ ...prev, pct: null }));
+        }
+      });
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch (e) {
+      setUpdateState({
+        status: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
   const checkForUpdates = async () => {
     setUpdateState({ status: "checking" });
     try {
       const { check } = await import("@tauri-apps/plugin-updater");
       const update = await check();
       if (update?.available) {
+        // Found, not fetched. The install happens when they press Install.
         setUpdateState({ status: "found", version: update.version });
-        const go = window.confirm(`Update ${update.version} available. Install now?`);
-        if (go) {
-          const { relaunch } = await import("@tauri-apps/plugin-process");
-          await update.downloadAndInstall();
-          await relaunch();
-        }
+        setPendingUpdate(update);
       } else {
         setUpdateState({ status: "none" });
       }
@@ -454,8 +480,24 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                     </p>
                   )}
                   {updateState.status === "found" && (
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm text-indigo-300 flex items-center gap-2">
+                        <Download className="w-4 h-4" /> Version {updateState.version} is available.
+                      </p>
+                      <button
+                        onClick={installUpdate}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-indigo-500/20 text-indigo-200 border border-indigo-500/40 hover:bg-indigo-500/30"
+                        data-tip="Download and install this version now"
+                      >
+                        Install
+                      </button>
+                    </div>
+                  )}
+                  {updateState.status === "downloading" && (
                     <p className="text-sm text-indigo-300 flex items-center gap-2">
-                      <Download className="w-4 h-4" /> Version {updateState.version} is available.
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Downloading {updateState.version}…
+                      {typeof updateState.pct === "number" ? ` ${updateState.pct}%` : ""}
                     </p>
                   )}
                   {updateState.status === "error" && (
