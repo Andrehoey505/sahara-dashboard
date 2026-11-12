@@ -1323,7 +1323,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                     { label: "Open server log", action: () => setActive("audit") },
                     { label: "Open troll list", action: () => setActive("trolls") },
                   ].map((a) => (
-                    <button key={a.label} onClick={a.action} className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-sm transition flex items-center justify-between group">
+                    <button key={a.label} onClick={a.action} data-tip={a.label} className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-sm transition flex items-center justify-between group">
                       {a.label}
                       <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-300" />
                     </button>
