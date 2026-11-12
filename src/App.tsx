@@ -1352,14 +1352,37 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
         {active === "violations" && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center gap-3 mb-4">
-              {["all", "pending", "resolved", "denied"].map((f) => (
-                <button key={f} onClick={() => setViolationFilter(f)} className={"px-3 py-1.5 rounded-lg text-sm transition " + (violationFilter === f ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" : "bg-slate-800/40 text-slate-400 hover:text-slate-200")}>
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
+              {["all", "pending", "resolved", "denied"].map((f) => {
+                const n =
+                  f === "all"
+                    ? violations.length
+                    : violations.filter((v) => v.status === f).length;
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setViolationFilter(f)}
+                    className={
+                      "px-3 py-1.5 rounded-lg text-sm transition " +
+                      (violationFilter === f
+                        ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                        : "bg-slate-800/40 text-slate-400 hover:text-slate-200")
+                    }
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                    <span className="ml-1.5 text-xs opacity-60">{n}</span>
+                  </button>
+                );
+              })}
             </div>
             <div className="space-y-2">
-              {filteredViolations.map((v) => (
+              {[...filteredViolations]
+                // Anything waiting on a decision comes first; a long history of
+                // settled ones should not bury the two that need an answer.
+                .sort((a, b) => {
+                  const rank = (v: any) => (v.status === "pending" ? 0 : 1);
+                  return rank(a) - rank(b) || String(b.time).localeCompare(String(a.time));
+                })
+                .map((v) => (
                 <div key={v.id} className="glass rounded-xl p-4 flex items-center gap-4">
                   <div className={"w-2 h-10 rounded-full " + (v.severity === "critical" ? "bg-rose-500" : v.severity === "high" ? "bg-orange-500" : "bg-amber-500")} />
                   <div className="flex-1">
