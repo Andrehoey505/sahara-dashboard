@@ -652,6 +652,10 @@ export default function App() {
             type: msg.type,
             words: msg.words || [],
             message: msg.full_message || msg.message || "",
+            timestamp: msg.timestamp || msg.time || "",
+            // A decision may already be filed under one of these; the bot moves
+            // it across rather than leaving it stranded under an old scheme.
+            alias_keys: msg.alias_keys || [],
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -671,6 +675,9 @@ export default function App() {
           status === "pending" ? "Undone" : status === "resolved" ? "Approved" : "Denied",
           status === "denied" ? "error" : "success"
         );
+        // Re-read from the bot. Updating local state alone is how a decision
+        // that did not stick kept looking done until the next poll put it back.
+        fetchData();
       } catch {
         notify("Connection failed — is the bot reachable?", "error");
       }
