@@ -13,6 +13,9 @@ type Member = {
   is_troll?: boolean;
   is_exempt?: boolean;
   is_staff?: boolean;
+  exempt_reason?: string;
+  exempt_reason_label?: string;
+  exempt_note?: string;
   guilds?: string[];
   violation_count?: number;
 };
@@ -21,6 +24,19 @@ type Props = {
   apiUrl: string;
   onLookupViolations?: (memberId: string) => void;
 };
+
+type Reason = { id: string; label: string };
+
+// The API sends this list with /api/exempt-users so the app offers exactly what the
+// bot accepts. This is the fallback for an older API, not a second source of truth.
+const FALLBACK_REASONS: Reason[] = [
+  { id: "staff", label: "Staff or moderator" },
+  { id: "trusted", label: "Trusted member" },
+  { id: "bot_owner", label: "Server owner" },
+  { id: "health", label: "Health or care context" },
+  { id: "test", label: "Test account" },
+  { id: "other", label: "Other" },
+];
 
 function daysSince(iso?: string): number | null {
   if (!iso) return null;
@@ -45,8 +61,17 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
   // the same list. Two people clicking at once can't half-apply it.
   const [saving, setSaving] = useState<string>("");
   const [saveError, setSaveError] = useState("");
+  const [reasons, setReasons] = useState<Reason[]>(FALLBACK_REASONS);
+  // Which member is choosing a reason right now, and what they picked.
+  const [choosing, setChoosing] = useState<string>("");
+  const [reasonPick, setReasonPick] = useState<string>("staff");
+  const [note, setNote] = useState<string>("");
 
-  async function toggleExempt(m: Member) {
+  async function toggleExempt(
+    m: Member,
+    reason?: string,
+    extra?: string,
+  ) {
     const next = !m.is_exempt;
     setSaving(m.id);
     setSaveError("");
@@ -58,6 +83,8 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
           exempt: next,
           name: m.display_name || m.name,
           server: (m.guilds || [])[0] || "",
+          reason: next ? reason ?? "" : "",
+          note: next ? extra ?? "" : "",
         }),
       }).catch(() => null);
       const data = await res?.json().catch(() => ({}));
@@ -66,9 +93,21 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
         // one that worked and got forgotten.
         throw new Error(data?.error || `the bot API said ${res?.status ?? "nothing"}`);
       }
+      const label = reasons.find((r) => r.id === reason)?.label || "";
       setMembers((prev) =>
-        prev.map((x) => (x.id === m.id ? { ...x, is_exempt: next } : x)),
+        prev.map((x) =>
+          x.id === m.id
+            ? {
+                ...x,
+                is_exempt: next,
+                exempt_reason: next ? reason ?? "" : "",
+                exempt_reason_label: next ? label : "",
+                exempt_note: next ? extra ?? "" : "",
+              }
+            : x,
+        ),
       );
+      setChoosing("");
     } catch (e) {
       setSaveError(
         `Couldn't ${next ? "exempt" : "un-exempt"} ${m.display_name || m.name}: ${
@@ -82,6 +121,14 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(apiUrl + "/api/exempt-users").catch(() => null);
+      const data = await res?.json().catch(() => ({}));
+      if (Array.isArray(data?.reasons) && data.reasons.length) setReasons(data.reasons);
+    })();
+  }, [apiUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,8 +246,16 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
                     </span>
                   )}
                   {m.is_exempt && (
-                    <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                      <ShieldCheck className="w-3 h-3" /> Not flagged
+                    <span
+                      className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                      data-tip={
+                        m.exempt_note
+                          ? `${m.exempt_reason_label || "Exempt"}: ${m.exempt_note}`
+                          : m.exempt_reason_label || "Exempt from being flagged"
+                      }
+                    >
+                      <ShieldCheck className="w-3 h-3" />{" "}
+                      {m.exempt_reason_label ? m.exempt_reason_label : "Not flagged"}
                     </span>
                   )}
                 </div>
@@ -219,7 +274,16 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
               </div>
 
               <button
-                onClick={() => toggleExempt(m)}
+                onClick={() => {
+                  if (m.is_exempt) {
+                    // Un-exempting needs no reason, so it takes one press.
+                    toggleExempt(m);
+                    return;
+                  }
+                  setChoosing(choosing === m.id ? "" : m.id);
+                  setReasonPick(m.exempt_reason || "staff");
+                  setNote(m.exempt_note || "");
+                }}
                 disabled={saving === m.id}
                 className={`shrink-0 px-3 py-1.5 rounded-lg text-xs border transition-colors disabled:opacity-50 ${
                   m.is_exempt
@@ -244,6 +308,61 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
                   <span className="ml-1.5 text-rose-300">{m.violation_count}</span>
                 )}
               </button>
+
+              {choosing === m.id && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="basis-full mt-2 rounded-xl bg-slate-900/60 border border-emerald-500/25 p-3"
+                >
+                  <p className="text-xs text-slate-400 mb-2">
+                    Why is {m.display_name || m.name} exempt? The bot won't flag them at all —
+                    a moderator can still act by hand.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {reasons.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => setReasonPick(r.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+                          reasonPick === r.id
+                            ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
+                            : "bg-slate-800/60 text-slate-300 border-slate-700/50 hover:border-slate-600"
+                        }`}
+                        data-tip={`Exempt: ${r.label}`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value.slice(0, 200))}
+                    placeholder="Anything worth remembering (optional, 200 characters)"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800/70 border border-slate-700/60 text-xs text-slate-200 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => toggleExempt(m, reasonPick, note.trim())}
+                      disabled={saving === m.id}
+                      className="px-3 py-1.5 rounded-lg text-xs bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-50"
+                      data-tip="Exempt this member from being flagged"
+                    >
+                      {saving === m.id ? "Saving…" : "Exempt"}
+                    </button>
+                    <button
+                      onClick={() => setChoosing("")}
+                      className="px-3 py-1.5 rounded-lg text-xs bg-slate-700/50 text-slate-300 border border-slate-600/40 hover:bg-slate-600/60"
+                      data-tip="Cancel"
+                    >
+                      Cancel
+                    </button>
+                    <span className="text-[11px] text-slate-500">
+                      {note.length}/200
+                    </span>
+                  </div>
+                </motion.div>
+              )}
             </div>
           );
         })}
