@@ -123,7 +123,7 @@ function describe(e: Entry): { title: string; detail: string; tone: string; targ
   }
 }
 
-export default function AuditLog({ apiUrl, notify }: Props) {
+export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverId?: string }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -135,6 +135,8 @@ export default function AuditLog({ apiUrl, notify }: Props) {
     const types = FILTERS.find((f) => f.id === filter)?.types || "";
     const params = new URLSearchParams({ limit: "200" });
     if (types) params.set("type", types);
+    // The screen shows a server picker, so it has to actually narrow to it.
+    if (serverId) params.set("guild_id", serverId);
     try {
       const res = await fetch(apiUrl + "/api/audit?" + params.toString());
       if (!res.ok) throw new Error("bad status");
@@ -148,7 +150,7 @@ export default function AuditLog({ apiUrl, notify }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [apiUrl, filter]);
+  }, [apiUrl, filter, serverId]);
 
   useEffect(() => {
     setLoading(true);

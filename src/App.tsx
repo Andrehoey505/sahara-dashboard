@@ -32,6 +32,7 @@ import {
   HeartPulse,
   SlidersHorizontal,
   Ticket,
+  Database,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
@@ -51,6 +52,7 @@ import ReactionRoles from "./components/ReactionRoles";
 import TicketScreen from "./components/TicketScreen";
 import TrollsScreen from "./components/TrollsScreen";
 import AuditLog from "./components/AuditLog";
+import DatabaseScreen from "./components/DatabaseScreen";
 import { SCREENS } from "./lib/screens";
 import { areaFor, areaTone } from "./lib/design";
 import ServerBar from "./components/ServerBar";
@@ -822,6 +824,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
       items: [
         { id: "config", label: "Server Settings", icon: SlidersHorizontal },
         { id: "tickets", label: "Tickets", icon: Ticket },
+        { id: "database", label: "Database", icon: Database },
       ],
     },
     {
@@ -1478,7 +1481,10 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               />
             )}
             {active === "trolls" && <TrollsScreen apiUrl={apiUrl} notify={notify} />}
-            {active === "audit" && <AuditLog apiUrl={apiUrl} notify={notify} />}
+            {active === "audit" && (
+              <AuditLog apiUrl={apiUrl} notify={notify} serverId={activeServer} />
+            )}
+            {active === "database" && <DatabaseScreen apiUrl={apiUrl} notify={notify} />}
             {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
             {active === "activities" && <ActivitiesScreen apiUrl={apiUrl} notify={notify} />}
             {active === "reactionroles" && (
