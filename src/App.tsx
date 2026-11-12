@@ -86,12 +86,22 @@ export default function App() {
   const [pinInput, setPinInput] = useState("");
   const [locked, setLocked] = useState(false);
   const [active, setActive] = useState("dashboard");
-  const [messages, setMessages] = useState([
-    { id: 1, user: "smg4_2010", avatar: "🎮", server: "Babble Playpen", channel: "general", content: "hey everyone!", time: "just now", flagged: false },
-    { id: 2, user: "wolfman_4328", avatar: "🐺", server: "Bear Café", channel: "general", content: "Fuck this", time: "2m ago", flagged: true },
-    { id: 3, user: "glacy6832", avatar: "🌴", server: "Glacy's Tropical", channel: "chat", content: "welcome back!", time: "3m ago", flagged: false },
-    { id: 4, user: "stitchy_gw", avatar: "🧵", server: "SocialLink.io Staff", channel: "main-chat", content: "bb!status", time: "5m ago", flagged: false },
-  ]);
+  // What the live feed draws. The API does not always send a user id (older log
+  // rows carry only a name), so both are optional: a quick action that needs an
+  // id has to say it has not got one rather than post the name as one.
+  type FeedMessage = {
+    id: number | string;
+    user: string;
+    user_id?: string;
+    avatar?: string;
+    server: string;
+    server_id?: string;
+    channel: string;
+    content: string;
+    time: string;
+    flagged: boolean;
+  };
+  const [messages, setMessages] = useState<FeedMessage[]>([]);
   const [messagesToday, setMessagesToday] = useState(0);
   const [violationsToday, setViolationsToday] = useState(0);
   const [memberCount, setMemberCount] = useState<number | null>(null);
@@ -1389,7 +1399,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       {m.flagged && <div className="text-xs text-rose-400 mt-1">flagged</div>}
                       <div className="flex gap-1 mt-1">
                         <button onClick={() => hideMessage(String(m.id))} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20" title="Delete from feed" data-tip="Remove this message from the feed">🗑</button>
-                        <button onClick={() => { setMoreOptionsMsg(m); setMoreOptionsAction("warn"); setMoreOptionsReason(""); }} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" title="More options" data-tip="Cancel and close">⋯</button>
+                        <button onClick={() => { setMoreOptionsMsg(m); setMoreOptionsAction("warn"); setMoreOptionsReason(""); }} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" title="More options" data-tip="Warn, mute, kick or ban this person">⋯</button>
+                        <button onClick={async () => { const who = m.user_id || m.user; if (!who) { notify("That message has no user id", "error"); return; } const reason = await Promise.resolve(window.prompt(`Warn ${m.user} — why?`, "Breach of server rules")); if (reason === null) return; if (!reason.trim()) { notify("A warning needs a reason — it goes in the record", "error"); return; } try { const res = await fetch(apiUrl + "/api/warn", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: who, server: m.server_id || m.server, reason: reason.trim(), issued_by: "dashboard" }) }); const data = await res.json().catch(() => ({})); if (res.ok && !data.error) { notify(data.dm_delivered ? `Warning ${data.warning_number} recorded and DM'd to ${data.user}` : `Warning ${data.warning_number} recorded. ${data.detail || "The DM did not land."}`, data.dm_delivered ? "success" : "info"); } else { notify(data.error || `That did not work (${res.status})`, "error"); } } catch { notify("Connection failed — is the bot running?", "error"); } }} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 hover:bg-amber-500/20" data-tip="Warn this person now, in one press — the reason goes in the record">⚠</button>
                       </div>
                     </div>
                   </motion.div>
@@ -1429,11 +1440,24 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                         if (!moreOptionsReason) { notify("Enter a reason", "error"); return; }
                         try {
                           const warnOnly = moreOptionsAction === "warn";
-                          const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server, reason: moreOptionsReason, duration: 10 }) });
+                          const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server_id || moreOptionsMsg.server, reason: moreOptionsReason, duration: 10, issued_by: "dashboard" }) });
                           const data = await res.json().catch(() => ({}));
-                          if (data.success) { notify(data.action + " applied to " + data.user, "success"); setMoreOptionsMsg(null); }
-                          else { notify(data.error || "Failed", "error"); }
-                        } catch (e) { notify("Connection failed", "error"); }
+                          if (res.ok && !data.error) {
+                            // A warning is a record first: say what was saved, and whether
+                            // the DM landed, rather than a flat "success".
+                            if (warnOnly) {
+                              const line = data.dm_delivered
+                                ? `Warning ${data.warning_number} recorded and DM'd to ${data.user}`
+                                : `Warning ${data.warning_number} recorded. ${data.detail || "The DM did not land."}`;
+                              notify(line, data.dm_delivered ? "success" : "info");
+                            } else {
+                              notify(`${data.action} applied to ${data.user}`, "success");
+                            }
+                            setMoreOptionsMsg(null);
+                          } else {
+                            notify(data.error || `That did not work (${res.status})`, "error");
+                          }
+                        } catch (e) { notify("Connection failed — is the bot running?", "error"); }
                       }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition" data-tip="Run this action">Execute</button>
                     </div>
                   </div>
