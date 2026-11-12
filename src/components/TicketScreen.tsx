@@ -106,6 +106,7 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
   const [error, setError] = useState("");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [open, setOpen] = useState<number | null>(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -143,11 +144,19 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
   const loadChannels = useCallback(async () => {
     if (!server) return;
     try {
-      const res = await fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server));
-      const data = await res.json().catch(() => ({}));
+      const [cRes, rRes] = await Promise.all([
+        fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server)),
+        fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(server)),
+      ]);
+      const data = await cRes.json().catch(() => ({}));
       setChannels(Array.isArray(data.channels) ? data.channels : Array.isArray(data) ? data : []);
+      const roledata = await rRes.json().catch(() => ({}));
+      // Only roles the bot can actually give out; the rest would be a setting that
+      // silently does nothing, which is worse than not offering it.
+      setRoles((Array.isArray(roledata.roles) ? roledata.roles : []).filter((r: any) => r.assignable));
     } catch {
       setChannels([]);
+      setRoles([]);
     }
   }, [apiUrl, server]);
 
@@ -159,7 +168,7 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
   const guild = useMemo(() => servers.find((s) => s.name === server || String(s.id) === String(server)), [servers, server]);
   const categories = useMemo(() => channels.filter((c) => c.type === 4 || c.type === "category"), [channels]);
   const textChannels = useMemo(() => channels.filter((c) => c.type === 0 || c.type === "text"), [channels]);
-  const roles = useMemo(() => guild?.roles || [], [guild]);
+
 
   const mine = useMemo(
     () => tickets.filter((t) => String(t.guild_id) === String(guild?.id)),
