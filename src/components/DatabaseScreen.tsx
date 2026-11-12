@@ -209,7 +209,8 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
           <button
             onClick={search}
             className="px-3 py-2 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/25"
-          >
+          
+            data-tip="Search this table">
             Search
           </button>
         </div>
@@ -326,7 +327,8 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
         <button
           onClick={load}
           className="ml-auto flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 hover:border-indigo-500/50 text-sm text-slate-200"
-        >
+        
+            data-tip="Reload the table">
           <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} data-tip="Refresh" />Refresh</button>
       </div>
 

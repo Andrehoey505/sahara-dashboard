@@ -154,7 +154,8 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
             onClick={load}
             aria-label="Refresh troll list"
             className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-          >
+          
+            data-tip="Reload the troll list">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
@@ -185,7 +186,8 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
               onClick={() => setAdding(false)}
               aria-label="Close add form"
               className="p-1.5 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 transition-colors"
-            >
+            
+            data-tip="Close">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -220,7 +222,8 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
             onClick={add}
             disabled={busy !== null || !newId.trim() || newReason.trim().length < 3}
             className="mt-4 px-4 py-2 rounded-lg text-sm bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 transition"
-          >
+          
+            data-tip="Add this account to the curated ban list">
             {busy === "add" ? "Adding…" : "Add to list"}
           </button>
         </div>
@@ -306,7 +309,8 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
                     }
                   }}
                   className="mt-1.5 text-xs px-2 py-1 rounded-lg bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 transition-colors"
-                >
+                
+            data-tip="Write a reason for this ban">
                   No reason recorded — add one
                 </button>
               )}
@@ -320,7 +324,8 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
               disabled={busy !== null}
               aria-label={`Remove ${t.name || t.user_id} from the troll list`}
               className="shrink-0 p-2 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 disabled:opacity-40 transition-colors"
-            >
+            
+            data-tip="Remove this account from the list">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>

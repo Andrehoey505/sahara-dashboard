@@ -108,7 +108,8 @@ export default function EdWaits({ apiUrl, variant = "page" }: Props) {
           disabled={busy}
           aria-label="Refresh waiting times"
           className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700 text-sm text-slate-300 hover:bg-slate-700/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-50 transition-colors"
-        >
+        
+            data-tip="Reload the A&E waits">
           <RefreshCw className={"w-4 h-4 " + (busy ? "animate-spin" : "")} />
           <span className="hidden sm:inline">Refresh</span>
         </button>

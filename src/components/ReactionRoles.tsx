@@ -310,12 +310,14 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
           <button
             onClick={load}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-200 hover:bg-slate-700/60 transition"
-          >
+          
+            data-tip="Reload the panels">
             <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} data-tip="Refresh" />Refresh</button>
           <button
             onClick={startNew}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-600/30 transition"
-          >
+          
+            data-tip="Create a new reaction-role panel">
             <Plus className="w-4 h-4" />
             New panel
           </button>
@@ -404,7 +406,8 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
                       onClick={() => remove(p.message_id)}
                       disabled={saving}
                       className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-xs text-rose-200 hover:bg-rose-500/30 transition"
-                    >
+                    
+            data-tip="Remove this panel for good — this cannot be undone">
                       {saving ? "Removing…" : "Really remove"}
                     </button>
                   ) : (
@@ -470,7 +473,8 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
                     "text-left p-3 rounded-xl border transition " +
                     (on ? t.bg + " " + t.border : "border-slate-700/60 hover:border-slate-600")
                   }
-                >
+                
+            data-tip="Add this emoji and role to the panel">
                   <span className="flex items-center gap-2 text-sm text-slate-100">
                     <Icon className={"w-4 h-4 " + (on ? t.accent : "text-slate-500")} />
                     {t.label}
@@ -489,7 +493,8 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
               "flex items-center gap-3 w-full p-3 rounded-xl border text-left transition " +
               (draft.toggle ? "border-indigo-500/40 bg-indigo-500/10" : "border-slate-700/60")
             }
-          >
+          
+            data-tip="Turn this mapping on or off">
             <span
               className={
                 "w-9 h-5 rounded-full relative transition " + (draft.toggle ? "bg-indigo-500" : "bg-slate-700")
@@ -572,7 +577,8 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
           <button
             onClick={addRow}
             className="mt-2 flex items-center gap-1.5 text-xs text-indigo-300 hover:text-indigo-200 transition"
-          >
+          
+            data-tip="Add another emoji and role">
             <Plus className="w-3.5 h-3.5" />
             Add another emoji
           </button>
@@ -596,7 +602,8 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
             onClick={save}
             disabled={saving || !!duplicateEmoji}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition"
-          >
+          
+            data-tip="Save this panel">
             {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? "Saving…" : editingIndex === null ? "Add panel" : "Save changes"}
           </button>

@@ -117,7 +117,8 @@ export default function ActivitiesScreen({ apiUrl, notify }: Props) {
             onClick={load}
             aria-label="Refresh activities"
             className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-          >
+          
+            data-tip="Reload activities">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>

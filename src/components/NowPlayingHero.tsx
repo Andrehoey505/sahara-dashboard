@@ -48,7 +48,8 @@ export default function NowPlayingHero({ now, position, onTransport, onExpand, b
             onClick={onExpand}
             aria-label="Open full screen player"
             className="group relative shrink-0 rounded-xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition"
-          >
+          
+            data-tip="Open the player">
             {now?.image ? (
               <img
                 src={now.image}
@@ -99,7 +100,8 @@ export default function NowPlayingHero({ now, position, onTransport, onExpand, b
                 onClick={() => onTransport(now?.is_playing ? "pause" : "play")}
                 disabled={busy || !now}
                 className="p-4 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 transition shadow-lg shadow-indigo-500/20"
-              >
+              
+            data-tip="Play or pause">
                 {now?.is_playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
               </button>
               <button

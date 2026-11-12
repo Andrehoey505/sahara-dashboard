@@ -45,7 +45,8 @@ export default function SleepMode({ open, onClose, onSleep }: Props) {
             onClick={onClose}
             aria-label="Close sleep mode"
             className="absolute top-3 right-3 p-2 rounded-lg bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-          >
+          
+            data-tip="Close">
             <X className="w-4 h-4" />
           </button>
         </div>

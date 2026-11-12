@@ -95,7 +95,8 @@ export default function MusicSearch({ clientId, deviceId, notify, onPlayed }: Pr
                 onClick={() => play(t.uri, t.name)}
                 disabled={busy !== null}
                 className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors text-left group"
-              >
+              
+            data-tip="Play this track">
                 {t.image ? (
                   <img src={t.image} alt="" className="w-9 h-9 rounded object-cover bg-slate-800" />
                 ) : (
@@ -126,7 +127,8 @@ export default function MusicSearch({ clientId, deviceId, notify, onPlayed }: Pr
                 onClick={() => play(a.uri, a.name)}
                 disabled={busy !== null}
                 className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full bg-slate-800/60 border border-slate-700 hover:border-indigo-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-              >
+              
+            data-tip="Play this album">
                 {a.image ? (
                   <img src={a.image} alt="" className="w-6 h-6 rounded-full object-cover" />
                 ) : (
@@ -149,7 +151,8 @@ export default function MusicSearch({ clientId, deviceId, notify, onPlayed }: Pr
                 onClick={() => play(a.uri, a.name)}
                 disabled={busy !== null}
                 className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 hover:border-indigo-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-              >
+              
+            data-tip="Play this artist">
                 {a.image ? (
                   <img src={a.image} alt="" className="w-6 h-6 rounded object-cover" />
                 ) : (

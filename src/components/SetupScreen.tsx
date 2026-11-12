@@ -196,7 +196,8 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                 onClick={onClose}
                 aria-label="Close setup"
                 className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-              >
+              
+            data-tip="Close setup">
                 <X className="w-4 h-4" />
               </button>
             )}
@@ -226,7 +227,8 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                       ? "text-slate-300 hover:bg-slate-800/50 border border-transparent"
                       : "text-slate-500 hover:bg-slate-800/50 border border-transparent")
                   }
-                >
+                
+            data-tip="Turn this on or off">
                   <span
                     className={
                       "w-6 h-6 rounded-lg flex items-center justify-center shrink-0 " +
@@ -288,7 +290,8 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                         onClick={testConnection}
                         disabled={testing || !apiLooksValid}
                         className="shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-slate-700/60 text-sm text-slate-200 hover:bg-slate-600/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-                      >
+                      
+            data-tip="Connect this service">
                         <Plug className="w-4 h-4" />
                         {testing ? "Testing…" : "Test"}
                       </button>
@@ -439,7 +442,8 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                     onClick={checkForUpdates}
                     disabled={updateState.status === "checking"}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-slate-800/60 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/15 disabled:opacity-50 transition"
-                  >
+                  
+            data-tip="Check for a newer version now">
                     <RefreshCw className={"w-4 h-4 " + (updateState.status === "checking" ? "animate-spin" : "")} />
                     {updateState.status === "checking" ? "Checking…" : "Check for updates"}
                   </button>
@@ -519,7 +523,8 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                   onClose?.();
                 }}
                 className="px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-              >
+              
+            data-tip="Skip the rest of setup">
                 Skip setup
               </button>
             )}
@@ -527,7 +532,8 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
               onClick={next}
               disabled={step.id === "bot" && !apiLooksValid}
               className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 font-semibold text-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 transition"
-            >
+            
+            data-tip="Go to the next step">
               {isLast ? "Finish" : "Continue"}
               {isLast ? <ArrowRight className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>

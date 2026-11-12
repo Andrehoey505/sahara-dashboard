@@ -929,7 +929,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           <div className="glass rounded-2xl p-6 w-[500px] max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold">Violation Context</h3>
-              <button onClick={() => setContextViolation(null)} className="text-slate-400 hover:text-slate-200"><X className="w-5 h-5" /></button>
+              <button onClick={() => setContextViolation(null)} className="text-slate-400 hover:text-slate-200"
+            data-tip="Close this panel"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-slate-800/30">
@@ -1130,7 +1131,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                         ? tone.soft + " " + tone.text + " border " + tone.border
                         : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border border-transparent")
                     }
-                  >
+                  
+            data-tip="Switch the bot in and out of sleep mode">
                     <span
                       className={
                         "w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors " +
@@ -1180,7 +1182,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 })
                 .catch(() => {});
             }
-          }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}>{sleepMode ? "☀️ Wake up" : "🌙 Going to sleep"}</button>
+          }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}
+            data-tip="Put the bot to sleep or wake it up">{sleepMode ? "☀️ Wake up" : "🌙 Going to sleep"}</button>
           )}
         </div>
         {!pinSet && (
@@ -1367,7 +1370,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 {channels.map((c) => <option key={c.id} value={c.name}>#{c.name}</option>)}
               </select>
               <p className="text-sm text-slate-400 flex-1">{filteredMessages.length} messages</p>
-              <button onClick={clearFeed} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm hover:bg-rose-500/20 transition">
+              <button onClick={clearFeed} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm hover:bg-rose-500/20 transition"
+            data-tip="Clear the message feed — hidden messages come back with Show hidden">
                 <Trash2 className="w-3.5 h-3.5" /> Clear Feed
               </button>
             </div>
@@ -1461,7 +1465,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                         ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
                         : "bg-slate-800/40 text-slate-400 hover:text-slate-200")
                     }
-                  >
+                  
+            data-tip="Show only these violations">
                     {f.charAt(0).toUpperCase() + f.slice(1)}
                     <span className="ml-1.5 text-xs opacity-60">{n}</span>
                   </button>

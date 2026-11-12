@@ -207,7 +207,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
             onClick={connect}
             disabled={!configured}
             className={btn + " px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 font-semibold text-sm hover:opacity-90"}
-          >
+          
+            data-tip="Sign in to Spotify in your browser">
             <Link2 className="w-4 h-4" /> Connect with Spotify
           </button>
           <button
@@ -248,7 +249,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
                 }
               }}
               className="mb-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-700/50 text-slate-300 hover:bg-slate-600/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-            >
+            
+            data-tip="Paste the address Spotify sent you back to">
               Paste from clipboard
             </button>
             <textarea
@@ -277,7 +279,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
               }}
               disabled={busy !== null || !pastedUrl.trim()}
               className={btn + " mt-3 px-4 py-2 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 text-sm"}
-            >
+            
+            data-tip="Finish connecting Spotify">
               Finish connecting
             </button>
           </div>
@@ -303,7 +306,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
             onClick={refresh}
             aria-label="Refresh Spotify state"
             className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-          >
+          
+            data-tip="Reload playlists">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
@@ -363,7 +367,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
                     ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
                     : "bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-700/50")
                 }
-              >
+              
+            data-tip="Play this playlist">
                 {d.name}
                 <span className="text-xs text-slate-500 ml-2">{d.type.toLowerCase()}</span>
               </button>
@@ -420,7 +425,8 @@ export default function SpotifyScreen({ settings, notify }: Props) {
                 onClick={() => startPlaylist(p.uri, p.name)}
                 disabled={busy !== null}
                 className="group text-left rounded-xl overflow-hidden bg-slate-800/40 border border-slate-700/50 hover:border-indigo-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-              >
+              
+            data-tip="Play this playlist">
                 {p.image ? (
                   <img src={p.image} alt="" className="w-full aspect-square object-cover" />
                 ) : (

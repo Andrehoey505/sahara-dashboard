@@ -107,7 +107,8 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
         "relative w-11 h-6 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 " +
         (on ? "bg-gradient-to-r from-indigo-500 to-violet-600" : "bg-slate-700")
       }
-    >
+    
+            data-tip="Turn this on or off">
       <span
         className={
           "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200 " +
@@ -264,7 +265,8 @@ export default function SettingsScreen({
               onClick={checkForUpdates}
               disabled={checking}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
+            
+            data-tip="Check GitHub for a newer version of the app">
               <RefreshCw className={"w-4 h-4 " + (checking ? "animate-spin" : "")} />
               {checking ? "Checking…" : "Check for updates"}
             </button>
@@ -378,7 +380,8 @@ export default function SettingsScreen({
         <button
           onClick={onOpenSetup}
           className="mt-4 text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5"
-        >
+        
+            data-tip="Open the full setup">
           <Settings2 className="w-3.5 h-3.5" /> Open the full setup wizard
         </button>
       </Card>
@@ -435,7 +438,8 @@ export default function SettingsScreen({
                   ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-200"
                   : "bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-700/50")
               }
-            >
+            
+            data-tip="Pick this tab">
               {t.label}
             </button>
           ))}
@@ -451,7 +455,8 @@ export default function SettingsScreen({
         <button
           onClick={onOpenSetup}
           className="mt-3 text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5"
-        >
+        
+            data-tip="Change the Spotify credentials">
           <Settings2 className="w-3.5 h-3.5" /> Change Spotify credentials
         </button>
       </Card>

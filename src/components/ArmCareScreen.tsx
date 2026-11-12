@@ -213,7 +213,8 @@ export default function ArmCareScreen() {
         <button
           onClick={add}
           className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-        >
+        
+            data-tip="Save this arm-care entry">
           {saved ? (
             <>
               <CheckCircle2 className="w-4 h-4" /> Saved

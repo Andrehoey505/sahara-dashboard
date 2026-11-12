@@ -87,7 +87,8 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                   onClick={onClose}
                   aria-label="Close full screen player"
                   className="p-2 rounded-lg bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-                >
+                
+            data-tip="Leave full screen">
                   <Minimize2 className="w-4 h-4" />
                 </button>
               </div>
@@ -158,14 +159,16 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                     disabled={busy || !now}
                     aria-label="Previous track"
                     className="p-3 rounded-full bg-slate-800/60 text-slate-300 hover:bg-slate-700/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-                  >
+                  
+            data-tip="Previous track">
                     <SkipBack className="w-6 h-6" />
                   </button>
                   <button
                     onClick={() => onTransport(now?.is_playing ? "pause" : "play")}
                     disabled={busy || !now}
                     className="p-5 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 transition shadow-xl shadow-indigo-500/25"
-                  >
+                  
+            data-tip="Play or pause">
                     {now?.is_playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7" />}
                   </button>
                   <button
@@ -173,7 +176,8 @@ export default function FullScreenPlayer({ open, now, position, onClose, onTrans
                     disabled={busy || !now}
                     aria-label="Next track"
                     className="p-3 rounded-full bg-slate-800/60 text-slate-300 hover:bg-slate-700/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-40 transition-colors"
-                  >
+                  
+            data-tip="Next track">
                     <SkipForward className="w-6 h-6" />
                   </button>
                 </div>

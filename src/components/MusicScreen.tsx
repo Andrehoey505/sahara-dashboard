@@ -86,7 +86,8 @@ export default function MusicScreen({ apiUrl, notify }: Props) {
           onClick={load}
           aria-label="Refresh music state"
           className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-        >
+        
+            data-tip="Reload the player">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>

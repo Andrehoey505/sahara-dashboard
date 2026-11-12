@@ -157,13 +157,15 @@ export default function TicketScreen({ apiUrl, server, servers, notify, onOpenCo
           <button
             onClick={load}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-200 hover:bg-slate-700/60 transition"
-          >
+          
+            data-tip="Reload tickets">
             <RefreshCw className={"w-4 h-4 " + (loading ? "animate-spin" : "")} data-tip="Refresh" />Refresh</button>
           {onOpenConfig && (
             <button
               onClick={onOpenConfig}
               className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-600/30 transition"
-            >
+            
+            data-tip="Ticket panel settings">
               <Settings2 className="w-4 h-4" />
               Ticket settings
             </button>

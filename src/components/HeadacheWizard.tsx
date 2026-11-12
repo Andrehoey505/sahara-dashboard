@@ -106,13 +106,15 @@ export default function HeadacheWizard({ onAccept, onClose }: Props) {
                   <button
                     onClick={() => answer(true)}
                     className="py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 font-medium hover:bg-emerald-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
-                  >
+                  
+            data-tip="Yes to this question">
                     Yes
                   </button>
                   <button
                     onClick={() => answer(false)}
                     className="py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-300 font-medium hover:bg-slate-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/60"
-                  >
+                  
+            data-tip="No to this question">
                     No
                   </button>
                 </div>
@@ -142,7 +144,8 @@ export default function HeadacheWizard({ onAccept, onClose }: Props) {
                   onClick={back}
                   disabled={step === 0}
                   className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 disabled:opacity-30"
-                >
+                
+            data-tip="Back a step">
                   <ChevronLeft className="w-3.5 h-3.5" data-tip="Back" />Back</button>
                 <button
                   onClick={onClose}
@@ -232,19 +235,22 @@ export default function HeadacheWizard({ onAccept, onClose }: Props) {
                 <button
                   onClick={back}
                   className="flex items-center gap-1 px-3 py-2.5 rounded-lg bg-slate-800/60 border border-slate-700 text-sm text-slate-300 hover:bg-slate-700/60"
-                >
+                
+            data-tip="Back a step">
                   <ChevronLeft className="w-4 h-4" data-tip="Back" />Back</button>
                 <button
                   onClick={() => onAccept(result?.matches[0] ?? null, severity)}
                   className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90"
-                >
+                
+            data-tip="Fill the log in from these answers">
                   Use this in my log
                 </button>
               </div>
               <button
                 onClick={() => onAccept(null, severity)}
                 className="w-full text-xs text-slate-500 hover:text-slate-300 flex items-center justify-center gap-1"
-              >
+              
+            data-tip="Close the wizard and type it yourself">
                 Skip and log it myself <ChevronRight className="w-3 h-3" />
               </button>
             </motion.div>

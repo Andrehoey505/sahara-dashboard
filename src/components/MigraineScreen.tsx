@@ -295,14 +295,16 @@ export default function MigraineScreen({ apiUrl }: Props) {
             onClick={openExport}
             className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
             aria-label="Export diary"
-          >
+          
+            data-tip="Download your episodes as a file for your doctor">
             <Download className="w-4 h-4" />
           </button>
           <button
             onClick={load}
             className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
             aria-label="Refresh"
-          >
+          
+            data-tip="Reload your episodes">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
@@ -362,7 +364,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
               onClick={() => setAdding(false)}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
               aria-label="Close"
-            >
+            
+            data-tip="Close without saving">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -408,7 +411,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
                         key={id}
                         onClick={() => toggle(regions, setRegions, id)}
                         className="px-2 py-1 rounded-full text-xs bg-rose-500/20 border border-rose-500/40 text-rose-200 hover:bg-rose-500/30"
-                      >
+                      
+            data-tip="Remove this area">
                         {regionLabel[id] || id} ×
                       </button>
                     ))}
@@ -461,7 +465,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
             <p className="text-xs text-slate-500 mb-2">Type</p>
             <div className="flex flex-wrap gap-1.5">
               {TYPES.map((t) => (
-                <button key={t} onClick={() => setType(t)} className={chip(type === t)}>
+                <button key={t} onClick={() => setType(t)} className={chip(type === t)}
+            data-tip="How bad it is, 1 to 10">
                   {t}
                 </button>
               ))}
@@ -473,7 +478,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
             <p className="text-xs text-slate-500 mb-2">Symptoms</p>
             <div className="flex flex-wrap gap-1.5">
               {SYMPTOMS.map((s) => (
-                <button key={s} onClick={() => toggle(symptoms, setSymptoms, s)} className={chip(symptoms.includes(s))}>
+                <button key={s} onClick={() => toggle(symptoms, setSymptoms, s)} className={chip(symptoms.includes(s))}
+            data-tip="How long it has lasted">
                   {s}
                 </button>
               ))}
@@ -485,7 +491,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
             <p className="text-xs text-slate-500 mb-2">Possible triggers</p>
             <div className="flex flex-wrap gap-1.5">
               {TRIGGERS.map((t) => (
-                <button key={t} onClick={() => toggle(triggers, setTriggers, t)} className={chip(triggers.includes(t))}>
+                <button key={t} onClick={() => toggle(triggers, setTriggers, t)} className={chip(triggers.includes(t))}
+            data-tip="What it feels like">
                   {t}
                 </button>
               ))}
@@ -517,7 +524,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
             onClick={save}
             disabled={saving}
             className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-          >
+          
+            data-tip="Save this episode">
             {saving ? "Saving…" : "Save episode"}
           </button>
         </div>
@@ -563,7 +571,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
                 }
               }}
               className="px-3 py-1.5 rounded-lg text-xs bg-slate-800/60 border border-slate-700 text-slate-400 hover:text-rose-300 hover:bg-rose-500/10"
-            >
+            
+            data-tip="Clear the form">
               Clear
             </button>
             <button
@@ -581,7 +590,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
                 }
               }}
               className="px-3 py-1.5 rounded-lg text-xs bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/30"
-            >
+            
+            data-tip="Save these notes">
               Save notes
             </button>
           </div>
@@ -666,7 +676,8 @@ export default function MigraineScreen({ apiUrl }: Props) {
                     onClick={() => remove(e.id)}
                     className="p-1.5 rounded-lg text-slate-600 hover:text-rose-300 hover:bg-rose-500/10 shrink-0"
                     aria-label="Delete entry"
-                  >
+                  
+            data-tip="Delete this episode">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>

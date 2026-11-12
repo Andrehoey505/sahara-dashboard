@@ -66,7 +66,8 @@ function Toggle({
         "relative w-11 h-6 rounded-full transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 " +
         (on ? "bg-indigo-500" : "bg-slate-700")
       }
-    >
+    
+            data-tip="Turn this setting on or off">
       <span
         className={
           "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all " +
@@ -105,7 +106,8 @@ function ChipPicker({
                 ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-200"
                 : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600")
             }
-          >
+          
+            data-tip="Turn this setting on or off">
             {on && <Check className="w-3 h-3 inline mr-1" />}
             {labelFor(id)}
           </button>
@@ -249,13 +251,15 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
             onClick={load}
             aria-label="Reload settings"
             className="p-2 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-          >
+          
+            data-tip="Reload the settings from the bot">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
             onClick={reset}
             className="px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-300 text-sm hover:bg-slate-700/60 transition-colors"
-          >
+          
+            data-tip="Put every setting back to its default">
             <RotateCcw className="w-4 h-4 inline mr-1.5" />
             Defaults
           </button>
@@ -268,7 +272,8 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
                 ? "bg-indigo-500 text-white hover:bg-indigo-400"
                 : "bg-slate-800/60 text-slate-500 border border-slate-700 cursor-not-allowed")
             }
-          >
+          
+            data-tip="Save these settings to the bot">
             <Save className="w-4 h-4 inline mr-1.5" />
             {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
           </button>

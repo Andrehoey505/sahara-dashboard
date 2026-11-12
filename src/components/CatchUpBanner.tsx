@@ -38,7 +38,8 @@ export default function CatchUpBanner({ flags, since, onDismiss }: Props) {
         onClick={onDismiss}
         aria-label="Dismiss catch-up notice"
         className="p-1.5 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-      >
+      
+            data-tip="Dismiss this summary">
         <X className="w-4 h-4" />
       </button>
     </motion.div>
