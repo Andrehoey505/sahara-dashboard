@@ -687,6 +687,8 @@ export default function App() {
       setContextMessages(null);
       return;
     }
+    // A violation carries a channel name; the bot's context endpoint matches on
+    // id or name, and a name is all a violation has.
     const channel = contextViolation.channel;
     if (!channel) {
       setContextMessages(null);
@@ -700,7 +702,11 @@ export default function App() {
       after: "6",
     });
     fetch(apiUrl + "/api/context?" + params.toString())
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        const body = await r.json().catch(() => null);
+        if (!r.ok) return { error: body?.error || "Couldn't read the conversation." };
+        return body;
+      })
       .then((d) => {
         if (!cancelled) setContextMessages(d);
       })
@@ -894,7 +900,11 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-slate-600">No context available for this message.</p>
+                <p className="text-xs text-slate-500">
+                  {contextMessages?.error
+                    ? contextMessages.error
+                    : "No surrounding messages found for this one."}
+                </p>
               )}
 
               <div className="text-xs text-slate-500 grid grid-cols-2 gap-2">
