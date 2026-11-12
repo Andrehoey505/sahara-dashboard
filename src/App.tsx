@@ -41,6 +41,7 @@ import SettingsScreen from "./components/SettingsScreen";
 import ArmCareScreen from "./components/ArmCareScreen";
 import SleepMode from "./components/SleepMode";
 import MembersScreen from "./components/MembersScreen";
+import ModerationScreen from "./components/ModerationScreen";
 import SetupScreen, { loadSettings, saveSettings, type AppSettings } from "./components/SetupScreen";
 import LockScreen from "./components/LockScreen";
 import MusicScreen from "./components/MusicScreen";
@@ -119,17 +120,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState("");
-  const [modTarget, setModTarget] = useState("");
-  const [modServer, setModServer] = useState("");
-  const [modAction, setModAction] = useState("warn");
-  const [modReason, setModReason] = useState("");
   const [apiUrl, setApiUrl] = useState(localStorage.getItem("sahara_api_url") || "http://localhost:8080");
-  const [modDuration, setModDuration] = useState(10);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [dmTarget, setDmTarget] = useState("");
-  const [dmMessage, setDmMessage] = useState("");
-  const [channelTarget, setChannelTarget] = useState("");
-  const [channelMessage, setChannelMessage] = useState("");
   const [showContext, setShowContext] = useState(false);
   const [contextViolation, setContextViolation] = useState<any>(null);
   const [theme, setTheme] = useState(localStorage.getItem("sahara_theme") || "dark");
@@ -1553,58 +1545,12 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               />
             )}
             {active === "moderation" && (
-              <div className="glass rounded-xl p-4 space-y-4">
-                <h3 className="font-semibold mb-3">Moderation Controls</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">User ID</label>
-                    <input value={modTarget} onChange={(e) => setModTarget(e.target.value)} placeholder="Discord User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Server</label>
-                    <select value={modServer} onChange={(e) => setModServer(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
-                      <option value="">Select server...</option>
-                      {["Babble Playpen", "Bear Café", "Glacy's Tropical", "SocialLink.io Staff"].map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Action</label>
-                    <select value={modAction} onChange={(e) => setModAction(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
-                      <option value="warn">Warn</option>
-                      <option value="mute">Mute</option>
-                      <option value="timeout">Timeout (10 min)</option>
-                      <option value="kick">Kick</option>
-                      <option value="ban">Ban</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Reason</label>
-                    <textarea value={modReason} onChange={(e) => setModReason(e.target.value)} placeholder="Reason for action..." rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 resize-none" />
-                  </div>
-                  <button onClick={async () => {
-                    if (!modTarget || !modServer || !modReason) { notify("Fill in user ID, server, and reason", "error"); return; }
-                    try {
-                      const warnOnly = modAction === "warn";
-                      const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: modAction, target_id: modTarget, server: modServer, reason: modReason, duration: modDuration }) });
-                      const data = await res.json().catch(() => ({}));
-                      if (data.success) { notify(data.action + " applied to " + data.user, "success"); setModTarget(""); setModReason(""); }
-                      else { notify(data.error || "Failed", "error"); }
-                    } catch (e) { notify("Connection failed", "error"); }
-                  }} className="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30 transition" data-tip="Run this action">Execute Action</button>
-                </div>
-                <div className="border-t border-slate-700/50 pt-4">
-                  <h4 className="font-semibold mb-2 text-sm">Send DM to User</h4>
-                  <input value={dmTarget} onChange={(e) => setDmTarget(e.target.value)} placeholder="User ID" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
-                  <textarea value={dmMessage} onChange={(e) => setDmMessage(e.target.value)} placeholder="Message (sent as SocialLink.io Staff)" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={async () => { if (!dmTarget || !dmMessage) { notify("Fill in user ID and message", "error"); return; } try { const res = await fetch(apiUrl + "/api/dm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: dmTarget, message: dmMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("DM sent to " + data.sent_to, "success"); setDmTarget(""); setDmMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-sm hover:bg-indigo-500/30 transition" data-tip="Send this message as a direct message">Send DM</button>
-                </div>
-                <div className="border-t border-slate-700/50 pt-4">
-                  <h4 className="font-semibold mb-2 text-sm">Send Message to Channel</h4>
-                  <input value={channelTarget} onChange={(e) => setChannelTarget(e.target.value)} placeholder="Server/Channel (e.g. Babble Playpen / general)" className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500" />
-                  <textarea value={channelMessage} onChange={(e) => setChannelMessage(e.target.value)} placeholder="Message to send to channel" rows={3} className="w-full px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm mb-2 focus:outline-none focus:border-indigo-500 resize-none" />
-                  <button onClick={async () => { if (!channelTarget || !channelMessage) { notify("Fill in channel and message", "error"); return; } const parts = channelTarget.split("/"); try { const res = await fetch(apiUrl + "/api/channel-message", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ server: parts[0]?.trim(), channel: parts[1]?.trim(), message: channelMessage }) }); const data = await res.json().catch(() => ({})); if (data.success) { notify("Message sent to " + data.channel, "success"); setChannelTarget(""); setChannelMessage(""); } else { notify(data.error || "Failed", "error"); } } catch (e) { notify("Connection failed", "error"); } }} className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-sm hover:bg-purple-500/30 transition" data-tip="Post this message in that channel">Send to Channel</button>
-                </div>
-              </div>
+              <ModerationScreen
+                apiUrl={apiUrl}
+                notify={notify}
+                servers={servers}
+                selectedServer={servers.find((x: any) => x.id === activeServer)?.name || ""}
+              />
             )}
             {active === "music" && <MusicScreen apiUrl={apiUrl} notify={notify} />}
             {active === "trollwatch" && <TrollWatch apiUrl={apiUrl} notify={notify} />}
