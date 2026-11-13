@@ -144,6 +144,42 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
     return () => clearInterval(t);
   }, [config.enabled, loadPosts]);
 
+  // Sleep or hide the app and the relay goes off with it.
+  //
+  // Andre's rule, and the right one: the review list is the only thing standing
+  // between Texan and a public channel. If the app is not there to be looked at,
+  // nothing should be quietly collecting messages in it. This turns the relay off on
+  // the way out rather than relying on him remembering to.
+  //
+  // Deliberately fire-and-forget with keepalive: the window may be going away
+  // mid-request, and a switch that only works while the app is open is no switch.
+  const switchOffQuietly = useCallback(() => {
+    if (!config.enabled) return;
+    try {
+      void fetch(apiUrl + "/api/relay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...config, enabled: false }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
+  }, [apiUrl, config]);
+
+  useEffect(() => {
+    if (!config.enabled) return;
+    const onHide = () => {
+      if (document.visibilityState === "hidden") switchOffQuietly();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", switchOffQuietly);
+    window.addEventListener("beforeunload", switchOffQuietly);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", switchOffQuietly);
+      window.removeEventListener("beforeunload", switchOffQuietly);
+    };
+  }, [config.enabled, switchOffQuietly]);
+
   const save = async (patch: Partial<RelayConfig>) => {
     const next = { ...config, ...patch };
     setConfig(next);
@@ -275,7 +311,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
           <div style={{ fontWeight: 600, fontSize: 14.5 }}>{config.enabled ? "Relay is on" : "Relay is off"}</div>
           <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 2 }}>
             {config.enabled
-              ? "Texan can leave messages for you. Nothing reaches Discord until you approve it."
+              ? "Texan can leave messages for you. Nothing reaches Discord until you approve it. Sleeping or hiding the app turns this off."
               : "Nothing happens at all — no messages stored, nothing posted, not even a row in the database."}
           </div>
         </div>
