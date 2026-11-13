@@ -158,50 +158,14 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
     return () => clearInterval(t);
   }, [config.enabled, loadPosts]);
 
-  // Sleep or hide the app and the relay goes off with it.
+  // The relay stays on until Andre turns it off, and nothing else turns it off.
   //
-  // Andre's rule, and the right one: the review list is the only thing standing
-  // between Texan and a public channel. If the app is not there to be looked at,
-  // nothing should be quietly collecting messages in it. This turns the relay off on
-  // the way out rather than relying on him remembering to.
+  // It used to switch itself off on visibilitychange and on window blur. Both were
+  // wrong: changing screens inside the app is using the app, and clicking another
+  // window is not closing anything. A relay that disarms itself whenever you look
+  // away is a relay you cannot trust to be on when you want it.
   //
-  // Deliberately fire-and-forget with keepalive: the window may be going away
-  // mid-request, and a switch that only works while the app is open is no switch.
-  const switchOffQuietly = useCallback(() => {
-    if (!config.enabled) return;
-    try {
-      void fetch(apiUrl + "/api/relay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...config, enabled: false }),
-        keepalive: true,
-      }).catch(() => {});
-    } catch {}
-  }, [apiUrl, config]);
-
-  useEffect(() => {
-    if (!config.enabled) return;
-
-    // Only these three mean "nobody is looking": the window losing focus to another
-    // APPLICATION, the machine sleeping, and the page actually going away. Switching
-    // tabs inside the app used to count too, which turned the relay off every time
-    // Andre moved between screens — that is not sleep, that is using the app.
-    const onBlur = () => {
-      // Ignore focus moving to something inside this window.
-      if (document.hasFocus()) return;
-      switchOffQuietly();
-    };
-    const onSleep = () => switchOffQuietly();
-
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("pagehide", onSleep);
-    window.addEventListener("beforeunload", onSleep);
-    return () => {
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("pagehide", onSleep);
-      window.removeEventListener("beforeunload", onSleep);
-    };
-  }, [config.enabled, switchOffQuietly]);
+  // Turning it off is one act, and it belongs to the person who turned it on.
 
   const save = async (patch: Partial<RelayConfig>) => {
     const next = { ...config, ...patch };
@@ -351,7 +315,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
           <div style={{ fontWeight: 600, fontSize: 14.5 }}>{config.enabled ? "Relay is on" : "Relay is off"}</div>
           <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 2 }}>
             {config.enabled
-              ? "Texan can leave messages for you. Nothing reaches Discord until you approve it. Switching away from the app or sleeping the Mac turns this off — changing screens inside it does not."
+              ? "Texan can leave messages for you. Nothing reaches Discord until you approve it. It stays on until you switch it off."
               : "Nothing happens at all — no messages stored, nothing posted, not even a row in the database."}
           </div>
         </div>
