@@ -82,6 +82,42 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"pending" | "all">("pending");
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [sent, setSent] = useState("");
+
+  // Writing here is the other half of the relay: bb!asktexan brings a question in, this
+  // sends an answer out. Both land in the same waiting list, so there is one place where
+  // anything that could reach Discord is seen before it does.
+  const sendDraft = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    setSendError("");
+    setSent("");
+    try {
+      const r = await fetch(apiUrl + "/api/relay/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        // A switched-off relay says so in its own words — better than a generic failure.
+        setSendError(d.error || `Couldn't queue that (${r.status}).`);
+        return;
+      }
+      setDraft("");
+      setSent("Queued — it's in the list below waiting for your yes.");
+      notify?.("Queued for approval", "success");
+      loadPosts();
+    } catch {
+      setSendError("Couldn't reach BabbleBot — nothing was queued.");
+    } finally {
+      setSending(false);
+    }
+  };
 
   const loadConfig = useCallback(async () => {
     try {
@@ -377,6 +413,65 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
             Currently {channelName(config.channel)}. The relay can't post until a channel is picked.
           </div>
         )}
+      </section>
+
+
+      {/* ── writing, not just approving ────────────────────────────────── */}
+      <section>
+        <h2 style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--text-dim)", margin: "0 0 8px" }}>
+          Say something
+        </h2>
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid var(--border, rgba(255,255,255,0.1))",
+            background: "rgba(10,12,26,0.45)",
+          }}
+        >
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            maxLength={1900}
+            placeholder={`Type a message for ${channelName(config.channel)}…`}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              borderRadius: 8,
+              border: "1px solid var(--border, rgba(255,255,255,0.12))",
+              background: "rgba(6,8,18,0.6)",
+              color: "var(--text, #e7e9f5)",
+              padding: "9px 11px",
+              fontSize: 13.5,
+              resize: "vertical",
+              fontFamily: "inherit",
+            }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+            <button
+              onClick={sendDraft}
+              disabled={!draft.trim() || sending}
+              title="Put it in the waiting list — it does not post until you approve it"
+              style={{
+                padding: "7px 14px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: !draft.trim() || sending ? "default" : "pointer",
+                opacity: !draft.trim() || sending ? 0.45 : 1,
+                border: "none",
+                color: "#fff",
+                background: "linear-gradient(135deg,#7c6bf5,#a78bfa)",
+              }}
+            >
+              {sending ? "Queuing…" : "Queue it"}
+            </button>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{draft.length}/1900</span>
+            {sent && <span style={{ fontSize: 11.5, color: "#6ee7b7" }}>{sent}</span>}
+            {sendError && <span style={{ fontSize: 11.5, color: "#fca5a5" }}>{sendError}</span>}
+          </div>
+        </div>
       </section>
 
       {/* ── the review list ────────────────────────────────────────────── */}

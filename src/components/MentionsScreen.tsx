@@ -18,8 +18,6 @@ type Props = {
   open: boolean;
   onClose: () => void;
   apiUrl: string;
-  /** Say something through the relay — the message waits for approval before posting. */
-  notify?: (msg: any, type?: string) => void;
   /** Inline: rendered as a page rather than a popup. Same list, same buttons. */
   inline?: boolean;
 };
@@ -34,14 +32,11 @@ type Props = {
  * It works two ways from the same code: a popup from the sleep card, and a page of its
  * own in the nav. A second copy of this list would be a second place to fix.
  */
-export default function MentionsScreen({ open, onClose, apiUrl, notify, inline = false }: Props) {
+export default function MentionsScreen({ open, onClose, apiUrl, inline = false }: Props) {
   const [mentions, setMentions] = useState<Mention[] | null>(null);
   const [error, setError] = useState("");
   const [clearing, setClearing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState("");
-  const [sent, setSent] = useState("");
+
 
   const base = apiUrl.replace(/\/$/, "");
 
@@ -75,36 +70,6 @@ export default function MentionsScreen({ open, onClose, apiUrl, notify, inline =
       .then(() => setMentions([]))
       .catch(() => setError("Couldn't clear the list — nothing was removed."))
       .finally(() => setClearing(false));
-  };
-
-  const sendDraft = () => {
-    const text = draft.trim();
-    if (!text || sending) return;
-    setSending(true);
-    setSendError("");
-    setSent("");
-    fetch(base + "/api/relay/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    })
-      .then(async (r) => ({ ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) }))
-      .then(({ ok, status, data }) => {
-        if (!ok) {
-          // 403 is the switch, and the switch's own words are better than mine.
-          setSendError(
-            status === 403
-              ? data?.error || "The Texan relay is switched off."
-              : data?.error || `Couldn't queue that (${status}).`,
-          );
-          return;
-        }
-        setDraft("");
-        setSent("Queued — it's waiting for your yes in Texan Relay.");
-        notify?.("Queued for approval", "success");
-      })
-      .catch(() => setSendError("Couldn't reach Babblebot — nothing was queued."))
-      .finally(() => setSending(false));
   };
 
   if (!open && !inline) return null;
@@ -149,33 +114,6 @@ export default function MentionsScreen({ open, onClose, apiUrl, notify, inline =
         </div>
       </div>
 
-
-        <div className="mt-4 rounded-xl bg-slate-950/40 p-3 border border-slate-800/60">
-          <p className="text-xs text-slate-400 mb-2">
-            Say something to a server. It waits in Texan Relay until you approve it — nothing
-            posts on its own.
-          </p>
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            maxLength={1900}
-            placeholder="Type the message…"
-            className="w-full rounded-lg bg-slate-900/70 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 resize-y"
-          />
-          <div className="flex items-center gap-2 mt-2">
-            <button
-              onClick={sendDraft}
-              disabled={!draft.trim() || sending}
-              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 text-sm font-semibold hover:opacity-90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition"
-              data-tip="Queue it for your approval">
-              {sending ? "Queuing…" : "Queue it"}
-            </button>
-            <span className="text-[11px] text-slate-500">{draft.length}/1900</span>
-            {sent && <span className="text-[11px] text-emerald-300">{sent}</span>}
-            {sendError && <span className="text-[11px] text-rose-300">{sendError}</span>}
-          </div>
-        </div>
 
       <div className={inline ? "mt-3" : "px-6 pb-6 overflow-y-auto"}>
         {error && <p className="text-sm text-rose-300">{error}</p>}
