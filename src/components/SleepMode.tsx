@@ -20,6 +20,8 @@ type Props = {
   onWake?: () => void;
   /** Opens the log of past nights, in the same popup style. */
   onOpenLog?: () => void;
+  /** Opens the full list of everything said to him while asleep. */
+  onOpenMentions?: () => void;
 };
 
 /**
@@ -53,6 +55,7 @@ export default function SleepMode({
   mentions = [],
   onWake,
   onOpenLog,
+  onOpenMentions,
 }: Props) {
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   if (!open) return null;
@@ -123,6 +126,12 @@ export default function SleepMode({
               </div>
 
               <div className="flex items-center justify-between mt-3">
+                <button
+                  onClick={() => { onClose(); onOpenMentions?.(); }}
+                  className="text-xs text-indigo-300 hover:text-indigo-200 underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 rounded transition-colors"
+                  data-tip="Everything anyone said to you while you slept">
+                  All mentions
+                </button>
                 <button
                   onClick={() => { onClose(); onOpenLog?.(); }}
                   className="text-xs text-slate-400 hover:text-slate-200 underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 rounded transition-colors"
