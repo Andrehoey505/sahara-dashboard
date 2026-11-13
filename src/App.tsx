@@ -51,6 +51,7 @@ import SpotifyScreen from "./components/SpotifyScreen";
 import ActivitiesScreen from "./components/ActivitiesScreen";
 import ReactionRoles from "./components/ReactionRoles";
 import TicketScreen from "./components/TicketScreen";
+import RelayScreen from "./components/RelayScreen";
 import TrollsScreen from "./components/TrollsScreen";
 import AuditLog from "./components/AuditLog";
 import DatabaseScreen from "./components/DatabaseScreen";
@@ -74,6 +75,7 @@ const SERVER_SCOPED = [
   "members",
   "moderation",
   "tickets",
+  "relay",
 ];
 
 export default function App() {
@@ -898,6 +900,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
       items: [
         { id: "config", label: "Server Settings", icon: SlidersHorizontal },
         { id: "tickets", label: "Tickets", icon: Ticket },
+        { id: "relay", label: "Texan Relay", icon: Sparkles },
         { id: "database", label: "Database", icon: Database },
       ],
     },
@@ -1465,6 +1468,10 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               </div>
             )}
           </motion.div>
+        )}
+
+        {active === "relay" && (
+          <RelayScreen apiUrl={apiUrl} servers={servers} selectedServer={selectedServer} notify={notify} />
         )}
 
         {active === "violations" && (
