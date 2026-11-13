@@ -40,6 +40,7 @@ import MigraineScreen from "./components/MigraineScreen";
 import SettingsScreen from "./components/SettingsScreen";
 import ArmCareScreen from "./components/ArmCareScreen";
 import SleepMode from "./components/SleepMode";
+import SleepLog from "./components/SleepLog";
 import MembersScreen from "./components/MembersScreen";
 import ModerationScreen from "./components/ModerationScreen";
 import SetupScreen, { loadSettings, saveSettings, type AppSettings } from "./components/SetupScreen";
@@ -361,6 +362,7 @@ export default function App() {
   const [sleepSince, setSleepSince] = useState<string | null>(null);
   const [sleepMentions, setSleepMentions] = useState<import("./components/CatchUpBanner").AsleepMention[]>([]);
   const [showSleep, setShowSleep] = useState(false);
+  const [showSleepLog, setShowSleepLog] = useState(false);
 
   // The bot is the only one who knows whether Andre is asleep. This app is not: it gets
   // closed, restarted and rebuilt, and a state it remembered itself would start
@@ -1751,6 +1753,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           </div>
         </div>
       )}
+      <SleepLog open={showSleepLog} onClose={() => setShowSleepLog(false)} apiUrl={apiUrl} />
       <SleepMode
         open={showSleep}
         onClose={() => setShowSleep(false)}
@@ -1758,6 +1761,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
         since={sleepSince}
         mentions={sleepMentions}
         onWake={wakeUp}
+        onOpenLog={() => setShowSleepLog(true)}
         onSleep={() => {
           setSleepMode(true);
           notify("Sleep mode on, goodnight 🌙", "success");

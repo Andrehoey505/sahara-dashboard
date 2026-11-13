@@ -18,6 +18,8 @@ type Props = {
   /** Mentions caught during this sleep. */
   mentions?: AsleepMention[];
   onWake?: () => void;
+  /** Opens the log of past nights, in the same popup style. */
+  onOpenLog?: () => void;
 };
 
 /**
@@ -50,6 +52,7 @@ export default function SleepMode({
   since,
   mentions = [],
   onWake,
+  onOpenLog,
 }: Props) {
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   if (!open) return null;
@@ -119,7 +122,16 @@ export default function SleepMode({
                 </ul>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex items-center justify-between mt-3">
+                <button
+                  onClick={() => { onClose(); onOpenLog?.(); }}
+                  className="text-xs text-slate-400 hover:text-slate-200 underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 rounded transition-colors"
+                  data-tip="Every night you've slept, and who asked for you">
+                  Past nights
+                </button>
+              </div>
+
+              <div className="flex gap-3 mt-4">
                 <button
                   onClick={() => {
                     onWake?.();
