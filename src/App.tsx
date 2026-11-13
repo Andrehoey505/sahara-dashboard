@@ -358,6 +358,38 @@ export default function App() {
 
   const isAndre = userId === "264680643013771265";
   const [sleepMode, setSleepMode] = useState(false);
+  const [sleepSince, setSleepSince] = useState<string | null>(null);
+  const [sleepMentions, setSleepMentions] = useState<import("./components/CatchUpBanner").AsleepMention[]>([]);
+  const [showSleep, setShowSleep] = useState(false);
+
+  // The bot is the only one who knows whether Andre is asleep. This app is not: it gets
+  // closed, restarted and rebuilt, and a state it remembered itself would start
+  // disagreeing with the bot the first time either one restarted alone. So the sleep
+  // state is READ from the API on load and written to the API when it changes.
+  const loadSleepState = React.useCallback(() => {
+    fetch(apiUrl.replace(/\/$/, "") + "/api/sleep")
+      .then((r) => r.json())
+      .then((d) => {
+        setSleepMode(d?.sleeping === true);
+        setSleepSince(d?.since || null);
+        // Mentions caught during that sleep, so reopening the Mac tomorrow shows the
+        // same night rather than an empty box.
+        if (d?.sleeping === true) {
+          fetch(apiUrl.replace(/\/$/, "") + "/api/mentions" + (d.since ? `?since=${encodeURIComponent(d.since)}` : ""))
+            .then((r) => r.json())
+            .then((m) => setSleepMentions(Array.isArray(m?.mentions) ? m.mentions : []))
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [apiUrl]);
+
+  React.useEffect(() => { loadSleepState(); }, [loadSleepState]);
+  React.useEffect(() => {
+    const onFocus = () => loadSleepState();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [loadSleepState]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   // Sleep mode: shown before the Mac is closed. Posts to the bot so anything
   // missed overnight can be surfaced on wake.
@@ -397,7 +429,7 @@ export default function App() {
     })();
   }, []);
   const [showSetup, setShowSetup] = useState(false);
-  const [showSleep, setShowSleep] = useState(false);
+
   const [catchUp, setCatchUp] = useState<{
     flags: number;
     since?: string | null;
@@ -545,6 +577,37 @@ export default function App() {
     });
     armToastTimer(id, type === "error" || type === "violation" ? 6000 : 3200);
   };
+
+  /** Wake up: tell the bot, then show and read out whatever piled up. */
+  const wakeUp = React.useCallback(() => {
+    setSleepMode(false);
+    notify("Welcome back", "success");
+    if (soundEnabled) playSound("wake");
+    fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sleeping: false }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        const cu = d?.catch_up;
+        const mentions = Array.isArray(cu?.mentions) ? cu.mentions : [];
+        setSleepSince(null);
+        setSleepMentions([]);
+        if (cu && (cu.flags > 0 || mentions.length > 0)) {
+          setCatchUp({ flags: cu.flags || 0, since: cu.since, mentions });
+          if (settings.ttsAsleepMentions !== false && mentions.length > 0) {
+            const n = mentions.length;
+            speak(
+              n === 1
+                ? `${mentions[0].author_name} mentioned you while you were asleep.`
+                : `${n} people mentioned you while you were asleep.`,
+            );
+          }
+        }
+      })
+      .catch(() => {});
+  }, [apiUrl, notify, soundEnabled, settings.ttsAsleepMentions]);
 
   useEffect(() => {
     if (!selectedServer || !connected) return;
@@ -1179,36 +1242,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             if (!sleepMode) {
               setShowSleep(true);
             } else {
-              setSleepMode(false);
-              notify("Welcome back", "success");
-              if (soundEnabled) playSound("wake");
-              fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sleeping: false }),
-              })
-                .then((r) => r.json())
-                .then((d) => {
-                  const cu = d?.catch_up;
-                  const mentions = Array.isArray(cu?.mentions) ? cu.mentions : [];
-                  // Show the card if EITHER happened: mentions are the whole point of
-                  // the morning, and gating on flags alone meant a night full of
-                  // people asking for him showed nothing at all.
-                  if (cu && (cu.flags > 0 || mentions.length > 0)) {
-                    setCatchUp({ flags: cu.flags || 0, since: cu.since, mentions });
-                    // Read it aloud, if he has asked for that. One sentence, not a
-                    // reading of every message: the card is there for the detail.
-                    if (settings.ttsAsleepMentions !== false && mentions.length > 0) {
-                      const n = mentions.length;
-                      speak(
-                        n === 1
-                          ? `${mentions[0].author_name} mentioned you while you were asleep.`
-                          : `${n} people mentioned you while you were asleep.`,
-                      );
-                    }
-                  }
-                })
-                .catch(() => {});
+              wakeUp();
             }
           }} className={"mt-2 w-full text-xs py-1 rounded transition " + (sleepMode ? "bg-amber-500/20 text-amber-300" : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50")}
             data-tip="Put the bot to sleep or wake it up">{sleepMode ? "☀️ Wake up" : "🌙 Going to sleep"}</button>
@@ -1720,6 +1754,10 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
       <SleepMode
         open={showSleep}
         onClose={() => setShowSleep(false)}
+        sleeping={sleepMode}
+        since={sleepSince}
+        mentions={sleepMentions}
+        onWake={wakeUp}
         onSleep={() => {
           setSleepMode(true);
           notify("Sleep mode on, goodnight 🌙", "success");
