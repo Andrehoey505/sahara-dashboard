@@ -12,6 +12,7 @@ import {
   FileText,
   Settings,
   Sparkles,
+  MessageCircle,
   Bell,
   Search,
   ChevronRight,
@@ -78,6 +79,7 @@ const SERVER_SCOPED = [
   "moderation",
   "tickets",
   "relay",
+  "mentions",
 ];
 
 export default function App() {
@@ -977,6 +979,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
         { id: "config", label: "Server Settings", icon: SlidersHorizontal },
         { id: "tickets", label: "Tickets", icon: Ticket },
         { id: "relay", label: "Texan Relay", icon: Sparkles },
+        { id: "mentions", label: "Mentions", icon: MessageCircle },
         { id: "database", label: "Database", icon: Database },
       ],
     },
@@ -1537,6 +1540,10 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           <RelayScreen apiUrl={apiUrl} servers={servers} selectedServer={selectedServer} notify={notify} />
         )}
 
+        {active === "mentions" && (
+          <MentionsScreen inline open onClose={() => {}} apiUrl={apiUrl} />
+        )}
+
         {active === "violations" && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center gap-3 mb-4">
@@ -1761,6 +1768,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
         </div>
       )}
       <MentionsScreen open={showMentions} onClose={() => setShowMentions(false)} apiUrl={apiUrl} />
+
       <SleepLog open={showSleepLog} onClose={() => setShowSleepLog(false)} apiUrl={apiUrl} />
       <SleepMode
         open={showSleep}
