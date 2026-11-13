@@ -1541,7 +1541,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
         )}
 
         {active === "mentions" && (
-          <MentionsScreen inline open onClose={() => {}} apiUrl={apiUrl} />
+          <MentionsScreen inline open onClose={() => {}} apiUrl={apiUrl} notify={notify} />
         )}
 
         {active === "violations" && (
@@ -1767,7 +1767,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           </div>
         </div>
       )}
-      <MentionsScreen open={showMentions} onClose={() => setShowMentions(false)} apiUrl={apiUrl} />
+      <MentionsScreen open={showMentions} onClose={() => setShowMentions(false)} apiUrl={apiUrl} notify={notify} />
 
       <SleepLog open={showSleepLog} onClose={() => setShowSleepLog(false)} apiUrl={apiUrl} />
       <SleepMode

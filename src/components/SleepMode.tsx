@@ -43,7 +43,6 @@ const SELF_CARE = [
   { id: "teeth", label: "Brush your teeth", Icon: Brush },
   { id: "symbicort", label: "Symbicort — 2 puffs", Icon: Pill },
   { id: "electrolytes", label: "Electrolytes", Icon: Droplets },
-  { id: "sit", label: "Sit on the edge of the bed for 30s before standing", Icon: Sparkles },
 ];
 
 export default function SleepMode({
