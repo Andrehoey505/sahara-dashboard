@@ -398,7 +398,11 @@ export default function App() {
   }, []);
   const [showSetup, setShowSetup] = useState(false);
   const [showSleep, setShowSleep] = useState(false);
-  const [catchUp, setCatchUp] = useState<{ flags: number; since?: string | null } | null>(null);
+  const [catchUp, setCatchUp] = useState<{
+    flags: number;
+    since?: string | null;
+    mentions?: import("./components/CatchUpBanner").AsleepMention[];
+  } | null>(null);
   // Seed from cache only if it is recent: a stale baseline would report a drop
   // that already happened, or hide one that just did.
   const _cachedWaits = (() => {
@@ -1185,8 +1189,23 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               })
                 .then((r) => r.json())
                 .then((d) => {
-                  if (d?.catch_up?.flags > 0) {
-                    setCatchUp({ flags: d.catch_up.flags, since: d.catch_up.since });
+                  const cu = d?.catch_up;
+                  const mentions = Array.isArray(cu?.mentions) ? cu.mentions : [];
+                  // Show the card if EITHER happened: mentions are the whole point of
+                  // the morning, and gating on flags alone meant a night full of
+                  // people asking for him showed nothing at all.
+                  if (cu && (cu.flags > 0 || mentions.length > 0)) {
+                    setCatchUp({ flags: cu.flags || 0, since: cu.since, mentions });
+                    // Read it aloud, if he has asked for that. One sentence, not a
+                    // reading of every message: the card is there for the detail.
+                    if (settings.ttsAsleepMentions !== false && mentions.length > 0) {
+                      const n = mentions.length;
+                      speak(
+                        n === 1
+                          ? `${mentions[0].author_name} mentioned you while you were asleep.`
+                          : `${n} people mentioned you while you were asleep.`,
+                      );
+                    }
                   }
                 })
                 .catch(() => {});
@@ -1215,6 +1234,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           <div className="mb-4">
             <CatchUpBanner
               flags={catchUp.flags}
+              mentions={catchUp.mentions}
               since={catchUp.since}
               onDismiss={() => setCatchUp(null)}
             />

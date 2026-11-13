@@ -27,6 +27,7 @@ export type AppSettings = {
   ttsEdDrop: boolean;
   edWaitsEnabled: boolean;
   ttsNewMember: boolean;
+  ttsAsleepMentions?: boolean;
   ttsVoice: string;
 };
 
@@ -38,6 +39,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ttsEdDrop: true,
   edWaitsEnabled: true,
   ttsNewMember: false,
+  ttsAsleepMentions: true,
   ttsVoice: "calm",
 };
 
@@ -439,6 +441,7 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                   {[
                     { key: "ttsEdDrop" as const, text: "Emergency department wait drops", dep: "edWaitsEnabled" as const },
                     { key: "ttsNewMember" as const, text: "New member joins" },
+                    { key: "ttsAsleepMentions" as const, text: "Mentions while you slept" },
                   ].map(({ key, text, dep }) => (
                     <label
                       key={key}

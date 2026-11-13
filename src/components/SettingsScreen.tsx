@@ -420,6 +420,13 @@ export default function SettingsScreen({
             onChange={(on) => onSaveSettings({ ...settings, ttsNewMember: on })}
           />
         </Row>
+        <Row label="Mentions while you slept">
+          <Switch
+            on={settings.ttsAsleepMentions ?? true}
+            label="Mentions while you slept"
+            onChange={(on) => onSaveSettings({ ...settings, ttsAsleepMentions: on })}
+          />
+        </Row>
       </Card>
 
       <Card icon={Palette} title="Appearance" data-tip="Appearance" blurb="How the app looks" tone="text-fuchsia-300">
