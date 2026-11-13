@@ -363,6 +363,7 @@ export default function App() {
   const [sleepMentions, setSleepMentions] = useState<import("./components/CatchUpBanner").AsleepMention[]>([]);
   const [showSleep, setShowSleep] = useState(false);
   const [showSleepLog, setShowSleepLog] = useState(false);
+  const [lastWokeAt, setLastWokeAt] = useState<string | null>(null);
 
   // The bot is the only one who knows whether Andre is asleep. This app is not: it gets
   // closed, restarted and rebuilt, and a state it remembered itself would start
@@ -596,6 +597,10 @@ export default function App() {
         const mentions = Array.isArray(cu?.mentions) ? cu.mentions : [];
         setSleepSince(null);
         setSleepMentions([]);
+        // woke_at lives at the top level of the response, not inside catch_up. Reading
+        // it from the wrong place gave an undefined end time for the night, which the
+        // log then silently dropped.
+        setLastWokeAt(d?.woke_at || null);
         if (cu && (cu.flags > 0 || mentions.length > 0)) {
           setCatchUp({ flags: cu.flags || 0, since: cu.since, mentions });
           if (settings.ttsAsleepMentions !== false && mentions.length > 0) {
