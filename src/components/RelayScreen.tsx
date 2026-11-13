@@ -181,16 +181,25 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
 
   useEffect(() => {
     if (!config.enabled) return;
-    const onHide = () => {
-      if (document.visibilityState === "hidden") switchOffQuietly();
+
+    // Only these three mean "nobody is looking": the window losing focus to another
+    // APPLICATION, the machine sleeping, and the page actually going away. Switching
+    // tabs inside the app used to count too, which turned the relay off every time
+    // Andre moved between screens — that is not sleep, that is using the app.
+    const onBlur = () => {
+      // Ignore focus moving to something inside this window.
+      if (document.hasFocus()) return;
+      switchOffQuietly();
     };
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", switchOffQuietly);
-    window.addEventListener("beforeunload", switchOffQuietly);
+    const onSleep = () => switchOffQuietly();
+
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("pagehide", onSleep);
+    window.addEventListener("beforeunload", onSleep);
     return () => {
-      document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", switchOffQuietly);
-      window.removeEventListener("beforeunload", switchOffQuietly);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("pagehide", onSleep);
+      window.removeEventListener("beforeunload", onSleep);
     };
   }, [config.enabled, switchOffQuietly]);
 
@@ -237,6 +246,22 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
     }
   };
 
+  const remove = async (id: string) => {
+    setBusy(id + "delete");
+    try {
+      const r = await fetch(apiUrl + "/api/relay/pending/" + encodeURIComponent(id), { method: "DELETE" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `the bot answered ${r.status}`);
+      notify("Deleted — the message is gone from the database entirely", "success", { sound: false });
+      await loadPosts();
+    } catch (e) {
+      notify("Couldn't delete it — " + (e instanceof Error ? e.message : String(e)), "error");
+      await loadPosts();
+    } finally {
+      setBusy("");
+    }
+  };
+
   const serverName = (id: string) => servers.find((s) => s.id === id)?.name || id || "—";
   const channelName = (id: string) => channels.find((c) => c.id === id)?.name || id || "not set";
   const pendingCount = posts.filter((p) => p.status === "pending").length;
@@ -256,7 +281,8 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: -0.3 }}>Texan relay</h1>
         <p style={{ margin: "6px 0 0", color: "var(--text-dim)", fontSize: 13.5, lineHeight: 1.5 }}>
           Lets Texan answer in a channel as BabbleBot — openly labelled, never posing as a member.
-          Every message waits here for your yes first.
+          Every message waits here for your yes first. Bin keeps a record that it was stopped;
+          Delete removes it from the database entirely.
         </p>
       </header>
 
@@ -325,7 +351,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
           <div style={{ fontWeight: 600, fontSize: 14.5 }}>{config.enabled ? "Relay is on" : "Relay is off"}</div>
           <div style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 2 }}>
             {config.enabled
-              ? "Texan can leave messages for you. Nothing reaches Discord until you approve it. Sleeping or hiding the app turns this off."
+              ? "Texan can leave messages for you. Nothing reaches Discord until you approve it. Switching away from the app or sleeping the Mac turns this off — changing screens inside it does not."
               : "Nothing happens at all — no messages stored, nothing posted, not even a row in the database."}
           </div>
         </div>
@@ -498,6 +524,14 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
                         style={{ ...btn, background: "transparent", color: "#fca5a5", borderColor: "rgba(248,113,113,0.35)" }}
                       >
                         Bin it
+                      </button>
+                      <button
+                        onClick={() => void remove(p.id)}
+                        disabled={busy === p.id + "delete"}
+                        title="Remove it from the database entirely — the words are gone, not just marked as binned"
+                        style={{ ...btn, background: "transparent", color: "var(--text-dim)", borderColor: "var(--border, rgba(255,255,255,0.12))" }}
+                      >
+                        {busy === p.id + "delete" ? "Deleting…" : "Delete"}
                       </button>
                     </div>
                   )}
