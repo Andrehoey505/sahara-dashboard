@@ -44,6 +44,7 @@ type Channel = {
   name: string;
   category?: string | null;
   category_id?: string | null;
+  type?: string;
 };
 
 type Props = {
@@ -75,6 +76,7 @@ function when(iso: string): string {
 export default function RelayScreen({ apiUrl, servers, selectedServer, notify }: Props) {
   const [config, setConfig] = useState<RelayConfig>({ enabled: false, server: "", channel: "", last_seen: "" });
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelError, setChannelError] = useState("");
   const [posts, setPosts] = useState<PendingPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string>("");
@@ -125,9 +127,21 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
     (async () => {
       try {
         const r = await fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server));
-        if (!r.ok) return;
-        const data = await r.json();
-        setChannels(Array.isArray(data.channels) ? data.channels : []);
+        const data = await r.json().catch(() => null);
+        if (!r.ok) {
+          // Say WHY, rather than showing an empty dropdown that looks like a server
+          // with no channels.
+          setChannelError(
+            (data && (data.error || data.message)) || `the bot answered ${r.status}`,
+          );
+          setChannels([]);
+          return;
+        }
+        // The bot returns a bare array. Accept the wrapped shape too, because a
+        // silent empty list is indistinguishable from a server with no channels.
+        const list = Array.isArray(data) ? data : Array.isArray(data?.channels) ? data.channels : [];
+        setChannels(list.filter((c: Channel) => !c.type || c.type === "text"));
+        setChannelError(list.length === 0 ? "the bot returned no text channels for this server" : "");
       } catch {
         setChannels([]);
       }
@@ -358,6 +372,11 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
           </label>
         </div>
 
+        {channelError && (
+          <div style={{ marginTop: 8, fontSize: 12.5, color: "#f0b429" }}>
+            Couldn't load the channel list: {channelError}
+          </div>
+        )}
         {config.channel && !channels.some((c) => c.id === config.channel) && channels.length > 0 && (
           <div style={{ marginTop: 8, fontSize: 12.5, color: "#f0b429" }}>
             That channel no longer exists in {serverName(config.server)} — pick another or the relay can't post.
