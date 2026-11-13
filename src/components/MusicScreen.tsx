@@ -17,6 +17,7 @@ import {
   Trash2,
   Loader2,
   ChevronDown,
+  Search,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 
@@ -68,6 +69,18 @@ const fmtDuration = (secs?: number) => {
   return `${m}:${String(s).padStart(2, "0")}`;
 };
 
+/** Wait for typing to stop before asking YouTube anything. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
+
+type SearchHit = { title: string; url: string; duration: number; uploader: string };
+
 export default function MusicScreen({ apiUrl, notify, userId, servers, selectedServer }: Props) {
   const [server, setServer] = useState(selectedServer || servers[0]?.name || "");
   const [state, setState] = useState<QueueState | null>(null);
@@ -78,6 +91,10 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
   const [newName, setNewName] = useState("");
   const [openPlaylist, setOpenPlaylist] = useState<string | null>(null);
   const [addingTo, setAddingTo] = useState<{ playlist: string; query: string } | null>(null);
+  const [search, setSearch] = useState("");
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchFor, setSearchFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedServer && selectedServer !== server) setServer(selectedServer);
@@ -280,6 +297,72 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     }
   };
 
+  const debouncedSearch = useDebounced(search, 450);
+
+  useEffect(() => {
+    const q = debouncedSearch.trim();
+    if (q.length < 2) {
+      setHits([]);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    fetch(apiUrl + "/api/music/search?q=" + encodeURIComponent(q) + "&limit=8")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d.error) {
+          setHits([]);
+        } else {
+          setHits(Array.isArray(d.results) ? d.results : []);
+        }
+      })
+      .catch(() => !cancelled && setHits([]))
+      .finally(() => !cancelled && setSearching(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [apiUrl, debouncedSearch]);
+
+  /** Queue the exact video somebody chose — not a search that might pick another. */
+  const playHit = async (hit: SearchHit) => {
+    setBusy("play-" + hit.url);
+    try {
+      const res = await fetch(apiUrl + "/api/music/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server, query: hit.url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && !data.error) {
+        notify(data.started ? `Playing ${hit.title}` : `Queued ${hit.title}`, "success");
+        setSearch("");
+        setHits([]);
+        loadState();
+      } else {
+        notify(data.error || "Could not queue that", "error");
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const addHitToPlaylist = async (hit: SearchHit) => {
+    if (!searchFor) return;
+    setBusy("add-" + hit.url);
+    try {
+      // The URL, not the title: a title search can land on a different upload, and
+      // "the version I picked" is the whole point of showing the list.
+      await playlistAction("add", { name: searchFor, query: hit.url });
+      notify(`Added ${hit.title}`, "success");
+      setSearchFor(null);
+      setSearch("");
+      setHits([]);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Server */}
@@ -414,25 +497,81 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
           <Plus className="w-4 h-4 text-emerald-300" />
           <h3 className="font-semibold text-sm">Add to the queue</h3>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && hits.length > 0) playHit(hits[0]);
+            }}
+            placeholder="Search YouTube — pick the exact version you want"
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-emerald-500"
+            data-tip="Type a few letters and pick from the results. A link still works too — paste it and press Enter."
+          />
+          {searching && <Loader2 className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 animate-spin" />}
+        </div>
+
+        {search.trim().length >= 2 && (
+          <div className="mt-2 rounded-xl bg-slate-900/50 border border-slate-700/60 overflow-hidden">
+            {hits.length === 0 && !searching && (
+              <p className="px-3 py-3 text-xs text-slate-500">
+                Nothing came back. If you know the exact video, paste its link instead.
+              </p>
+            )}
+            {hits.map((hit) => (
+              <div
+                key={hit.url}
+                className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate">{hit.title}</p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {hit.uploader}
+                    {hit.duration ? ` · ${fmtDuration(hit.duration)}` : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => playHit(hit)}
+                  disabled={busy === "play-" + hit.url}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-200 text-xs hover:bg-emerald-500/30 transition disabled:opacity-50"
+                  data-tip="Queue this exact video"
+                >
+                  {busy === "play-" + hit.url ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  Play
+                </button>
+                <button
+                  onClick={() => addHitToPlaylist(hit)}
+                  disabled={busy === "add-" + hit.url}
+                  className="p-1.5 rounded-lg bg-purple-500/15 text-purple-200 text-xs hover:bg-purple-500/25 transition disabled:opacity-50"
+                  data-tip="Add this exact video to a playlist"
+                >
+                  {busy === "add-" + hit.url ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 mt-2">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") addSong();
             }}
-            placeholder="Song name or a YouTube link"
-            className="flex-1 min-w-[220px] px-3 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-emerald-500"
-            data-tip="The bot looks this up on YouTube and adds what it finds"
+            placeholder="…or paste a YouTube link"
+            className="flex-1 min-w-[200px] px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-xs focus:outline-none focus:border-emerald-500"
+            data-tip="A link always plays that exact video — no searching involved"
           />
           <button
             onClick={addSong}
             disabled={busy === "add"}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-200 text-sm hover:bg-emerald-500/30 transition disabled:opacity-50"
-            data-tip="Queue this song at the end, without interrupting what is playing"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-700/50 text-slate-200 text-xs hover:bg-slate-700 transition disabled:opacity-50"
+            data-tip="Queue whatever is in the box, as a search if it is a name and exactly if it is a link"
           >
-            {busy === "add" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Queue it
+            {busy === "add" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            Queue
           </button>
         </div>
         {!canControl && state?.bot_channel && (
@@ -583,9 +722,71 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
                         data-tip="The bot looks this up and stores what it finds"
                       />
                       <button
+                        onClick={() => {
+                          // Switch this playlist's add box over to the search picker.
+                          setSearchFor(p.name);
+                          setAddingTo(null);
+                          setSearch("");
+                          setHits([]);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-purple-500/20 text-purple-200 text-xs"
+                        data-tip="Pick the exact version from a search instead of trusting the first hit"
+                      >
+                        Search…
+                      </button>
+                      <button
                         onClick={() => setAddingTo(null)}
                         className="px-2.5 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 text-xs"
                         data-tip="Stop adding songs"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  )}
+
+                  {searchFor === p.name && (
+                    <div className="px-3 pb-3 space-y-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          autoFocus
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder={`Search YouTube to add to "${p.name}"`}
+                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-900/60 border border-purple-500/40 text-sm focus:outline-none focus:border-purple-500"
+                          data-tip="Pick the exact version — a link also works"
+                        />
+                      </div>
+                      {hits.map((hit) => (
+                        <div key={hit.url} className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs truncate">{hit.title}</p>
+                            <p className="text-[10px] text-slate-500 truncate">
+                              {hit.uploader}
+                              {hit.duration ? ` · ${fmtDuration(hit.duration)}` : ""}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => addHitToPlaylist(hit)}
+                            disabled={busy === "add-" + hit.url}
+                            className="px-2 py-1 rounded-lg bg-purple-500/20 text-purple-200 text-[11px] hover:bg-purple-500/30 disabled:opacity-50"
+                            data-tip="Add this exact video to the playlist"
+                          >
+                            {busy === "add-" + hit.url ? "…" : "Add"}
+                          </button>
+                        </div>
+                      ))}
+                      {search.trim().length >= 2 && hits.length === 0 && !searching && (
+                        <p className="text-[11px] text-slate-500">Nothing found — paste a link instead.</p>
+                      )}
+                      <button
+                        onClick={() => {
+                          setSearchFor(null);
+                          setSearch("");
+                          setHits([]);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-300 text-[11px]"
+                        data-tip="Close the search"
                       >
                         Done
                       </button>
