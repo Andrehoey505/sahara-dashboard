@@ -31,7 +31,6 @@ export const FALLBACK_SCHEMA: Schema = {
     goodbye_message: "",
     hitl_enabled: true,
     troll_watch_enabled: true,
-    tickets_enabled: false,
     ticket_category: "",
     ticket_staff_role: "",
     ticket_panel_channel: "",
@@ -47,7 +46,6 @@ export const FALLBACK_SCHEMA: Schema = {
     goodbye_message: "Goodbye message",
     hitl_enabled: "Approve before acting",
     troll_watch_enabled: "Watch suspicious joins",
-    tickets_enabled: "Tickets",
     ticket_category: "Ticket category",
     ticket_staff_role: "Ticket staff role",
     ticket_panel_channel: "Ticket panel channel",
@@ -59,8 +57,10 @@ export const FALLBACK_SCHEMA: Schema = {
     logging: ["log_channel", "log_events"],
     welcome: ["welcome_channel", "welcome_message", "goodbye_message"],
     automod: ["hitl_enabled", "troll_watch_enabled"],
+    // tickets_enabled used to head this list. Nothing respected it — each ticket
+    // type has its own switch on the Tickets screen — so it has been removed from
+    // the bot and from here rather than left as a toggle that changes nothing.
     tickets: [
-      "tickets_enabled",
       "ticket_category",
       "ticket_staff_role",
       "ticket_panel_channel",
@@ -73,7 +73,6 @@ export const FALLBACK_SCHEMA: Schema = {
   bool_keys: [
     "hitl_enabled",
     "troll_watch_enabled",
-    "tickets_enabled",
     "ticket_transcript",
   ],
   list_keys: ["log_events"],
