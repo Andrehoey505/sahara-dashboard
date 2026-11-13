@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ShieldAlert, Plus, Trash2, RefreshCw, Search, X } from "lucide-react";
+import { ShieldAlert, Plus, Trash2, RefreshCw, Search, X, UserRoundSearch, Loader2 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { formatShort } from "../lib/time";
 
@@ -53,6 +53,27 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const refreshNames = async () => {
+    setBusy("names");
+    try {
+      const res = await fetch(apiUrl + "/api/trolls/refresh-names", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        const bits = [`${data.updated} name${data.updated === 1 ? "" : "s"} updated`];
+        if (data.unchanged) bits.push(`${data.unchanged} already right`);
+        if (data.missing?.length) bits.push(`${data.missing.length} Discord no longer knows (kept)`);
+        notify(bits.join(" · "), "success");
+        load();
+      } else {
+        notify(data.error || `Couldn't refresh the names (HTTP ${res.status})`, "error");
+      }
+    } catch {
+      notify("Connection failed — is the bot running?", "error");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const add = async () => {
     const id = newId.trim();
@@ -159,6 +180,15 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
+            onClick={refreshNames}
+            disabled={busy === "names"}
+            aria-label="Look every troll's name up again"
+            className="p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300 hover:bg-slate-700/60 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
+            data-tip="Look every entry's name up in Discord again — fills in blanks and catches people who changed their username. Never removes anyone."
+          >
+            {busy === "names" ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserRoundSearch className="w-4 h-4" />}
+          </button>
+          <button
             onClick={() => setShowHistory((v) => !v)}
             className={
               "px-3 py-2 rounded-lg text-sm border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 " +
@@ -200,7 +230,8 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
                 id="troll-id"
                 value={newId}
                 onChange={(e) => setNewId(e.target.value)}
-                placeholder="Right-click a user → Copy ID"
+                placeholder="e.g. 264680643013771265"
+                data-tip="Developer Mode on, then right-click the name → Copy User ID. The name is looked up from the id when you add them."
                 spellCheck={false}
                 className={field}
               />

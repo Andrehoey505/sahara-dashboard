@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Ticket,
   Plus,
@@ -10,12 +10,16 @@ import {
   ShieldCheck,
   Loader2,
   Send,
-  ChevronDown,
   HelpCircle,
-  Copy,
-  Check,
+  Search,
   AlertTriangle,
   RotateCcw,
+  CheckCircle2,
+  FolderOpen,
+  UserCheck,
+  MessageSquare,
+  ClipboardList,
+  ChevronDown,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 
@@ -24,8 +28,11 @@ import { motionTokens } from "../lib/design";
  *
  * A server owns a list of ticket types. Each type is a whole ticket system in
  * miniature: what the panel says, what the button says, where the channel lands,
- * who can see it, and what the person is asked before the channel opens. This
- * screen edits that list and posts the panels.
+ * who can see it, and what the person is asked before the channel opens.
+ *
+ * The screen is a list of types on the left and the selected type's settings on
+ * the right. Before, every type was expanded at once and a server with six types
+ * was six screens of identical inputs with no way to tell which was which.
  *
  * Two rules the API enforces and this screen has to respect rather than discover
  * at the last moment:
@@ -97,7 +104,10 @@ const keyFrom = (label: string) =>
     .replace(/^_|_$/g, "")
     .slice(0, 24) || "question";
 
-export default function TicketScreen({ apiUrl, notify, servers, selectedServer, userId }: Props) {
+const inputCls =
+  "w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500";
+
+export default function TicketScreen({ apiUrl, notify, servers, selectedServer }: Props) {
   const [server, setServer] = useState(selectedServer || servers[0]?.name || "");
   const [types, setTypes] = useState<TicketType[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -107,9 +117,9 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
-  const [open, setOpen] = useState<number | null>(0);
+  const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [showTickets, setShowTickets] = useState(false);
 
   useEffect(() => {
     if (selectedServer && selectedServer !== server) setServer(selectedServer);
@@ -128,9 +138,13 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
       if (tData.error) {
         setError(tData.error);
         setTypes([]);
+        setSelected(null);
       } else {
-        setTypes(Array.isArray(tData.types) ? tData.types : []);
+        const list: TicketType[] = Array.isArray(tData.types) ? tData.types : [];
+        setTypes(list);
         setDirty(false);
+        // keep the selection if it still exists, else land on the first one
+        setSelected((prev) => (prev && list.some((t) => t.id === prev) ? prev : list[0]?.id ?? null));
       }
       const kData = await kRes.json().catch(() => ({}));
       setTickets(Array.isArray(kData.tickets) ? kData.tickets : []);
@@ -165,10 +179,12 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
     loadChannels();
   }, [load, loadChannels]);
 
-  const guild = useMemo(() => servers.find((s) => s.name === server || String(s.id) === String(server)), [servers, server]);
-  const categories = useMemo(() => channels.filter((c) => c.type === 4 || c.type === "category"), [channels]);
-  const textChannels = useMemo(() => channels.filter((c) => c.type === 0 || c.type === "text"), [channels]);
-
+  const guild = useMemo(
+    () => servers.find((s) => s.name === server || String(s.id) === String(server)),
+    [servers, server]
+  );
+  const categories = useMemo(() => channels.filter((c) => c.type === "category" || c.type === 4), [channels]);
+  const textChannels = useMemo(() => channels.filter((c) => c.type === "text" || c.type === 0), [channels]);
 
   const mine = useMemo(
     () => tickets.filter((t) => String(t.guild_id) === String(guild?.id)),
@@ -176,18 +192,19 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
   );
   const openTickets = mine.filter((t) => t.status === "open");
 
-  const update = (index: number, patch: Partial<TicketType>) => {
-    setTypes((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
+  const index = types.findIndex((t) => t.id === selected);
+  const current = index >= 0 ? types[index] : null;
+
+  const update = (i: number, patch: Partial<TicketType>) => {
+    setTypes((prev) => prev.map((t, j) => (j === i ? { ...t, ...patch } : t)));
     setDirty(true);
   };
 
-  const updateQuestion = (index: number, qIndex: number, patch: Partial<Question>) => {
+  const updateQuestion = (i: number, qi: number, patch: Partial<Question>) => {
     setTypes((prev) =>
-      prev.map((t, i) => {
-        if (i !== index) return t;
-        const questions = t.questions.map((q, j) => (j === qIndex ? { ...q, ...patch } : q));
-        return { ...t, questions };
-      })
+      prev.map((t, j) =>
+        j === i ? { ...t, questions: t.questions.map((q, k) => (k === qi ? { ...q, ...patch } : q)) } : t
+      )
     );
     setDirty(true);
   };
@@ -237,6 +254,29 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
   };
 
   const channelName = (id: string) => channels.find((c) => String(c.id) === String(id))?.name;
+  const categoryName = (id: string) => categories.find((c) => String(c.id) === String(id))?.name;
+  const roleName = (id: string) => roles.find((r: any) => String(r.id) === String(id))?.name;
+
+  // A type is ready to post when it has somewhere to post and somewhere to put the
+  // channel. Saying so on the row means the problem is visible before the button.
+  const warningsFor = (t: TicketType) => {
+    const w: string[] = [];
+    if (!t.panel_channel) w.push("no panel channel");
+    if (!t.category) w.push("no category");
+    if (!t.staff_role) w.push("no staff role");
+    return w;
+  };
+
+  const addType = () => {
+    if (types.length >= MAX_TYPES) {
+      notify(`${MAX_TYPES} ticket types is the most Discord can show on one panel`, "error");
+      return;
+    }
+    const t = newType(types.length);
+    setTypes((prev) => [...prev, t]);
+    setSelected(t.id);
+    setDirty(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -256,9 +296,16 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
             </option>
           ))}
         </select>
-        <span className="text-xs text-slate-400">
+        <button
+          onClick={() => setShowTickets((v) => !v)}
+          className={
+            "text-xs px-2.5 py-1.5 rounded-lg transition " +
+            (showTickets ? "bg-emerald-500/20 text-emerald-200" : "bg-slate-800/60 text-slate-300 hover:bg-slate-800")
+          }
+          data-tip="Tickets people have already opened in this server"
+        >
           {openTickets.length} open · {mine.length} total
-        </span>
+        </button>
         {dirty && (
           <span className="text-xs px-2 py-1 rounded-lg bg-amber-500/15 text-amber-300 flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -290,303 +337,472 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer, 
         <div className="rounded-2xl p-3 bg-rose-500/10 border border-rose-500/30 text-sm text-rose-200">{error}</div>
       )}
 
-      {/* Types */}
-      {types.map((type, i) => (
-        <motion.div
-          key={type.id + i}
-          className="glass rounded-2xl overflow-hidden"
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={motionTokens.enter}
-        >
-          <div className="flex items-center gap-2 px-4 py-3">
-            <button
-              onClick={() => setOpen(open === i ? null : i)}
-              className="flex items-center gap-2 flex-1 text-left"
-              data-tip="Show or hide this ticket type's settings"
-            >
-              <ChevronDown className={"w-4 h-4 transition " + (open === i ? "rotate-180" : "")} />
-              <span className="text-lg">{type.emoji}</span>
-              <span className="font-semibold text-sm">{type.label}</span>
-              <span className="text-[11px] text-slate-500">`{type.id}`</span>
-              {!type.enabled && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">off</span>
-              )}
-            </button>
-            <label className="flex items-center gap-1.5 text-xs text-slate-400" data-tip="Turn this type off without deleting it">
-              <input
-                type="checkbox"
-                checked={type.enabled}
-                onChange={(e) => update(i, { enabled: e.target.checked })}
-                className="accent-emerald-500"
-              />
-              on
-            </label>
-            <button
-              onClick={() => postPanel(type)}
-              disabled={busy === "panel-" + type.id || !type.panel_channel}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/15 text-indigo-200 text-xs hover:bg-indigo-500/25 transition disabled:opacity-40"
-              data-tip="Post this type's panel in its panel channel — no need to go into Discord"
-            >
-              {busy === "panel-" + type.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              Post panel
-            </button>
-            <button
-              onClick={() => {
-                if (!confirm(`Delete the ticket type "${type.label}"? Tickets already open keep working.`)) return;
-                setTypes((prev) => prev.filter((_, j) => j !== i));
-                setDirty(true);
-              }}
-              className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-300 text-xs hover:bg-rose-500/20 transition"
-              data-tip="Remove this ticket type. Panels already posted will stop opening new tickets of this kind."
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+      {showTickets && (
+        <motion.div className="glass rounded-2xl p-4" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={motionTokens.enter}>
+          <div className="flex items-center gap-2 mb-3">
+            <Ticket className="w-4 h-4 text-emerald-300" />
+            <h3 className="font-semibold text-sm">Tickets on record</h3>
           </div>
-
-          {open === i && (
-            <div className="px-4 pb-4 space-y-3 border-t border-slate-700/50 pt-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Field label="Button label" tip="What the button on the panel says">
-                  <input
-                    value={type.label}
-                    onChange={(e) => update(i, { label: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                    data-tip="Shown on the panel button, and in this screen"
-                  />
-                </Field>
-                <Field label="Emoji" tip="One emoji, shown on the button">
-                  <input
-                    value={type.emoji}
-                    onChange={(e) => update(i, { emoji: e.target.value })}
-                    maxLength={8}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                    data-tip="Paste one emoji — anything longer is cut off"
-                  />
-                </Field>
-                <Field label="Panel title" tip="The heading on the panel message">
-                  <input
-                    value={type.panel_title}
-                    onChange={(e) => update(i, { panel_title: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                    data-tip="Appears in bold at the top of the panel"
-                  />
-                </Field>
-                <Field label="Panel channel" tip="Where this type's panel gets posted">
-                  <select
-                    value={type.panel_channel}
-                    onChange={(e) => update(i, { panel_channel: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                    data-tip="The channel the Post panel button sends to"
-                  >
-                    <option value="">Not set</option>
-                    {textChannels.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        #{c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Category" tip="Where the new ticket channel is created">
-                  <select
-                    value={type.category}
-                    onChange={(e) => update(i, { category: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                    data-tip="Stored by ID, so renaming the category in Discord changes nothing"
-                  >
-                    <option value="">No category</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Staff role" tip="Who can see tickets of this type">
-                  <select
-                    value={type.staff_role}
-                    onChange={(e) => update(i, { staff_role: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                    data-tip="Also stored by ID — rename the role and tickets still land right"
-                  >
-                    <option value="">Nobody in particular</option>
-                    {roles.map((r: any) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="Panel description" tip="The line under the heading">
-                <textarea
-                  value={type.description}
-                  onChange={(e) => update(i, { description: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                  data-tip="Say what this kind of ticket is for"
-                />
-              </Field>
-
-              <Field label="Message when it opens" tip="Posted at the top of the new channel">
-                <textarea
-                  value={type.open_message}
-                  onChange={(e) => update(i, { open_message: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
-                  data-tip="Greets the member, and tells them what happens next"
-                />
-              </Field>
-
-              <label className="flex items-center gap-2 text-sm text-slate-300" data-tip="Save a transcript of the conversation when the ticket closes">
-                <input
-                  type="checkbox"
-                  checked={type.transcript}
-                  onChange={(e) => update(i, { transcript: e.target.checked })}
-                  className="accent-indigo-500"
-                />
-                <ShieldCheck className="w-4 h-4 text-indigo-300" />
-                Keep a transcript when the ticket closes
-              </label>
-
-              {/* Questions */}
-              <div className="rounded-xl bg-slate-800/40 p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <HelpCircle className="w-4 h-4 text-purple-300" />
-                  <span className="text-sm font-medium">Questions asked before the channel opens</span>
-                  <span className="text-[11px] text-slate-500">
-                    {type.questions.length}/{MAX_QUESTIONS}
-                  </span>
-                  <button
-                    onClick={() => {
-                      if (type.questions.length >= MAX_QUESTIONS) {
-                        notify(`A Discord popup shows ${MAX_QUESTIONS} questions at most`, "error");
-                        return;
+          {mine.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              Nothing yet. Once someone presses a panel button, their ticket shows here with what they were asked.
+            </p>
+          ) : (
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {mine.map((t) => (
+                <div key={t.channel_id} className="rounded-xl bg-slate-800/40 px-3 py-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span
+                      className={
+                        "text-[11px] px-1.5 py-0.5 rounded " +
+                        (t.status === "open" ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-400")
                       }
-                      const label = "New question";
-                      update(i, {
-                        questions: [...type.questions, { key: keyFrom(label), label, style: "short", required: true }],
-                      });
-                    }}
-                    className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/15 text-purple-200 text-xs hover:bg-purple-500/25 transition"
-                    data-tip={`Add a question (max ${MAX_QUESTIONS} — that is all Discord shows)`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Question
-                  </button>
-                </div>
-
-                {type.questions.length === 0 && (
-                  <p className="text-xs text-slate-500">
-                    No questions — the channel opens straight away.
-                  </p>
-                )}
-
-                <div className="space-y-2">
-                  {type.questions.map((q, qi) => (
-                    <div key={qi} className="flex flex-wrap items-center gap-2">
-                      <input
-                        value={q.label}
-                        onChange={(e) => updateQuestion(i, qi, { label: e.target.value, key: q.key || keyFrom(e.target.value) })}
-                        placeholder="Question"
-                        className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700 text-sm focus:outline-none focus:border-purple-500"
-                        data-tip="What the member is asked"
-                      />
-                      <select
-                        value={q.style}
-                        onChange={(e) => updateQuestion(i, qi, { style: e.target.value as "short" | "long" })}
-                        className="px-2 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700 text-xs"
-                        data-tip="A long one gets a bigger box, for explanations"
-                      >
-                        <option value="short">short</option>
-                        <option value="long">long</option>
-                      </select>
-                      <label className="flex items-center gap-1 text-[11px] text-slate-400" data-tip="A required question cannot be skipped">
-                        <input
-                          type="checkbox"
-                          checked={q.required}
-                          onChange={(e) => updateQuestion(i, qi, { required: e.target.checked })}
-                          className="accent-purple-500"
-                        />
-                        required
-                      </label>
-                      <button
-                        onClick={() => update(i, { questions: type.questions.filter((_, j) => j !== qi) })}
-                        className="text-rose-300/70 hover:text-rose-300"
-                        data-tip="Remove this question"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    >
+                      {t.status}
+                    </span>
+                    <span className="font-medium">#{t.number}</span>
+                    <span className="text-slate-300">{t.user_name}</span>
+                    {t.type_label && <span className="text-[11px] text-indigo-300">{t.type_label}</span>}
+                    <span className="ml-auto text-[11px] text-slate-500">
+                      {channelName(t.channel_id) ? `#${channelName(t.channel_id)}` : ""}
+                    </span>
+                  </div>
+                  {t.answers && Object.keys(t.answers).length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {Object.entries(t.answers).map(([k, v]) => (
+                        <p key={k} className="text-[11px] text-slate-400">
+                          <span className="text-slate-500">{k}: </span>
+                          {v}
+                        </p>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
+              ))}
             </div>
           )}
         </motion.div>
-      ))}
-
-      {types.length < MAX_TYPES && (
-        <button
-          onClick={() => {
-            setTypes((prev) => [...prev, newType(prev.length)]);
-            setOpen(types.length);
-            setDirty(true);
-          }}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-slate-700 text-sm text-slate-400 hover:border-indigo-500 hover:text-indigo-300 transition"
-          data-tip="Add another kind of ticket — verification, appeals, reports, anything"
-        >
-          <Plus className="w-4 h-4" />
-          Add a ticket type
-        </button>
       )}
 
-      {/* Tickets on record */}
-      <div className="glass rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Ticket className="w-4 h-4 text-emerald-300" />
-          <h3 className="font-semibold text-sm">Tickets on record</h3>
+      {/* Two panes: the types, and the one you picked */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 items-start">
+        {/* left: the list */}
+        <div className="glass rounded-2xl p-2 lg:sticky lg:top-4">
+          <div className="flex items-center justify-between px-2 py-1.5">
+            <span className="text-[11px] uppercase tracking-wider text-slate-500">Ticket types</span>
+            <span className="text-[11px] text-slate-500">{types.length}/{MAX_TYPES}</span>
+          </div>
+          <div className="space-y-1">
+            {types.map((t) => {
+              const on = t.id === selected;
+              const warn = warningsFor(t);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setSelected(t.id)}
+                  className={
+                    "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left transition " +
+                    (on ? "bg-indigo-500/20 ring-1 ring-indigo-400/40" : "hover:bg-slate-800/60")
+                  }
+                  data-tip={`Edit ${t.label}`}
+                >
+                  <span className="text-base leading-none">{t.emoji}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className={"block text-sm truncate " + (on ? "text-indigo-100" : "text-slate-200")}>
+                      {t.label}
+                    </span>
+                    <span className="block text-[10px] text-slate-500 truncate">
+                      {warn.length ? warn.join(" · ") : channelName(t.panel_channel) ? `#${channelName(t.panel_channel)}` : "ready"}
+                    </span>
+                  </span>
+                  {!t.enabled && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">off</span>
+                  )}
+                  {warn.length > 0 && t.enabled && <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+          {types.length < MAX_TYPES && (
+            <button
+              onClick={addType}
+              className="mt-1 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-slate-700 text-xs text-slate-400 hover:border-indigo-500 hover:text-indigo-300 transition"
+              data-tip="Add another kind of ticket — verification, appeals, reports, anything"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add a ticket type
+            </button>
+          )}
         </div>
-        {mine.length === 0 ? (
-          <p className="text-xs text-slate-500">
-            Nothing yet. Once someone presses a panel button, their ticket shows here with what they were asked.
-          </p>
-        ) : (
-          <div className="space-y-1 max-h-80 overflow-y-auto">
-            {mine.map((t) => (
-              <div key={t.channel_id} className="rounded-xl bg-slate-800/40 px-3 py-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <span
-                    className={
-                      "text-[11px] px-1.5 py-0.5 rounded " +
-                      (t.status === "open" ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-400")
-                    }
-                  >
-                    {t.status}
-                  </span>
-                  <span className="font-medium">#{t.number}</span>
-                  <span className="text-slate-300">{t.user_name}</span>
-                  {t.type_label && <span className="text-[11px] text-indigo-300">{t.type_label}</span>}
-                  <span className="ml-auto text-[11px] text-slate-500">
-                    {channelName(t.channel_id) ? `#${channelName(t.channel_id)}` : ""}
-                  </span>
+
+        {/* right: the selected type */}
+        <div className="min-w-0">
+          {!current && !loading && (
+            <div className="glass rounded-2xl p-10 text-center border border-dashed border-slate-700">
+              <Ticket className="w-8 h-8 mx-auto text-slate-600 mb-3" />
+              <p className="text-sm text-slate-400">
+                {types.length === 0
+                  ? "No ticket types on this server yet. Add one to get started."
+                  : "Pick a ticket type on the left to edit it."}
+              </p>
+            </div>
+          )}
+
+          <AnimatePresence mode="wait">
+            {current && (
+              <motion.div
+                key={current.id}
+                className="glass rounded-2xl overflow-hidden"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={motionTokens.enter}
+              >
+                {/* header */}
+                <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-slate-700/50">
+                  <span className="text-lg">{current.emoji}</span>
+                  <span className="font-semibold text-sm">{current.label}</span>
+                  <span className="text-[11px] text-slate-500 font-mono">`{current.id}`</span>
+                  <label className="ml-2 flex items-center gap-1.5 text-xs text-slate-400" data-tip="Turn this type off without deleting it">
+                    <input
+                      type="checkbox"
+                      checked={current.enabled}
+                      onChange={(e) => update(index, { enabled: e.target.checked })}
+                      className="accent-emerald-500"
+                    />
+                    on
+                  </label>
+                  <div className="ml-auto flex gap-2">
+                    <button
+                      onClick={() => postPanel(current)}
+                      disabled={busy === "panel-" + current.id || !current.panel_channel}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 text-indigo-200 text-xs hover:bg-indigo-500/25 transition disabled:opacity-40"
+                      data-tip={
+                        current.panel_channel
+                          ? "Post this type's panel in its panel channel — no need to go into Discord"
+                          : "Pick a panel channel first"
+                      }
+                    >
+                      {busy === "panel-" + current.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      Post panel
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!confirm(`Delete the ticket type "${current.label}"? Tickets already open keep working.`)) return;
+                        setTypes((prev) => prev.filter((t) => t.id !== current.id));
+                        setSelected(types.find((t) => t.id !== current.id)?.id ?? null);
+                        setDirty(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-300 text-xs hover:bg-rose-500/20 transition"
+                      data-tip="Remove this ticket type. Panels already posted will stop opening new tickets of this kind."
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                {t.answers && Object.keys(t.answers).length > 0 && (
-                  <div className="mt-1 space-y-0.5">
-                    {Object.entries(t.answers).map(([k, v]) => (
-                      <p key={k} className="text-[11px] text-slate-400">
-                        <span className="text-slate-500">{k}: </span>
-                        {v}
-                      </p>
-                    ))}
+
+                {warningsFor(current).length > 0 && (
+                  <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-[12px] text-amber-200 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Not ready: {warningsFor(current).join(", ")}. A ticket opened without these still works, but staff get a warning inside it.
                   </div>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
+
+                <div className="p-4 space-y-4">
+                  {/* the panel */}
+                  <Section icon={<MessageSquare className="w-4 h-4 text-indigo-300" />} title="The panel" tip="What people see and press in the channel">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Field label="Button label" tip="What the button on the panel says">
+                        <input value={current.label} onChange={(e) => update(index, { label: e.target.value })} className={inputCls} />
+                      </Field>
+                      <Field label="Emoji" tip="One emoji, shown on the button">
+                        <input
+                          value={current.emoji}
+                          onChange={(e) => update(index, { emoji: e.target.value })}
+                          maxLength={8}
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Panel title" tip="The heading on the panel message">
+                        <input
+                          value={current.panel_title}
+                          onChange={(e) => update(index, { panel_title: e.target.value })}
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Panel channel" tip="Where this type's panel gets posted">
+                        <Picker
+                          value={current.panel_channel}
+                          onChange={(v) => update(index, { panel_channel: v })}
+                          options={textChannels.map((c) => ({ id: String(c.id), label: `#${c.name}` }))}
+                          empty="Not set"
+                          icon={<Hash className="w-3.5 h-3.5" />}
+                          tip="The channel the Post panel button sends to"
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Panel description" tip="The line under the heading">
+                      <textarea
+                        value={current.description}
+                        onChange={(e) => update(index, { description: e.target.value })}
+                        rows={2}
+                        className={inputCls}
+                        data-tip="Say what this kind of ticket is for"
+                      />
+                    </Field>
+                  </Section>
+
+                  {/* where it lands */}
+                  <Section icon={<FolderOpen className="w-4 h-4 text-purple-300" />} title="Where the ticket lands" tip="The channel that opens when someone presses the button">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Field label="Category" tip="Where the new ticket channel is created">
+                        <Picker
+                          value={current.category}
+                          onChange={(v) => update(index, { category: v })}
+                          options={categories.map((c) => ({ id: String(c.id), label: c.name }))}
+                          empty="No category"
+                          icon={<FolderOpen className="w-3.5 h-3.5" />}
+                          tip="Stored by ID, so renaming the category in Discord changes nothing"
+                          missing={
+                            current.category && !categoryName(current.category)
+                              ? `Saved category ${current.category} is not in this server any more`
+                              : undefined
+                          }
+                        />
+                      </Field>
+                      <Field label="Staff role" tip="Who can see tickets of this type">
+                        <Picker
+                          value={current.staff_role}
+                          onChange={(v) => update(index, { staff_role: v })}
+                          options={roles.map((r: any) => ({ id: String(r.id), label: r.name }))}
+                          empty="Nobody in particular"
+                          icon={<UserCheck className="w-3.5 h-3.5" />}
+                          tip="Also stored by ID — rename the role and tickets still land right"
+                          missing={
+                            current.staff_role && !roleName(current.staff_role)
+                              ? `Saved role ${current.staff_role} is not in this server any more`
+                              : undefined
+                          }
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Message when it opens" tip="Posted at the top of the new channel">
+                      <textarea
+                        value={current.open_message}
+                        onChange={(e) => update(index, { open_message: e.target.value })}
+                        rows={2}
+                        className={inputCls}
+                      />
+                    </Field>
+                    <label
+                      className="flex items-center gap-2 text-sm text-slate-300"
+                      data-tip="Save a transcript of the conversation when the ticket closes"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={current.transcript}
+                        onChange={(e) => update(index, { transcript: e.target.checked })}
+                        className="accent-indigo-500"
+                      />
+                      <ShieldCheck className="w-4 h-4 text-indigo-300" />
+                      Keep a transcript when the ticket closes
+                    </label>
+                  </Section>
+
+                  {/* questions */}
+                  <Section
+                    icon={<ClipboardList className="w-4 h-4 text-purple-300" />}
+                    title="Questions before the channel opens"
+                    tip={`Discord shows ${MAX_QUESTIONS} at most`}
+                    aside={
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500">
+                          {current.questions.length}/{MAX_QUESTIONS}
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (current.questions.length >= MAX_QUESTIONS) {
+                              notify(`A Discord popup shows ${MAX_QUESTIONS} questions at most`, "error");
+                              return;
+                            }
+                            const label = "New question";
+                            update(index, {
+                              questions: [
+                                ...current.questions,
+                                { key: keyFrom(label), label, style: "short", required: true },
+                              ],
+                            });
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/15 text-purple-200 text-xs hover:bg-purple-500/25 transition"
+                          data-tip={`Add a question (max ${MAX_QUESTIONS} — that is all Discord shows)`}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Question
+                        </button>
+                      </div>
+                    }
+                  >
+                    {current.questions.length === 0 && (
+                      <p className="text-xs text-slate-500">No questions — the channel opens straight away.</p>
+                    )}
+                    <div className="space-y-2">
+                      {current.questions.map((q, qi) => (
+                        <div key={qi} className="flex flex-wrap items-center gap-2">
+                          <input
+                            value={q.label}
+                            onChange={(e) =>
+                              updateQuestion(index, qi, { label: e.target.value, key: q.key || keyFrom(e.target.value) })
+                            }
+                            placeholder="Question"
+                            className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700 text-sm focus:outline-none focus:border-purple-500"
+                            data-tip="What the member is asked"
+                          />
+                          <select
+                            value={q.style}
+                            onChange={(e) => updateQuestion(index, qi, { style: e.target.value as "short" | "long" })}
+                            className="px-2 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700 text-xs"
+                            data-tip="A long one gets a bigger box, for explanations"
+                          >
+                            <option value="short">short</option>
+                            <option value="long">long</option>
+                          </select>
+                          <label className="flex items-center gap-1 text-[11px] text-slate-400" data-tip="A required question cannot be skipped">
+                            <input
+                              type="checkbox"
+                              checked={q.required}
+                              onChange={(e) => updateQuestion(index, qi, { required: e.target.checked })}
+                              className="accent-purple-500"
+                            />
+                            required
+                          </label>
+                          <button
+                            onClick={() =>
+                              update(index, { questions: current.questions.filter((_, j) => j !== qi) })
+                            }
+                            className="text-rose-300/70 hover:text-rose-300"
+                            data-tip="Remove this question"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400/70" />
+                    Category and role are stored as IDs — rename them in Discord and this keeps working.
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/** A select that can be typed into, for servers with more channels than a list can show. */
+function Picker({
+  value,
+  onChange,
+  options,
+  empty,
+  icon,
+  tip,
+  missing,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; label: string }[];
+  empty: string;
+  icon?: React.ReactNode;
+  tip: string;
+  missing?: string;
+}) {
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return needle ? options.filter((o) => o.label.toLowerCase().includes(needle)) : options;
+  }, [options, q]);
+  const chosen = options.find((o) => o.id === value);
+
+  return (
+    <div data-tip={tip}>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">{icon}</span>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={chosen ? chosen.label : empty}
+          className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
+          data-tip={options.length > 8 ? "Type to filter" : tip}
+        />
+        <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+      </div>
+      <div className="mt-1 max-h-40 overflow-y-auto rounded-xl bg-slate-900/50 border border-slate-700/60">
+        {!q && (
+          <button
+            onClick={() => {
+              onChange("");
+              setQ("");
+            }}
+            className={
+              "w-full text-left px-3 py-1.5 text-xs hover:bg-slate-800/60 " +
+              (value ? "text-slate-400" : "text-indigo-200 bg-indigo-500/10")
+            }
+          >
+            {empty}
+          </button>
+        )}
+        {filtered.length === 0 && <p className="px-3 py-2 text-xs text-slate-500">No matches.</p>}
+        {filtered.slice(0, 60).map((o) => (
+          <button
+            key={o.id}
+            onClick={() => {
+              onChange(o.id);
+              setQ("");
+            }}
+            className={
+              "w-full text-left px-3 py-1.5 text-xs truncate hover:bg-slate-800/60 " +
+              (o.id === value ? "text-indigo-200 bg-indigo-500/10" : "text-slate-300")
+            }
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {missing && <p className="mt-1 text-[11px] text-amber-300">{missing}</p>}
+    </div>
+  );
+}
+
+function Section({
+  icon,
+  title,
+  tip,
+  aside,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  tip: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl bg-slate-800/30 border border-slate-700/50 p-3" data-tip={tip}>
+      <div className="flex items-center gap-2 mb-3">
+        {icon}
+        <span className="text-sm font-medium">{title}</span>
+        {aside && <div className="ml-auto">{aside}</div>}
+      </div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
