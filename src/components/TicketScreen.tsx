@@ -82,6 +82,24 @@ type Props = {
 const MAX_QUESTIONS = 5;
 const MAX_TYPES = 12;
 
+// Every limit below is Discord's own, not ours. A number invented here that is
+// tighter than Discord's silently cuts a server's wording in half; one that is
+// looser makes Discord reject the whole message with an error nobody sees. Either
+// way the person who typed it finds out by looking at the panel in Discord, which
+// is the worst place to find out — so the editor refuses it here instead, and says
+// by how much. Kept identical to LIMITS in babblebot's ticket_types.py.
+//   modal field label 45 · modal text answer 4000 · message content 2000
+//   embed description 4096 · embed title 256 · button label 80 · channel name 100
+const LIMITS = {
+  button: 80,
+  title: 256,
+  description: 4096,
+  openMessage: 2000,
+  question: 45,
+};
+
+const overLimit = (text: string, limit: number) => text.length > limit;
+
 const newType = (index: number): TicketType => ({
   id: `type${index + 1}`,
   label: "New ticket type",
@@ -209,7 +227,31 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
     setDirty(true);
   };
 
+  // Refuse here what Discord would refuse, naming the field and the overrun. The bot
+  // does the same check on its side, so this is the same rule said earlier — in the
+  // place the person can actually fix it.
+  const tooLong = (() => {
+    for (const t of types) {
+      if (overLimit(t.label, LIMITS.button))
+        return `"${t.label.slice(0, 20)}…" — the button label is ${t.label.length} characters, Discord allows ${LIMITS.button}.`;
+      if (overLimit(t.panel_title, LIMITS.title))
+        return `"${t.label}" — the panel title is ${t.panel_title.length} characters, Discord allows ${LIMITS.title}.`;
+      if (overLimit(t.description, LIMITS.description))
+        return `"${t.label}" — the panel description is ${t.description.length} characters, Discord allows ${LIMITS.description}.`;
+      if (overLimit(t.open_message, LIMITS.openMessage))
+        return `"${t.label}" — the opening message is ${t.open_message.length} characters, Discord allows ${LIMITS.openMessage}.`;
+      const q = t.questions.find((x) => overLimit(x.label, LIMITS.question));
+      if (q)
+        return `"${t.label}" — a question label is ${q.label.length} characters, Discord allows ${LIMITS.question}.`;
+    }
+    return null;
+  })();
+
   const save = async () => {
+    if (tooLong) {
+      notify(tooLong, "error");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(apiUrl + "/api/ticket-types", {
@@ -516,7 +558,7 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                   {/* the panel */}
                   <Section icon={<MessageSquare className="w-4 h-4 text-indigo-300" />} title="The panel" tip="What people see and press in the channel">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <Field label="Button label" tip="What the button on the panel says">
+                      <Field label="Button label" tip={`What the button on the panel says — ${LIMITS.button} characters max`}>
                         <input value={current.label} onChange={(e) => update(index, { label: e.target.value })} className={inputCls} />
                       </Field>
                       <Field label="Emoji" tip="One emoji, shown on the button">
@@ -527,7 +569,7 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                           className={inputCls}
                         />
                       </Field>
-                      <Field label="Panel title" tip="The heading on the panel message">
+                      <Field label="Panel title" tip={`The heading on the panel message — ${LIMITS.title} characters max`}>
                         <input
                           value={current.panel_title}
                           onChange={(e) => update(index, { panel_title: e.target.value })}
@@ -545,14 +587,28 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                         />
                       </Field>
                     </div>
-                    <Field label="Panel description" tip="The line under the heading">
+                    <Field
+                      label="Panel description"
+                      tip={`The line under the heading — ${LIMITS.description.toLocaleString()} characters max, which is an embed's worth. The bot posts this as an embed, so verification instructions fit in full.`}
+                    >
                       <textarea
                         value={current.description}
                         onChange={(e) => update(index, { description: e.target.value })}
-                        rows={2}
+                        rows={6}
                         className={inputCls}
-                        data-tip="Say what this kind of ticket is for"
+                        data-tip="Say what this kind of ticket is for — this is where verification instructions go"
                       />
+                      <span
+                        className={
+                          overLimit(current.description, LIMITS.description)
+                            ? "text-[11px] text-rose-400"
+                            : "text-[11px] text-slate-500"
+                        }
+                      >
+                        {current.description.length.toLocaleString()} / {LIMITS.description.toLocaleString()}
+                        {overLimit(current.description, LIMITS.description) &&
+                          ` — cut ${current.description.length - LIMITS.description} characters, Discord will refuse this`}
+                      </span>
                     </Field>
                   </Section>
 
@@ -659,8 +715,13 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                             }
                             placeholder="Question"
                             className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700 text-sm focus:outline-none focus:border-purple-500"
-                            data-tip="What the member is asked"
+                            data-tip={`What the member is asked — ${LIMITS.question} characters max, that is Discord's own limit on a popup field`}
                           />
+                          {overLimit(q.label, LIMITS.question) && (
+                            <span className="text-[11px] text-rose-400">
+                              {q.label.length}/{LIMITS.question} — Discord cuts popup labels at {LIMITS.question}
+                            </span>
+                          )}
                           <select
                             value={q.style}
                             onChange={(e) => updateQuestion(index, qi, { style: e.target.value as "short" | "long" })}
