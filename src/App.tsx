@@ -62,6 +62,7 @@ import { SCREENS } from "./lib/screens";
 import { areaFor, areaTone } from "./lib/design";
 import ServerBar from "./components/ServerBar";
 import ConfigScreen from "./components/ConfigScreen";
+import MessageMedia, { type Attachment, type Embed } from "./components/MessageMedia";
 import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers";
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
@@ -106,6 +107,10 @@ export default function App() {
     content: string;
     time: string;
     flagged: boolean;
+    // Present when the bot logs them. Older log lines carry only an attachment
+    // COUNT, so a message from before this change simply shows no strip.
+    attachments?: Attachment[];
+    embeds?: Embed[];
   };
   const [messages, setMessages] = useState<FeedMessage[]>([]);
   const [messagesToday, setMessagesToday] = useState(0);
@@ -1453,15 +1458,21 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             <div className="space-y-2">
               <AnimatePresence>
                 {filteredMessages.map((m) => (
-                  <motion.div key={m.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, msg: m }); }} className="glass rounded-xl p-3 flex items-center gap-3 hover:bg-slate-800/30 transition cursor-context-menu">
-                    <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-lg">{m.avatar}</div>
+                  <motion.div key={m.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, msg: m }); }} className="glass rounded-xl p-3 flex items-start gap-3 hover:bg-slate-800/30 transition cursor-context-menu">
+                    <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-lg shrink-0">{m.avatar}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold">{m.user}</span>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">{m.server}</span>
                         <span className="text-xs text-slate-500">#{m.channel}</span>
                       </div>
-                      <p className="text-sm text-slate-300 truncate">{m.content}</p>
+                      {/* Wrapped, not truncated: a message that ends in an image usually
+                          says something too, and cutting it to one line hid the reason
+                          the picture was posted. */}
+                      {m.content && (
+                        <p className="text-sm text-slate-300 whitespace-pre-wrap break-words line-clamp-6">{m.content}</p>
+                      )}
+                      <MessageMedia attachments={m.attachments} embeds={m.embeds} />
                     </div>
                     <div className="text-right flex flex-col items-end gap-1">
                       <span className="text-xs text-slate-500">{fmtTime(m.time)}</span>
