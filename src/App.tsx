@@ -5,6 +5,7 @@ import {
   Users,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Music,
   Music2,
   Trophy,
@@ -45,6 +46,7 @@ import SleepLog from "./components/SleepLog";
 import MentionsScreen from "./components/MentionsScreen";
 import MembersScreen from "./components/MembersScreen";
 import ModerationScreen from "./components/ModerationScreen";
+import ModerationRulesScreen from "./components/ModerationRulesScreen";
 import SetupScreen, { loadSettings, saveSettings, type AppSettings } from "./components/SetupScreen";
 import LockScreen from "./components/LockScreen";
 import MusicScreen from "./components/MusicScreen";
@@ -972,6 +974,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
       group: "Moderation",
       items: [
         { id: "moderation", label: "Moderation", icon: Shield },
+        { id: "moderationrules", label: "Moderation Rules", icon: ShieldCheck },
         { id: "violations", label: "Violations", icon: AlertTriangle },
         { id: "trollwatch", label: "Troll Watch", icon: ShieldAlert },
         { id: "trolls", label: "Troll List", icon: Shield },
@@ -1658,6 +1661,14 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             )}
             {active === "moderation" && (
               <ModerationScreen
+                apiUrl={apiUrl}
+                notify={notify}
+                servers={servers}
+                selectedServer={servers.find((x: any) => x.id === activeServer)?.name || ""}
+              />
+            )}
+            {active === "moderationrules" && (
+              <ModerationRulesScreen
                 apiUrl={apiUrl}
                 notify={notify}
                 servers={servers}
