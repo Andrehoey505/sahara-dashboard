@@ -125,6 +125,26 @@ const keyFrom = (label: string) =>
     .replace(/^_|_$/g, "")
     .slice(0, 24) || "question";
 
+/**
+ * A key for the question at `index` that no other question in the same type uses.
+ *
+ * Every new question used to be created with the label "New question", so every
+ * one of them got the key `new_question` — and answers are stored by key. Four
+ * questions with the same key meant four answers collapsed into one: the member
+ * filled in the whole form and the ticket kept only the last box. The bot now
+ * refuses duplicate keys, so the app has to be the one that gets this right.
+ */
+const uniqueKey = (questions: Question[], index: number, base: string) => {
+  const taken = new Set(questions.filter((_, i) => i !== index).map((q) => q.key));
+  const stem = (base || "question").slice(0, 20) || "question";
+  if (!taken.has(stem)) return stem;
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${stem}_${n}`;
+    if (!taken.has(candidate)) return candidate.slice(0, 24);
+  }
+  return `question_${index + 1}`.slice(0, 24);
+};
+
 const inputCls =
   "w-full px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500";
 
@@ -269,9 +289,21 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
 
   const updateQuestion = (i: number, qi: number, patch: Partial<Question>) => {
     setTypes((prev) =>
-      prev.map((t, j) =>
-        j === i ? { ...t, questions: t.questions.map((q, k) => (k === qi ? { ...q, ...patch } : q)) } : t
-      )
+      prev.map((t, j) => {
+        if (j !== i) return t;
+        const questions = t.questions.map((q, k) => (k === qi ? { ...q, ...patch } : q));
+        // Two questions sharing a key is not a cosmetic problem: answers are stored
+        // by key, so the second answer silently overwrites the first and the ticket
+        // keeps one box out of however many the member filled in. Keys are repaired
+        // here rather than refused, because a duplicated key is our bug, not theirs.
+        const seen = new Set<string>();
+        for (const q of questions) {
+          const key = q.key && !seen.has(q.key) ? q.key : uniqueKey(questions, questions.indexOf(q), q.key || keyFrom(q.label));
+          seen.add(key);
+          q.key = key;
+        }
+        return { ...t, questions };
+      })
     );
     setDirty(true);
   };
@@ -808,12 +840,16 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                               return;
                             }
                             const label = "New question";
-                            update(index, {
-                              questions: [
-                                ...current.questions,
-                                { key: keyFrom(label), label, style: "short", required: true },
-                              ],
-                            });
+                            const questions = [
+                              ...current.questions,
+                              { key: "", label, style: "short" as const, required: true },
+                            ];
+                            questions[questions.length - 1].key = uniqueKey(
+                              questions,
+                              questions.length - 1,
+                              keyFrom(label)
+                            );
+                            update(index, { questions });
                           }}
                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/15 text-purple-200 text-xs hover:bg-purple-500/25 transition"
                           data-tip={`Add a question (max ${MAX_QUESTIONS} — that is all Discord shows)`}
@@ -833,7 +869,13 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                           <input
                             value={q.label}
                             onChange={(e) =>
-                              updateQuestion(index, qi, { label: e.target.value, key: q.key || keyFrom(e.target.value) })
+                              updateQuestion(index, qi, {
+                                label: e.target.value,
+                                // Only a question that has no key yet takes one from its
+                                // label; an existing key is what the stored answers are
+                                // filed under, so renaming a question must not move them.
+                                key: q.key || uniqueKey(current.questions, qi, keyFrom(e.target.value)),
+                              })
                             }
                             placeholder="Question"
                             className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700 text-sm focus:outline-none focus:border-purple-500"
