@@ -20,6 +20,9 @@ import {
   MessageSquare,
   ClipboardList,
   ChevronDown,
+  FileText,
+  Download,
+  X,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 
@@ -209,6 +212,52 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
     [tickets, guild]
   );
   const openTickets = mine.filter((t) => t.status === "open");
+
+  // One transcript at a time, fetched on demand. The bot writes the file when a
+  // ticket closes and hands back exactly that file, so this is the real thing rather
+  // than the app's own guess at what was said.
+  const [transcript, setTranscript] = useState<{
+    number: number;
+    filename: string;
+    text: string;
+  } | null>(null);
+  const [transcriptBusy, setTranscriptBusy] = useState<number | null>(null);
+  const [transcriptError, setTranscriptError] = useState("");
+
+  const openTranscript = async (number: number) => {
+    setTranscriptBusy(number);
+    setTranscriptError("");
+    try {
+      const res = await fetch(
+        apiUrl +
+          "/api/ticket-transcript?server=" +
+          encodeURIComponent(server) +
+          "&number=" +
+          encodeURIComponent(String(number))
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && !data.error) {
+        setTranscript({ number: data.number, filename: data.filename, text: data.text || "" });
+      } else {
+        setTranscriptError(data.error || `Could not load the transcript for ticket #${number}`);
+      }
+    } catch {
+      setTranscriptError("Connection failed — is the bot running?");
+    } finally {
+      setTranscriptBusy(null);
+    }
+  };
+
+  const saveTranscript = (t: { number: number; text: string }) => {
+    // Saved from the app, so it can be read on the Mac without the Windows box.
+    const blob = new Blob([t.text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ticket-${String(t.number).padStart(4, "0")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const index = types.findIndex((t) => t.id === selected);
   const current = index >= 0 ? types[index] : null;
@@ -419,12 +468,85 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                       ))}
                     </div>
                   )}
+                  {t.status === "closed" && (
+                    <button
+                      onClick={() => openTranscript(t.number)}
+                      className="mt-1.5 flex items-center gap-1 text-[11px] text-indigo-300 hover:text-indigo-200"
+                      data-tip="Read what was said in this ticket before it was closed"
+                    >
+                      <FileText className="w-3 h-3" />
+                      {transcriptBusy === t.number ? "Loading…" : "Transcript"}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </motion.div>
       )}
+
+      {/* The transcript of one closed ticket, over the page */}
+      <AnimatePresence>
+        {(transcript || transcriptError) && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              setTranscript(null);
+              setTranscriptError("");
+            }}
+          >
+            <motion.div
+              className="glass rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+              initial={{ scale: 0.96, y: 8 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 8 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/60">
+                <FileText className="w-4 h-4 text-indigo-300" />
+                <span className="text-sm font-medium">
+                  {transcript ? `Ticket #${transcript.number}` : "Transcript"}
+                </span>
+                {transcript && (
+                  <span className="text-[11px] text-slate-500">{transcript.filename}</span>
+                )}
+                <div className="ml-auto flex items-center gap-1.5">
+                  {transcript && (
+                    <button
+                      onClick={() => saveTranscript(transcript)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/70 text-[11px] text-slate-200 hover:bg-slate-800"
+                      data-tip="Save a copy to this Mac"
+                    >
+                      <Download className="w-3 h-3" />
+                      Save
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setTranscript(null);
+                      setTranscriptError("");
+                    }}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-200"
+                    data-tip="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              {transcriptError ? (
+                <p className="px-4 py-6 text-sm text-rose-300">{transcriptError}</p>
+              ) : (
+                <pre className="px-4 py-3 overflow-auto text-[12px] leading-relaxed whitespace-pre-wrap text-slate-300 font-mono">
+                  {transcript?.text || "The transcript file is empty."}
+                </pre>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Two panes: the types, and the one you picked */}
       <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 items-start">
