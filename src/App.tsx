@@ -1472,7 +1472,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       {m.content && (
                         <p className="text-sm text-slate-300 whitespace-pre-wrap break-words line-clamp-6">{m.content}</p>
                       )}
-                      <MessageMedia attachments={m.attachments} embeds={m.embeds} />
+                      <MessageMedia attachments={m.attachments} embeds={m.embeds} apiBase={apiUrl} />
                     </div>
                     <div className="text-right flex flex-col items-end gap-1">
                       <span className="text-xs text-slate-500">{fmtTime(m.time)}</span>

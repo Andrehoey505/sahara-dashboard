@@ -136,20 +136,44 @@ function ImageTile({
 export default function MessageMedia({
   attachments,
   embeds,
+  apiBase,
 }: {
   attachments?: Attachment[];
   embeds?: Embed[];
+  /** The bot's base URL, so a relative proxy_url resolves. */
+  apiBase?: string;
 }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
 
-  const files = Array.isArray(attachments) ? attachments.filter((a) => srcFor(a)) : [];
+  // The bot returns proxy_url as a path on itself ("/api/media?url=…"), which is the
+  // right thing for it to return — it does not know what host the app reached it on.
+  // Resolve it once here against the base the rest of the app already uses, or the
+  // app fetches /api/media from its own origin (tauri://localhost) and every image
+  // fails with no obvious reason.
+  const resolve = (raw: string) => {
+    if (!raw) return "";
+    if (/^https?:/i.test(raw)) return raw;
+    const base = (apiBase || "").replace(/\/+$/, "");
+    if (!base) return raw;
+    return base + (raw.startsWith("/") ? raw : "/" + raw);
+  };
+
+  const withBase = (list?: Attachment[]): Attachment[] =>
+    (Array.isArray(list) ? list : []).map((a) => ({
+      ...a,
+      proxy_url: a.proxy_url ? resolve(a.proxy_url) : a.proxy_url,
+      url: a.url ? resolve(a.url) : a.url,
+    }));
+
+  const files = withBase(attachments).filter((a) => srcFor(a));
   const linked = Array.isArray(embeds) ? embeds : [];
 
   // An embed's image is an attachment in all but name; only the ones with artwork
   // are worth a tile, and only when the same picture is not already in the strip.
   const embedImages = linked
     .flatMap((e) => [e.image, e.thumbnail, e.video])
-    .filter((u): u is string => Boolean(u));
+    .filter((u): u is string => Boolean(u))
+    .map(resolve);
 
   if (files.length === 0 && embedImages.length === 0 && linked.length === 0) return null;
 
