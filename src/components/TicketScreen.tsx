@@ -243,6 +243,46 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
   } | null>(null);
   const [transcriptBusy, setTranscriptBusy] = useState<number | null>(null);
   const [transcriptError, setTranscriptError] = useState("");
+  const [answersFor, setAnswersFor] = useState<Ticket | null>(null);
+
+  /**
+   * The questions a ticket was asked, in the order it asked them, each with what was
+   * stored — or "nothing stored" where the record has no answer.
+   *
+   * Answers are stored by key, and the key is not what the member read. Showing the
+   * key meant a ticket read `new_question: Wear a diaper`, which tells you neither
+   * what was asked nor whether the other boxes were filled in. The type's question
+   * list is the only thing that knows the labels, so the labels come from there.
+   *
+   * A stored answer whose key no question uses is still listed, labelled by its key,
+   * because it is evidence of a question that has since been renamed or removed and
+   * hiding it would make the record look smaller than it is.
+   */
+  const answerRows = (t: Ticket) => {
+    const type = types.find((x) => x.id === t.type_id) || types.find((x) => x.label === t.type_label);
+    const questions = type?.questions || [];
+    const stored = t.answers || {};
+    const used = new Set<string>();
+    const rows: { label: string; value: string; missing?: boolean }[] = [];
+    for (const q of questions) {
+      const key = q.key || "";
+      if (used.has(key)) continue;
+      used.add(key);
+      const value = stored[key];
+      rows.push({ label: q.label || key, value: value || "", missing: !value });
+    }
+    for (const [key, value] of Object.entries(stored)) {
+      if (!used.has(key) && value) rows.push({ label: `${key} (no question)`, value });
+    }
+    return rows;
+  };
+
+  /** True when two questions on this type share a key — the fault that lost answers. */
+  const duplicateKeys = (t: Ticket) => {
+    const type = types.find((x) => x.id === t.type_id) || types.find((x) => x.label === t.type_label);
+    const keys = (type?.questions || []).map((q) => q.key).filter(Boolean);
+    return keys.filter((k, i) => keys.indexOf(k) !== i);
+  };
 
   const openTranscript = async (number: number) => {
     setTranscriptBusy(number);
@@ -486,20 +526,38 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
                     <span className="font-medium">#{t.number}</span>
                     <span className="text-slate-300">{t.user_name}</span>
                     {t.type_label && <span className="text-[11px] text-indigo-300">{t.type_label}</span>}
+                    {duplicateKeys(t).length > 0 && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300"
+                        data-tip={`Two questions share the key ${duplicateKeys(t)[0]} — answers to both went into one slot. Open Tickets above and save to repair it.`}
+                      >
+                        duplicate keys
+                      </span>
+                    )}
                     <span className="ml-auto text-[11px] text-slate-500">
                       {channelName(t.channel_id) ? `#${channelName(t.channel_id)}` : ""}
                     </span>
                   </div>
                   {t.answers && Object.keys(t.answers).length > 0 && (
                     <div className="mt-1 space-y-0.5">
-                      {Object.entries(t.answers).map(([k, v]) => (
-                        <p key={k} className="text-[11px] text-slate-400">
-                          <span className="text-slate-500">{k}: </span>
-                          {v}
+                      {answerRows(t).map((row, ri) => (
+                        <p key={ri} className="text-[11px] text-slate-400">
+                          <span className={row.missing ? "text-amber-400/80" : "text-slate-500"}>
+                            {row.label}:{" "}
+                          </span>
+                          {row.missing ? "nothing stored" : row.value}
                         </p>
                       ))}
                     </div>
                   )}
+                  <button
+                    onClick={() => setAnswersFor(t)}
+                    className="mt-1.5 mr-3 flex items-center gap-1 text-[11px] text-emerald-300 hover:text-emerald-200"
+                    data-tip="Every question this ticket asked, and what was stored for it"
+                  >
+                    <ClipboardList className="w-3 h-3" />
+                    Answers
+                  </button>
                   {t.status === "closed" && (
                     <button
                       onClick={() => openTranscript(t.number)}
@@ -518,6 +576,68 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
       )}
 
       {/* The transcript of one closed ticket, over the page */}
+      <AnimatePresence>
+        {answersFor && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setAnswersFor(null)}
+          >
+            <motion.div
+              className="glass rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+              initial={{ scale: 0.96, y: 8 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 8 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/60">
+                <ClipboardList className="w-4 h-4 text-emerald-300" />
+                <span className="text-sm font-medium">Ticket #{answersFor.number}</span>
+                <span className="text-[11px] text-slate-500">
+                  {answersFor.user_name} · {answersFor.status}
+                </span>
+                <button
+                  onClick={() => setAnswersFor(null)}
+                  className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-200"
+                  data-tip="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-4 py-3 overflow-auto space-y-2">
+                {answerRows(answersFor).length === 0 ? (
+                  <p className="text-sm text-slate-500">This ticket asked nothing and stored nothing.</p>
+                ) : (
+                  answerRows(answersFor).map((row, ri) => (
+                    <div key={ri} className="rounded-xl bg-slate-800/40 px-3 py-2">
+                      <p className="text-[11px] text-slate-500">{row.label}</p>
+                      <p
+                        className={
+                          "text-sm whitespace-pre-wrap break-words " +
+                          (row.missing ? "text-amber-400/80 italic" : "text-slate-200")
+                        }
+                      >
+                        {row.missing ? "nothing stored" : row.value}
+                      </p>
+                    </div>
+                  ))
+                )}
+                {duplicateKeys(answersFor).length > 0 && (
+                  <p className="text-[11px] text-rose-300 rounded-xl bg-rose-500/10 border border-rose-500/30 px-3 py-2">
+                    Two questions on this type share the key{" "}
+                    <span className="font-mono">{duplicateKeys(answersFor)[0]}</span>, so their answers
+                    went into one slot and only one could be kept. Open Tickets above and save — that
+                    repairs the keys.
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {(transcript || transcriptError) && (
           <motion.div
