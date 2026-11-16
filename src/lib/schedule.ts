@@ -204,6 +204,20 @@ export function isTicked(ticks: Ticks, slotId: string, when: Date = new Date()):
   return Boolean(ticks[dayKey(when)]?.[slotId]);
 }
 
+/**
+ * Wipe every tick for one day, leaving other days alone.
+ *
+ * This exists because a tick you cannot take back is a trap: one stray press on
+ * a medication row and the record says a dose was taken when it wasn't. Undoing
+ * one item is the tick button itself; this is the way out when several went wrong
+ * or you don't know which did.
+ */
+export function clearDayTicks(ticks: Ticks, when: Date = new Date()): Ticks {
+  const next: Ticks = { ...ticks };
+  delete next[dayKey(when)];
+  return next;
+}
+
 // ---------------------------------------------------------------- due-ness
 
 const NAG_REPEAT_MINUTES = 45;

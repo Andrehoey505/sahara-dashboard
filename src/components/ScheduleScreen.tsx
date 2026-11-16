@@ -17,6 +17,7 @@ import {
   Plus,
   Trash2,
   ChevronDown,
+  X,
 } from "lucide-react";
 import { playCue } from "../lib/audio";
 import {
@@ -36,6 +37,7 @@ import {
   dayKey,
   mirrorPayload,
   loadMirrorTarget,
+  clearDayTicks,
 } from "../lib/schedule";
 
 /**
@@ -50,7 +52,7 @@ import {
  * 1. **The app owns the ticks, not the bot.** Ticking something is the record.
  *    The bot is told so staff can see it, but a staff member ticking in Discord
  *    must never be able to silence Andre's own reminder for something he hasn't
- *    done.
+ *    actually done.
  * 2. **Sleep mode means quiet, and nothing is queued.** A nag suppressed by
  *    sleep is dropped, not replayed on waking — four nags at once at 11am is
  *    worse than none. The exception is medication, which is held rather than
@@ -107,6 +109,16 @@ function dueLabel(slot: Slot): string {
   return slot.at.time;
 }
 
+/** Items that are tickable in the main list (not manual/asneeded). */
+function isMainListItem(slot: Slot): boolean {
+  return slot.at.type !== "manual";
+}
+
+/** Items that belong in the "As needed" section. */
+function isAsNeededItem(slot: Slot): boolean {
+  return slot.at.type === "manual" && slot.enabled;
+}
+
 export default function ScheduleScreen({
   notify,
   sleeping,
@@ -139,11 +151,11 @@ export default function ScheduleScreen({
     return () => clearInterval(id);
   }, []);
 
-  const today = useMemo(() => orderedToday(slots, now), [slots, now]);
+  const mainList = useMemo(() => orderedToday(slots, now).filter(isMainListItem), [slots, now]);
+  const asNeededList = useMemo(() => slots.filter(isAsNeededItem), [slots]);
 
   const fire = useCallback(
     (slot: Slot) => {
-      // A nag is a sound and a toast, not a modal. Nothing that steals focus.
       playCue(slot.kind === "medication" ? "error" : "violation", soundEnabled);
       notify(
         slot.kind === "medication" ? `${slot.label} — due now` : `${slot.label} — ${dueLabel(slot)}`,
@@ -212,18 +224,29 @@ export default function ScheduleScreen({
     saveTicks(next);
     if (!done) {
       playCue("success", soundEnabled);
-      // Ticking clears any nag owed for it, including the repeat.
       naggedRef.current.first.add(slot.id);
       naggedRef.current.repeat.add(slot.id);
+    } else {
+      // Unticking also clears the nag state so it can fire again if needed
+      naggedRef.current.first.delete(slot.id);
+      naggedRef.current.repeat.delete(slot.id);
     }
   };
 
   const logAsNeeded = (slot: Slot) => {
-    const next = tick(ticks, slot.id, now);
+    const done = isTicked(ticks, slot.id, now);
+    const next = done ? untick(ticks, slot.id, now) : tick(ticks, slot.id, now);
     setTicks(next);
     saveTicks(next);
     playCue("success", soundEnabled);
-    notify(`${slot.label} logged`, "success");
+    notify(done ? `${slot.label} unlogged` : `${slot.label} logged`, done ? "info" : "success");
+  };
+
+  const clearToday = () => {
+    const cleared = clearDayTicks(ticks, now);
+    setTicks(cleared);
+    saveTicks(cleared);
+    notify("Cleared all ticks for today", "info");
   };
 
   const updateSlot = (id: string, patch: Partial<Slot>) => {
@@ -250,18 +273,17 @@ export default function ScheduleScreen({
   };
 
   const reset = () => {
-    const fresh = loadSchedule.length ? null : null; // keep TS honest about unused
-    void fresh;
     localStorage.removeItem("sahara_schedule_v1");
+    localStorage.removeItem("sahara_schedule_ticks_v1");
     setSlots(loadSchedule());
+    setTicks(loadTicks());
     setConfirmReset(false);
-    notify("Schedule reset to the default day", "info");
+    notify("Schedule and ticks reset to default", "info");
   };
 
-  const done = today.filter((s) => isTicked(ticks, s.id, now)).length;
-  const total = today.filter((s) => s.at.type !== "manual").length;
+  const done = mainList.filter((s) => isTicked(ticks, s.id, now)).length;
+  const total = mainList.length;
   const left = outstanding(slots, ticks, now);
-  const asNeeded = slots.filter((s) => s.at.type === "manual" && s.enabled);
 
   return (
     <div className="p-4 md:p-6 max-w-3xl">
@@ -286,6 +308,15 @@ export default function ScheduleScreen({
           >
             {editing ? "Done editing" : "Edit"}
           </button>
+          {total > 0 && (
+            <button
+              onClick={clearToday}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-200 hover:bg-rose-500/30 transition flex items-center gap-1.5"
+              data-tip="Clear all ticks for today — use if something was ticked by accident"
+            >
+              <X className="w-3.5 h-3.5" /> Clear today
+            </button>
+          )}
           {renderSettings && apiUrl && (
             <button
               onClick={() => setShowSettings((v) => !v)}
@@ -306,11 +337,10 @@ export default function ScheduleScreen({
       )}
 
       <div className="mt-4 space-y-2">
-        {today.map((slot) => {
+        {mainList.map((slot) => {
           const Icon = KIND_ICON[slot.kind] || Clock;
           const checked = isTicked(ticks, slot.id, now);
           const state = nagState(slot, now, ticks, { sleeping, wakeAt });
-          const isManual = slot.at.type === "manual";
 
           return (
             <motion.div
@@ -326,15 +356,15 @@ export default function ScheduleScreen({
               }
             >
               <button
-                onClick={() => (isManual ? logAsNeeded(slot) : toggle(slot))}
+                onClick={() => toggle(slot)}
                 className={
                   "shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border transition " +
                   (checked
                     ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
                     : "border-slate-600 text-slate-400 hover:border-slate-500 hover:text-slate-200")
                 }
-                data-tip={isManual ? "Log this now" : checked ? "Mark as not done" : "Mark as done"}
-                aria-label={isManual ? `Log ${slot.label}` : `Tick ${slot.label}`}
+                data-tip={checked ? "Mark as not done" : "Mark as done"}
+                aria-label={checked ? `Untick ${slot.label}` : `Tick ${slot.label}`}
               >
                 <Check className="w-4 h-4" />
               </button>
@@ -346,11 +376,6 @@ export default function ScheduleScreen({
                   <span className={"text-sm font-medium " + (checked ? "text-slate-400 line-through" : "text-slate-100")}>
                     {slot.label}
                   </span>
-                  {isManual && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300">
-                      logged, never nagged
-                    </span>
-                  )}
                   {slot.kind === "medication" && !checked && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300">
                       held if you're asleep
@@ -373,23 +398,31 @@ export default function ScheduleScreen({
         })}
       </div>
 
-      {asNeeded.length > 0 && (
+      {asNeededList.length > 0 && (
         <div className="mt-6">
           <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2">As needed</h3>
           <div className="flex flex-wrap gap-2">
-            {asNeeded.map((slot) => (
-              <button
-                key={slot.id}
-                onClick={() => logAsNeeded(slot)}
-                className="text-xs px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-200 hover:bg-rose-500/20 transition flex items-center gap-1.5"
-                data-tip="Logs it. Never nags you for it."
-              >
-                <Pill className="w-3.5 h-3.5" /> {slot.label}
-                {isTicked(ticks, slot.id, now) && (
-                  <span className="text-rose-300/70">· {ticks[dayKey(now)]?.[slot.id]}</span>
-                )}
-              </button>
-            ))}
+            {asNeededList.map((slot) => {
+              const checked = isTicked(ticks, slot.id, now);
+              return (
+                <button
+                  key={slot.id}
+                  onClick={() => logAsNeeded(slot)}
+                  className={
+                    "text-xs px-3 py-2 rounded-lg border transition flex items-center gap-1.5 " +
+                    (checked
+                      ? "bg-rose-500/20 border-rose-500/40 text-rose-200"
+                      : "bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800")
+                  }
+                  data-tip={checked ? "Unlog this" : "Log this now. Never nags you for it."}
+                >
+                  <Pill className="w-3.5 h-3.5" /> {slot.label}
+                  {checked && (
+                    <span className="text-rose-300/70">· {ticks[dayKey(now)]?.[slot.id]}</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
