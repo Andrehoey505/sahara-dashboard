@@ -34,6 +34,8 @@ import {
   nagState,
   outstanding,
   dayKey,
+  mirrorPayload,
+  loadMirrorTarget,
 } from "../lib/schedule";
 
 /**
@@ -64,6 +66,17 @@ type Props = {
   /** When the wake-up press happened today, "HH:MM", or null. */
   wakeAt: string | null;
   soundEnabled: boolean;
+  /** Where the day is mirrored. Absent means the schedule stays on this Mac. */
+  apiUrl?: string;
+  servers?: any[];
+  selectedServer?: string;
+  /** Rendered inside the settings expander, so this file owns no channel pickers. */
+  renderSettings?: (props: {
+    apiUrl: string;
+    notify: (message: string, kind?: "success" | "error" | "info") => void;
+    servers: any[];
+    selectedServer: string;
+  }) => React.ReactNode;
 };
 
 const KIND_ICON: Record<SlotKind, typeof Clock> = {
@@ -94,12 +107,22 @@ function dueLabel(slot: Slot): string {
   return slot.at.time;
 }
 
-export default function ScheduleScreen({ notify, sleeping, wakeAt, soundEnabled }: Props) {
+export default function ScheduleScreen({
+  notify,
+  sleeping,
+  wakeAt,
+  soundEnabled,
+  apiUrl,
+  servers = [],
+  selectedServer = "",
+  renderSettings,
+}: Props) {
   const [slots, setSlots] = useState<Slot[]>(() => loadSchedule());
   const [ticks, setTicks] = useState<Ticks>(() => loadTicks());
   const [now, setNow] = useState<Date>(() => new Date());
   const [editing, setEditing] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Which slots have already had their first nag today, and which have had their
   // repeat. Keyed by day so a nag doesn't carry over from yesterday.
@@ -153,6 +176,34 @@ export default function ScheduleScreen({ notify, sleeping, wakeAt, soundEnabled 
       }
     }
   }, [now, slots, ticks, sleeping, wakeAt, fire]);
+
+  // Mirror the day to the bot, so a channel can show how it's going.
+  //
+  // Debounced rather than fired on every tick: ticking three things in a row is
+  // one change to anyone reading, not three edits. A failure here is silent by
+  // design — the schedule on this Mac is already correct, and a toast every time
+  // the bot is mid-restart would be noise about nothing.
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!apiUrl || !selectedServer) return;
+    const target = loadMirrorTarget(selectedServer);
+    const serverName = servers.find((x) => x.id === selectedServer)?.name || "";
+    if (!serverName) return;
+
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      const body = mirrorPayload(slots, ticks, serverName, target.channelId, target.nag, now);
+      fetch(apiUrl.replace(/\/$/, "") + "/api/schedule/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    }, 1200);
+
+    return () => {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+    };
+  }, [apiUrl, selectedServer, servers, slots, ticks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (slot: Slot) => {
     const done = isTicked(ticks, slot.id, now);
@@ -235,6 +286,15 @@ export default function ScheduleScreen({ notify, sleeping, wakeAt, soundEnabled 
           >
             {editing ? "Done editing" : "Edit"}
           </button>
+          {renderSettings && apiUrl && (
+            <button
+              onClick={() => setShowSettings((v) => !v)}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700/70 transition"
+              data-tip="Where the day is posted, and whether the bot nudges there"
+            >
+              {showSettings ? "Hide settings" : "Settings"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -333,6 +393,21 @@ export default function ScheduleScreen({ notify, sleeping, wakeAt, soundEnabled 
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {showSettings && renderSettings && apiUrl && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-6 overflow-hidden"
+          >
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+              {renderSettings({ apiUrl, notify, servers, selectedServer })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {editing && (

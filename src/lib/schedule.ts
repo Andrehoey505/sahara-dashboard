@@ -289,3 +289,69 @@ export function orderedToday(slots: Slot[], now: Date = new Date()): Slot[] {
 export function outstanding(slots: Slot[], ticks: Ticks, now: Date = new Date()): number {
   return orderedToday(slots, now).filter((s) => s.at.type !== "manual" && !isTicked(ticks, s.id, now)).length;
 }
+
+// ---------------------------------------------------------------- mirroring
+
+/**
+ * The day as the bot should see it.
+ *
+ * The app posts the whole day, not a diff, for the same reason the ticket types
+ * and channel rules do: two callers sending deltas can disagree, and then neither
+ * of them is right. The bot validates and stores what it's given.
+ *
+ * Nothing here throws. A sync that fails is a mirror that failed, not a schedule
+ * that failed — the day on this Mac is already correct.
+ */
+export type MirrorSlot = {
+  id: string;
+  label: string;
+  kind: SlotKind;
+  due: string;
+  done: boolean;
+  done_at: string | null;
+};
+
+export function mirrorPayload(
+  slots: Slot[],
+  ticks: Ticks,
+  serverName: string,
+  channelId: string,
+  nag: boolean,
+  when: Date = new Date()
+) {
+  const day = dayKey(when);
+  const done = ticks[day] || {};
+  return {
+    server: serverName,
+    channel_id: channelId || "",
+    nag,
+    date: day,
+    slots: orderedToday(slots, when).map<MirrorSlot>((s) => ({
+      id: s.id,
+      label: s.label,
+      kind: s.kind,
+      due: s.at.type === "wake" ? "wake" : s.at.type === "manual" ? "manual" : s.at.time,
+      done: Boolean(done[s.id]),
+      done_at: done[s.id] || null,
+    })),
+  };
+}
+
+/** Where the mirror is pointed, per server. Read by the sync, written by Settings. */
+const CHANNEL_KEY = "sahara_schedule_channel_v1";
+
+export function loadMirrorTarget(serverId: string): { channelId: string; channelName: string; nag: boolean } {
+  try {
+    const raw = localStorage.getItem(CHANNEL_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const entry = parsed?.[serverId];
+    if (!entry) return { channelId: "", channelName: "", nag: false };
+    return {
+      channelId: String(entry.channelId || ""),
+      channelName: String(entry.channelName || ""),
+      nag: entry.nag === true,
+    };
+  } catch {
+    return { channelId: "", channelName: "", nag: false };
+  }
+}

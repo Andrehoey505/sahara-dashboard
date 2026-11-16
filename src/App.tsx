@@ -45,6 +45,7 @@ import ArmCareScreen from "./components/ArmCareScreen";
 import SleepMode from "./components/SleepMode";
 import SleepLog from "./components/SleepLog";
 import ScheduleScreen from "./components/ScheduleScreen";
+import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
 import MentionsScreen from "./components/MentionsScreen";
 import MembersScreen from "./components/MembersScreen";
@@ -1453,7 +1454,16 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
         )}
 
         {active === "schedule" && (
-          <ScheduleScreen notify={notify} sleeping={sleepMode} wakeAt={wakeAt} soundEnabled={soundEnabled} />
+          <ScheduleScreen
+            notify={notify}
+            sleeping={sleepMode}
+            wakeAt={wakeAt}
+            soundEnabled={soundEnabled}
+            apiUrl={apiUrl}
+            servers={servers}
+            selectedServer={selectedServer}
+            renderSettings={(p) => <ScheduleSettings {...p} />}
+          />
         )}
         {active === "migraine" && <MigraineScreen apiUrl={apiUrl} />}
 
