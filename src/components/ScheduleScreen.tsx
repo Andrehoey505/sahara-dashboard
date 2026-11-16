@@ -17,6 +17,8 @@ import {
   Plus,
   Trash2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   X,
 } from "lucide-react";
 import { playCue } from "../lib/audio";
@@ -38,6 +40,13 @@ import {
   mirrorPayload,
   loadMirrorTarget,
   clearDayTicks,
+  type DayPlans,
+  loadDayPlans,
+  saveDayPlans,
+  planFor,
+  dayList,
+  addDays,
+  isToday,
 } from "../lib/schedule";
 
 /**
@@ -130,8 +139,11 @@ export default function ScheduleScreen({
   renderSettings,
 }: Props) {
   const [slots, setSlots] = useState<Slot[]>(() => loadSchedule());
+  const [plans, setPlans] = useState<DayPlans>(() => loadDayPlans());
   const [ticks, setTicks] = useState<Ticks>(() => loadTicks());
   const [now, setNow] = useState<Date>(() => new Date());
+  /** The day being looked at. Only "today" nags and syncs. */
+  const [viewDate, setViewDate] = useState<Date>(() => addDays(new Date(), 0));
   const [editing, setEditing] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -151,8 +163,15 @@ export default function ScheduleScreen({
     return () => clearInterval(id);
   }, []);
 
-  const mainList = useMemo(() => orderedToday(slots, now).filter(isMainListItem), [slots, now]);
-  const asNeededList = useMemo(() => slots.filter(isAsNeededItem), [slots]);
+  const viewingToday = isToday(viewDate);
+  /** The plan in force for the day on screen: its own if it has one, else the template. */
+  const daySlots = useMemo(() => planFor(slots, plans, viewDate), [slots, plans, viewDate]);
+  const dayIsOwn = useMemo(() => Array.isArray(plans[dayKey(viewDate)]), [plans, viewDate]);
+  const mainList = useMemo(
+    () => dayList(slots, plans, viewDate).filter(isMainListItem),
+    [slots, plans, viewDate]
+  );
+  const asNeededList = useMemo(() => daySlots.filter(isAsNeededItem), [daySlots]);
 
   const fire = useCallback(
     (slot: Slot) => {
@@ -204,22 +223,29 @@ export default function ScheduleScreen({
 
     if (syncTimer.current) clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const body = mirrorPayload(slots, ticks, serverName, target.channelId, target.nag, now);
-      fetch(apiUrl.replace(/\/$/, "") + "/api/schedule/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }).catch(() => {});
+      // Today and tomorrow. Two days, because planning tomorrow is the whole
+      // point of the day switcher and a plan the bot never hears about is a
+      // plan nobody can see. Beyond tomorrow it stays local — a channel post
+      // about next Thursday is noise.
+      const url = apiUrl.replace(/\/$/, "") + "/api/schedule/sync";
+      for (const when of [addDays(now, 0), addDays(now, 1)]) {
+        const body = mirrorPayload(slots, ticks, serverName, target.channelId, target.nag, when, plans);
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }).catch(() => {});
+      }
     }, 1200);
 
     return () => {
       if (syncTimer.current) clearTimeout(syncTimer.current);
     };
-  }, [apiUrl, selectedServer, servers, slots, ticks]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiUrl, selectedServer, servers, slots, ticks, plans]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (slot: Slot) => {
-    const done = isTicked(ticks, slot.id, now);
-    const next = done ? untick(ticks, slot.id, now) : tick(ticks, slot.id, now);
+    const done = isTicked(ticks, slot.id, viewDate);
+    const next = done ? untick(ticks, slot.id, viewDate) : tick(ticks, slot.id, viewDate);
     setTicks(next);
     saveTicks(next);
     if (!done) {
@@ -234,8 +260,8 @@ export default function ScheduleScreen({
   };
 
   const logAsNeeded = (slot: Slot) => {
-    const done = isTicked(ticks, slot.id, now);
-    const next = done ? untick(ticks, slot.id, now) : tick(ticks, slot.id, now);
+    const done = isTicked(ticks, slot.id, viewDate);
+    const next = done ? untick(ticks, slot.id, viewDate) : tick(ticks, slot.id, viewDate);
     setTicks(next);
     saveTicks(next);
     playCue("success", soundEnabled);
@@ -243,61 +269,126 @@ export default function ScheduleScreen({
   };
 
   const clearToday = () => {
-    const cleared = clearDayTicks(ticks, now);
+    const cleared = clearDayTicks(ticks, viewDate);
     setTicks(cleared);
     saveTicks(cleared);
-    notify("Cleared all ticks for today", "info");
+    notify(viewingToday ? "Cleared all ticks for today" : "Cleared the ticks for that day", "info");
+  };
+
+  // Editing the day on screen.
+  //
+  // Today and future days are different problems. Editing today edits the
+  // template — it's the day you're living. Editing tomorrow writes a plan for
+  // that date only, so adding something for tomorrow doesn't quietly add it to
+  // every day after. "Back to the usual day" is how a one-off gets taken back.
+  const setDaySlots = (next: Slot[]) => {
+    if (viewingToday) {
+      setSlots(next);
+      saveSchedule(next);
+      return;
+    }
+    const updated: DayPlans = { ...plans, [dayKey(viewDate)]: next };
+    setPlans(updated);
+    saveDayPlans(updated);
+  };
+
+  const editDay = (mutate: (list: Slot[]) => Slot[]) => {
+    setDaySlots(mutate(daySlots));
+  };
+
+  const revertDay = () => {
+    const updated: DayPlans = { ...plans };
+    delete updated[dayKey(viewDate)];
+    setPlans(updated);
+    saveDayPlans(updated);
+    notify("That day follows the usual schedule again", "info");
+  };
+
+  const goDay = (n: number) => {
+    setViewDate((d) => addDays(d, n));
   };
 
   const updateSlot = (id: string, patch: Partial<Slot>) => {
-    const next = slots.map((s) => (s.id === id ? { ...s, ...patch } : s));
-    setSlots(next);
-    saveSchedule(next);
+    editDay((list) => list.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   };
 
   const removeSlot = (id: string) => {
-    const next = slots.filter((s) => s.id !== id);
-    setSlots(next);
-    saveSchedule(next);
+    editDay((list) => list.filter((s) => s.id !== id));
   };
 
   const addSlot = () => {
     const id = "custom-" + Date.now().toString(36);
-    const next: Slot[] = [
-      ...slots,
+    editDay((list) => [
+      ...list,
       { id, label: "New item", kind: "food", at: { type: "time", time: "12:00" }, enabled: true },
-    ];
-    setSlots(next);
-    saveSchedule(next);
+    ]);
     setEditing(true);
   };
 
   const reset = () => {
     localStorage.removeItem("sahara_schedule_v1");
     localStorage.removeItem("sahara_schedule_ticks_v1");
+    localStorage.removeItem("sahara_schedule_days_v1");
     setSlots(loadSchedule());
+    setPlans({});
     setTicks(loadTicks());
     setConfirmReset(false);
     notify("Schedule and ticks reset to default", "info");
   };
 
-  const done = mainList.filter((s) => isTicked(ticks, s.id, now)).length;
+  const done = mainList.filter((s) => isTicked(ticks, s.id, viewDate)).length;
   const total = mainList.length;
-  const left = outstanding(slots, ticks, now);
+  const left = total - done;
+  const dayDate = viewDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const relative =
+    dayKey(viewDate) === dayKey(addDays(new Date(), 1)) ? "Tomorrow" : WEEKDAYS[viewDate.getDay()];
 
   return (
     <div className="p-4 md:p-6 max-w-3xl">
       <div className="flex items-start justify-between gap-4 mb-1">
         <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Clock className="w-5 h-5 text-indigo-400" /> Today
-          </h2>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => goDay(-1)}
+              disabled={viewingToday}
+              className="w-7 h-7 rounded-lg border border-slate-700 bg-slate-800 flex items-center justify-center text-slate-300 hover:bg-slate-700/70 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              data-tip={viewingToday ? "You're already on today" : "The day before"}
+              aria-label="Previous day"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <h2 className="text-xl font-semibold flex items-center gap-2 min-w-[8.5rem]">
+              <Clock className="w-5 h-5 text-indigo-400" /> {viewingToday ? "Today" : relative}
+            </h2>
+            <button
+              onClick={() => goDay(1)}
+              className="w-7 h-7 rounded-lg border border-slate-700 bg-slate-800 flex items-center justify-center text-slate-300 hover:bg-slate-700/70 transition"
+              data-tip="Plan another day"
+              aria-label="Next day"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-slate-500 ml-1">{dayDate}</span>
+            {!viewingToday && (
+              <button
+                onClick={() => setViewDate(addDays(new Date(), 0))}
+                className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700/70 transition ml-1"
+                data-tip="Back to today"
+              >
+                Today
+              </button>
+            )}
+          </div>
           <p className="text-sm text-slate-400 mt-1">
-            {total === 0
-              ? "Nothing scheduled today."
-              : left === 0
-              ? "Everything's ticked. That's the day done."
-              : `${done} of ${total} done — ${left} to go.`}
+            {viewingToday
+              ? total === 0
+                ? "Nothing scheduled today."
+                : left === 0
+                ? "Everything's ticked. That's the day done."
+                : `${done} of ${total} done — ${left} to go.`
+              : total === 0
+              ? "Nothing planned for this day."
+              : `${total} ${total === 1 ? "item" : "items"}${dayIsOwn ? " — planned for this day only" : " — the usual day"}`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -308,7 +399,7 @@ export default function ScheduleScreen({
           >
             {editing ? "Done editing" : "Edit"}
           </button>
-          {total > 0 && (
+          {done > 0 && (
             <button
               onClick={clearToday}
               className="text-xs px-2.5 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-200 hover:bg-rose-500/30 transition flex items-center gap-1.5"
@@ -339,8 +430,11 @@ export default function ScheduleScreen({
       <div className="mt-4 space-y-2">
         {mainList.map((slot) => {
           const Icon = KIND_ICON[slot.kind] || Clock;
-          const checked = isTicked(ticks, slot.id, now);
-          const state = nagState(slot, now, ticks, { sleeping, wakeAt });
+          const checked = isTicked(ticks, slot.id, viewDate);
+          // Only today has a due state: a nag is about now, not about Thursday.
+          const state = viewingToday
+            ? nagState(slot, now, ticks, { sleeping, wakeAt })
+            : { state: "none" as const };
 
           return (
             <motion.div
@@ -391,7 +485,9 @@ export default function ScheduleScreen({
               </div>
 
               {checked && (
-                <span className="text-xs text-emerald-300/80 shrink-0">{ticks[dayKey(now)]?.[slot.id]}</span>
+                <span className="text-xs text-emerald-300/80 shrink-0">
+                  {ticks[dayKey(viewDate)]?.[slot.id]}
+                </span>
               )}
             </motion.div>
           );
@@ -403,7 +499,7 @@ export default function ScheduleScreen({
           <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2">As needed</h3>
           <div className="flex flex-wrap gap-2">
             {asNeededList.map((slot) => {
-              const checked = isTicked(ticks, slot.id, now);
+              const checked = isTicked(ticks, slot.id, viewDate);
               return (
                 <button
                   key={slot.id}
@@ -418,7 +514,7 @@ export default function ScheduleScreen({
                 >
                   <Pill className="w-3.5 h-3.5" /> {slot.label}
                   {checked && (
-                    <span className="text-rose-300/70">· {ticks[dayKey(now)]?.[slot.id]}</span>
+                    <span className="text-rose-300/70">· {ticks[dayKey(viewDate)]?.[slot.id]}</span>
                   )}
                 </button>
               );
@@ -452,8 +548,19 @@ export default function ScheduleScreen({
           >
             <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium">The schedule</h3>
+                <h3 className="text-sm font-medium">
+                  {viewingToday ? "The schedule" : `The plan for ${relative.toLowerCase()}`}
+                </h3>
                 <div className="flex gap-2">
+                  {!viewingToday && dayIsOwn && (
+                    <button
+                      onClick={revertDay}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700/70 transition flex items-center gap-1"
+                      data-tip="Drop this day's own plan and follow the usual schedule"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Usual day
+                    </button>
+                  )}
                   <button
                     onClick={addSlot}
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/30 transition flex items-center gap-1"
@@ -479,7 +586,7 @@ export default function ScheduleScreen({
               </div>
 
               <div className="space-y-2">
-                {slots.map((slot) => (
+                {daySlots.map((slot) => (
                   <div
                     key={slot.id}
                     className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center rounded-lg border border-slate-700/50 bg-slate-800/40 px-2.5 py-2"
@@ -528,8 +635,11 @@ export default function ScheduleScreen({
               </div>
 
               <p className="text-xs text-slate-500 mt-3">
-                Nags fire once at the time, and once more 45 minutes later if it's still not ticked. Nothing
-                fires in sleep mode.
+                {viewingToday
+                  ? "Changes here become the usual day, from today onwards."
+                  : "Changes here are for this day only — the usual day is untouched. Use \"Usual day\" to undo them."}{" "}
+                Nags fire once at the time, and once more 45 minutes later if it's still not ticked, and only
+                ever for today. Nothing fires in sleep mode.
               </p>
             </div>
           </motion.div>

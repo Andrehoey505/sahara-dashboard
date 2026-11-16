@@ -299,6 +299,66 @@ export function orderedToday(slots: Slot[], now: Date = new Date()): Slot[] {
   return slots.filter((s) => appliesToday(s, now)).sort((a, b) => order(a) - order(b));
 }
 
+// ------------------------------------------------------- planning ahead
+
+/**
+ * Days you can plan into, as a key list from today onwards.
+ *
+ * The schedule is a repeating template, not a calendar: most days are the
+ * template plus nothing. So a day only needs its own entry when you change it —
+ * add something for tomorrow, take tomorrow's noodles out, and that becomes
+ * tomorrow's plan. Days with no entry fall through to the template, which is
+ * why adding something for tomorrow doesn't disturb today or next week.
+ */
+export type DayPlans = Record<string, Slot[]>;
+
+const PLANS_KEY = "sahara_schedule_days_v1";
+
+export function loadDayPlans(): DayPlans {
+  try {
+    const raw = localStorage.getItem(PLANS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveDayPlans(plans: DayPlans) {
+  // Keep today and forward only: a plan for last Tuesday is not a plan.
+  const today = dayKey();
+  const kept: DayPlans = {};
+  for (const k of Object.keys(plans).sort()) {
+    if (k >= today) kept[k] = plans[k];
+  }
+  try {
+    localStorage.setItem(PLANS_KEY, JSON.stringify(kept));
+  } catch {}
+}
+
+/** The plan for a given day: its own if it has one, otherwise the template. */
+export function planFor(slots: Slot[], plans: DayPlans, when: Date = new Date()): Slot[] {
+  const own = plans[dayKey(when)];
+  return Array.isArray(own) ? own : slots;
+}
+
+/** Slots for a day, ordered, with weekday-only chores filtered as usual. */
+export function dayList(slots: Slot[], plans: DayPlans, when: Date = new Date()): Slot[] {
+  return orderedToday(planFor(slots, plans, when), when);
+}
+
+/** Move a date by whole days, keeping the time of day out of it entirely. */
+export function addDays(d: Date, n: number): Date {
+  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  next.setDate(next.getDate() + n);
+  return next;
+}
+
+export function isToday(d: Date): boolean {
+  return dayKey(d) === dayKey();
+}
+
 /** How many of today's slots are still unticked — the number on the sidebar. */
 export function outstanding(slots: Slot[], ticks: Ticks, now: Date = new Date()): number {
   return orderedToday(slots, now).filter((s) => s.at.type !== "manual" && !isTicked(ticks, s.id, now)).length;
@@ -331,7 +391,8 @@ export function mirrorPayload(
   serverName: string,
   channelId: string,
   nag: boolean,
-  when: Date = new Date()
+  when: Date = new Date(),
+  plans: DayPlans = {}
 ) {
   const day = dayKey(when);
   const done = ticks[day] || {};
@@ -340,7 +401,7 @@ export function mirrorPayload(
     channel_id: channelId || "",
     nag,
     date: day,
-    slots: orderedToday(slots, when).map<MirrorSlot>((s) => ({
+    slots: dayList(slots, plans, when).map<MirrorSlot>((s) => ({
       id: s.id,
       label: s.label,
       kind: s.kind,

@@ -22,6 +22,7 @@ type Props = {
 };
 
 const KEY = "sahara_schedule_channel_v1";
+const PICKED_SERVER_KEY = "sahara_schedule_server_v1";
 
 type Store = Record<string, { channelId: string; channelName: string; nag: boolean }>;
 
@@ -40,8 +41,19 @@ export default function ScheduleSettings({ apiUrl, notify, servers, selectedServ
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [picked, setPicked] = useState<string>(() => {
+    try {
+      return localStorage.getItem(PICKED_SERVER_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
 
-  const serverId = selectedServer || servers[0]?.id || "";
+  // The schedule remembers its own server. Falling back to the dashboard's active
+  // server means it starts somewhere sensible, but a choice made here sticks —
+  // picking a channel for Babble Playpen shouldn't evaporate because the app is
+  // looking at a different server an hour later.
+  const serverId = picked || selectedServer || servers[0]?.id || "";
   const serverName = servers.find((s) => s.id === serverId)?.name || serverId;
   const current = store[serverId] || { channelId: "", channelName: "", nag: false };
 
@@ -86,6 +98,14 @@ export default function ScheduleSettings({ apiUrl, notify, servers, selectedServ
     } catch {}
   };
 
+  const pickServer = (id: string) => {
+    setPicked(id);
+    try {
+      localStorage.setItem(PICKED_SERVER_KEY, id);
+    } catch {}
+    setChannels([]);
+  };
+
   const pickChannel = (id: string) => {
     const found = textChannels.find((c) => String(c.id) === id);
     update({ channelId: id, channelName: found?.name || "" });
@@ -117,6 +137,25 @@ export default function ScheduleSettings({ apiUrl, notify, servers, selectedServ
           </button>
         </div>
       )}
+
+      <div className="space-y-2">
+        <label className="text-xs text-slate-400 flex items-center gap-1.5">
+          <Server className="w-3.5 h-3.5" /> Server
+        </label>
+        <select
+          value={serverId}
+          onChange={(e) => pickServer(e.target.value)}
+          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
+          data-tip="Which server the schedule belongs to"
+        >
+          {servers.length === 0 && <option value="">No servers found</option>}
+          {servers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div className="space-y-2">
         <label className="text-xs text-slate-400 flex items-center gap-1.5">
