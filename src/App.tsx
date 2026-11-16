@@ -35,6 +35,7 @@ import {
   SlidersHorizontal,
   Ticket,
   Database,
+  Clock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
@@ -43,6 +44,8 @@ import SettingsScreen from "./components/SettingsScreen";
 import ArmCareScreen from "./components/ArmCareScreen";
 import SleepMode from "./components/SleepMode";
 import SleepLog from "./components/SleepLog";
+import ScheduleScreen from "./components/ScheduleScreen";
+import { dayKey } from "./lib/schedule";
 import MentionsScreen from "./components/MentionsScreen";
 import MembersScreen from "./components/MembersScreen";
 import ModerationScreen from "./components/ModerationScreen";
@@ -374,6 +377,18 @@ export default function App() {
   const [showSleep, setShowSleep] = useState(false);
   const [showSleepLog, setShowSleepLog] = useState(false);
   const [lastWokeAt, setLastWokeAt] = useState<string | null>(null);
+  // When the wake-up press happened today, "HH:MM". The morning inhaler hangs off
+  // this rather than a fixed time, so a 10am wake and a 2pm wake behave the same.
+  const [wakeAt, setWakeAt] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem("sahara_wake_at");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.day === dayKey() ? parsed.time : null;
+    } catch {
+      return null;
+    }
+  });
   const [showMentions, setShowMentions] = useState(false);
 
   // The bot is the only one who knows whether Andre is asleep. This app is not: it gets
@@ -595,6 +610,11 @@ export default function App() {
   /** Wake up: tell the bot, then show and read out whatever piled up. */
   const wakeUp = React.useCallback(() => {
     setSleepMode(false);
+    const stamped = new Date().toTimeString().slice(0, 5);
+    setWakeAt(stamped);
+    try {
+      localStorage.setItem("sahara_wake_at", JSON.stringify({ day: dayKey(), time: stamped }));
+    } catch {}
     notify("Welcome back", "success");
     if (soundEnabled) playSound("wake");
     fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
@@ -956,6 +976,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
     {
       group: "Health",
       items: [
+        { id: "schedule", label: "Today", icon: Clock },
         { id: "migraine", label: "Migraine Diary", icon: Brain },
         { id: "armcare", label: "Arm Care", icon: HeartPulse },
         ...(settings.edWaitsEnabled ? [{ id: "edwaits", label: "ED Waits", icon: Activity }] : []),
@@ -1431,6 +1452,9 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           </motion.div>
         )}
 
+        {active === "schedule" && (
+          <ScheduleScreen notify={notify} sleeping={sleepMode} wakeAt={wakeAt} soundEnabled={soundEnabled} />
+        )}
         {active === "migraine" && <MigraineScreen apiUrl={apiUrl} />}
 
         {active === "armcare" && <ArmCareScreen />}

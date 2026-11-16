@@ -7,6 +7,7 @@
  */
 export const SCREENS = [
   "dashboard",
+  "schedule",
   "edwaits",
   "livefeed",
   "violations",
