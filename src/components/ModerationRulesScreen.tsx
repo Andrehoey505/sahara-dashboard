@@ -45,7 +45,9 @@ type ChannelRule = {
   links?: string | null;
   profanity?: string | null;
   spam?: string | null;
-  nsfw_text?: string | null;
+  // nsfw_text is deliberately absent: the bot stores it but has no detector behind
+  // it, and a switch that saves a value nothing reads is a lie told by a settings
+  // screen. It goes back on the day there is something for it to switch.
   nsfw_images?: string | null;
   nsfw_videos?: string | null;
   sensitivity?: string | null;
@@ -129,15 +131,6 @@ const SWITCHES: {
     ],
   },
   {
-    key: "nsfw_text",
-    label: "NSFW text",
-    help: "Sexual or adult language in the message itself.",
-    options: [
-      { value: "off", label: "Not checked" },
-      { value: "flag", label: "Flag for review" },
-    ],
-  },
-  {
     key: "nsfw_images",
     label: "NSFW images",
     help: "Pictures are analysed for adult content.",
@@ -176,7 +169,6 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "allow",
     profanity: "off",
     spam: "off",
-    nsfw_text: "off",
     nsfw_images: "off",
     nsfw_videos: "off",
     sensitivity: "normal",
@@ -185,7 +177,6 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "allow",
     profanity: "off",
     spam: "flag",
-    nsfw_text: "flag",
     nsfw_images: "spoiler",
     nsfw_videos: "spoiler",
     sensitivity: "normal",
@@ -194,7 +185,6 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "flag",
     profanity: "flag",
     spam: "flag",
-    nsfw_text: "flag",
     nsfw_images: "flag",
     nsfw_videos: "flag",
     sensitivity: "normal",
@@ -203,7 +193,6 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "flag",
     profanity: "always",
     spam: "delete",
-    nsfw_text: "flag",
     nsfw_images: "flag",
     nsfw_videos: "flag",
     sensitivity: "high",
@@ -523,6 +512,10 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
                             </div>
                           );
                         })}
+                        <p className="text-[11px] text-slate-600 pt-1">
+                          NSFW text is not checked — the bot has no detector for it yet, so there is
+                          no switch for it here.
+                        </p>
                       </div>
                     </motion.div>
                   )}
