@@ -258,7 +258,18 @@ export default function SettingsScreen({
     }
   };
 
-  const saveApi = () => {
+  /**
+   * Save both addresses.
+   *
+   * `primary` says which field was pressed, so the other one cannot be silently
+   * dropped. The bug this fixes: the two fields had one Save between them, and
+   * it took the primary from `apiDraft` -- so pressing Save on the fallback
+   * rewrote the primary with whatever happened to be in that box. Type the LAN
+   * in the primary, Tailscale in the fallback, press Save, and end up with two
+   * copies of Tailscale. Which is exactly what "it keeps changing my local
+   * address back" looks like.
+   */
+  const saveAddresses = (primary: "api" | "fallback") => {
     const clean = apiDraft.trim().replace(/\/$/, "");
     const cleanFallback = fallbackDraft.trim().replace(/\/$/, "");
     setApiDraft(clean);
@@ -266,7 +277,8 @@ export default function SettingsScreen({
     // Both saved together: the fallback is a property of the bot, not of this
     // laptop, and half a pair is worse than none.
     onSaveSettings({ ...settings, apiFallbackUrl: cleanFallback });
-    onSaveApiUrl(clean);
+    // The primary only moves when the primary field is what was saved.
+    if (primary === "api") onSaveApiUrl(clean);
   };
 
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
@@ -393,7 +405,7 @@ export default function SettingsScreen({
             {testing ? "Testing…" : "Test"}
           </button>
           <button
-            onClick={saveApi}
+            onClick={() => saveAddresses("api")}
             className="px-3 py-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/30 transition-colors"
            data-tip="Save these settings">Save</button>
         </div>
@@ -450,7 +462,7 @@ export default function SettingsScreen({
                 which looks like it belongs to the primary field — so a fallback typed
                 in and never saved is the obvious mistake, and it fails silently. */}
             <button
-              onClick={saveApi}
+              onClick={() => saveAddresses("fallback")}
               disabled={fallbackDraft.trim() === (settings.apiFallbackUrl || "").trim()}
               className="px-3 py-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/30 disabled:opacity-40 transition-colors"
               data-tip={
