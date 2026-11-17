@@ -20,6 +20,8 @@
  * first is alive kicks the first one off its session.
  */
 
+import { botRequest } from "./bot";
+
 export type AddressKind = "lan" | "fallback";
 
 /**
@@ -97,37 +99,32 @@ export function addresses(lan: string, fallback?: string): { kind: AddressKind; 
   return out;
 }
 
-/** One short request. Resolves, never throws. */
+/**
+ * One short request to one address. Resolves, never throws.
+ *
+ * Goes through `botRequest`, which performs the request in Rust. The webview's
+ * own fetch could not reach the fallback address at all -- a plain curl on the
+ * same machine answered in 53ms while this got nothing back and the bot saw no
+ * request arrive -- so the probe uses the path that actually works.
+ */
 async function hit(url: string, timeoutMs: number): Promise<ProbeResult & { kind: AddressKind }> {
   const started = Date.now();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const kind: AddressKind = "lan";
-  try {
-    const res = await fetch(url + "/api/health", {
-      method: "GET",
-      signal: controller.signal,
-      // A cached 200 from an earlier session must not read as "alive now".
-      cache: "no-store",
-    });
-    const ms = Date.now() - started;
-    if (!res.ok) {
-      return { kind, url, ok: false, ms, error: `answered but not healthy (HTTP ${res.status})` };
-    }
-    return { kind, url, ok: true, ms };
-  } catch (e: any) {
-    const ms = Date.now() - started;
-    const aborted = e?.name === "AbortError";
-    return {
-      kind,
-      url,
-      ok: false,
-      ms,
-      error: aborted ? "no answer in time" : "could not connect",
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+  const r = await botRequest(url, "/api/health", { timeoutMs });
+  const ms = Date.now() - started;
+  if (r.ok) return { kind, url, ok: true, ms };
+  return {
+    kind,
+    url,
+    ok: false,
+    ms,
+    error:
+      r.status === 0
+        ? ms >= timeoutMs
+          ? "no answer in time"
+          : "could not connect"
+        : `answered but not healthy (HTTP ${r.status})`,
+  };
 }
 
 /**

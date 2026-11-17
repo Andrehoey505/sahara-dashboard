@@ -4,6 +4,10 @@
   "description": "Core permissions plus the plugins the app actually calls from JS.",
   "windows": ["*"],
   "permissions": [
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "http://*" }, { "url": "https://*" }]
+    },
     "core:default",
     "process:default",
     "updater:default",

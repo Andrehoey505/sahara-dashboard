@@ -1,6 +1,6 @@
 [package]
 name = "sahara-dashboard"
-version = "0.12.42"
+version = "0.12.43"
 description = "Sahara Discord Bot Dashboard"
 authors = ["Andre Hoey"]
 edition = "2021"
@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-fs = "2"
+tauri-plugin-http = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"

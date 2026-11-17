@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { looksLikeTailscale, networkState, type OfflineState } from "../lib/connection";
+import { pingBot } from "../lib/bot";
 import type { AppSettings } from "./SetupScreen";
 
 /**
@@ -235,8 +236,8 @@ export default function SettingsScreen({
       return;
     }
     try {
-      const res = await fetch(apiDraft.replace(/\/$/, "") + "/api/health");
-      setTestResult(res.ok ? "ok" : "fail");
+      const r = await pingBot(apiDraft.replace(/\/$/, ""));
+      setTestResult(r.ok ? "ok" : "fail");
     } catch {
       setTestResult("fail");
     } finally {
@@ -248,8 +249,8 @@ export default function SettingsScreen({
     setTestingFallback(true);
     setFallbackResult(null);
     try {
-      const res = await fetch(fallbackDraft.trim().replace(/\/$/, "") + "/api/health");
-      setFallbackResult(res.ok ? "ok" : "fail");
+      const r = await pingBot(fallbackDraft.trim().replace(/\/$/, ""));
+      setFallbackResult(r.ok ? "ok" : "fail");
     } catch {
       setFallbackResult("fail");
     } finally {
