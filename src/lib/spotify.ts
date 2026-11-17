@@ -9,6 +9,7 @@
  * Requires an active Spotify Premium account — playback control is Premium-only.
  */
 
+import { botFetch } from "./bot";
 const AUTH_URL = "https://accounts.spotify.com/authorize";
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const API = "https://api.spotify.com/v1";
@@ -129,7 +130,7 @@ export async function completeAuth(
     code_verifier: verifier,
   });
 
-  const res = await fetch(TOKEN_URL, {
+  const res = await botFetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -159,7 +160,7 @@ async function refresh(clientId: string, token: SpotifyToken): Promise<SpotifyTo
     grant_type: "refresh_token",
     refresh_token: token.refresh_token,
   });
-  const res = await fetch(TOKEN_URL, {
+  const res = await botFetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -181,13 +182,11 @@ async function authed(clientId: string, path: string, init?: RequestInit) {
   if (Date.now() > token.expires_at - 60000) {
     token = await refresh(clientId, token);
   }
-  const res = await fetch(API + path, {
-    ...init,
-    headers: {
-      ...(init?.headers || {}),
-      Authorization: `Bearer ${token.access_token}`,
-    },
-  });
+  const headers: Record<string, string> = {
+    ...((init?.headers as Record<string, string>) || {}),
+    Authorization: `Bearer ${token.access_token}`,
+  };
+  const res = await botFetch(API + path, { ...init, headers });
   if (res.status === 204) return null;
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -432,7 +431,7 @@ function parseLrc(lrc: string): LyricLine[] {
 
 async function lrclibFetch(path: string): Promise<any | null> {
   try {
-    const res = await fetch(LRCLIB + path, {
+    const res = await botFetch(LRCLIB + path, {
       headers: { "Lrclib-Client": "Sahara Dashboard v0.3 (personal use)" },
     });
     if (!res.ok) return null;

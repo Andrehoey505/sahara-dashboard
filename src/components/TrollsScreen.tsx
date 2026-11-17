@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ShieldAlert, Plus, Trash2, RefreshCw, Search, X, UserRoundSearch, Loader2 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { formatShort } from "../lib/time";
+import { botFetch } from "../lib/bot";
 
 type Troll = {
   user_id: string;
@@ -35,7 +36,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl + "/api/trolls");
+      const res = await botFetch(apiUrl + "/api/trolls");
       if (!res.ok) throw new Error("bad status");
       const data = await res.json().catch(() => ({}));
       setTrolls(Array.isArray(data) ? data : data.trolls || []);
@@ -57,7 +58,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
   const refreshNames = async () => {
     setBusy("names");
     try {
-      const res = await fetch(apiUrl + "/api/trolls/refresh-names", { method: "POST" });
+      const res = await botFetch(apiUrl + "/api/trolls/refresh-names", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         const bits = [`${data.updated} name${data.updated === 1 ? "" : "s"} updated`];
@@ -87,7 +88,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
     }
     setBusy("add");
     try {
-      const res = await fetch(apiUrl + "/api/trolls", {
+      const res = await botFetch(apiUrl + "/api/trolls", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: id, reason: newReason.trim() }),
@@ -114,7 +115,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
   const remove = async (t: Troll) => {
     setBusy(t.user_id);
     try {
-      const res = await fetch(apiUrl + "/api/trolls/" + encodeURIComponent(t.user_id), {
+      const res = await botFetch(apiUrl + "/api/trolls/" + encodeURIComponent(t.user_id), {
         method: "DELETE",
       });
       const data = await res.json().catch(() => ({}));
@@ -322,7 +323,7 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
                       ""
                     );
                     if (reason && reason.trim().length >= 3) {
-                      fetch(apiUrl + "/api/trolls/" + encodeURIComponent(t.user_id) + "/reason", {
+                      botFetch(apiUrl + "/api/trolls/" + encodeURIComponent(t.user_id) + "/reason", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ reason: reason.trim() }),

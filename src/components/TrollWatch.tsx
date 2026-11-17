@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ShieldAlert, Check, X, RefreshCw, UserX, Clock } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 type HitlRequest = {
   id: string;
@@ -36,7 +37,7 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl + "/api/troll-watch");
+      const res = await botFetch(apiUrl + "/api/troll-watch");
       if (!res.ok) throw new Error("bad status");
       const data = await res.json().catch(() => ({}));
       setPending(data.pending || []);
@@ -58,7 +59,7 @@ export default function TrollWatch({ apiUrl, notify }: Props) {
   const respond = async (req: HitlRequest, action: string) => {
     setBusy(req.id);
     try {
-      const res = await fetch(apiUrl + "/api/troll-watch/respond", {
+      const res = await botFetch(apiUrl + "/api/troll-watch/respond", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: req.id, action }),

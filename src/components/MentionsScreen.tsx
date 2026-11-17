@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { X, MessageCircle, Trash2, RefreshCw } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { formatDateTime } from "../lib/time";
+import { botFetch } from "../lib/bot";
 
 export type Mention = {
   timestamp: string;
@@ -42,7 +43,7 @@ export default function MentionsScreen({ open, onClose, apiUrl, inline = false }
 
   const load = React.useCallback(() => {
     setError("");
-    fetch(base + "/api/mentions")
+    botFetch(base + "/api/mentions")
       .then((r) => r.json())
       .then((d) => setMentions(Array.isArray(d?.mentions) ? d.mentions : []))
       .catch(() => setError("Couldn't reach Babblebot for the list."));
@@ -61,7 +62,7 @@ export default function MentionsScreen({ open, onClose, apiUrl, inline = false }
     const until = mentions && mentions.length
       ? mentions.reduce((a, m) => (m.timestamp > a ? m.timestamp : a), mentions[0].timestamp)
       : "";
-    fetch(base + "/api/mentions/clear", {
+    botFetch(base + "/api/mentions/clear", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ until }),

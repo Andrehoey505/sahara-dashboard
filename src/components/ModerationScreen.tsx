@@ -16,6 +16,7 @@ import {
   Crosshair,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 /**
  * Moderation, done from the app.
@@ -125,7 +126,7 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
   useEffect(() => {
     let gone = false;
     (async () => {
-      const res = await fetch(apiUrl + "/api/members").catch(() => null);
+      const res = await botFetch(apiUrl + "/api/members").catch(() => null);
       if (!res || !res.ok) return;
       const list = await res.json().catch(() => []);
       if (!gone && Array.isArray(list)) setMembers(list);
@@ -143,7 +144,7 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
     }
     let gone = false;
     (async () => {
-      const res = await fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server)).catch(
+      const res = await botFetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server)).catch(
         () => null,
       );
       const list = res ? await res.json().catch(() => []) : [];
@@ -158,7 +159,7 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
     setWarningsFor(userId);
     const url =
       apiUrl + "/api/warnings?limit=50" + (userId ? "&user=" + encodeURIComponent(userId) : "");
-    const res = await fetch(url).catch(() => null);
+    const res = await botFetch(url).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
   };
@@ -217,7 +218,7 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
         issued_by: "dashboard",
       };
       const endpoint = action === "warn" ? "/api/warn" : "/api/moderation-action";
-      const res = await fetch(apiUrl + endpoint, {
+      const res = await botFetch(apiUrl + endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -267,7 +268,7 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
     if (!channelMessage.trim()) return notify("Type a message first", "error");
     setSending(true);
     try {
-      const res = await fetch(apiUrl + "/api/channel-message", {
+      const res = await botFetch(apiUrl + "/api/channel-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server, channel, message: channelMessage.trim() }),

@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 /**
  * Tickets, as the bot actually stores them.
@@ -172,8 +173,8 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
     setError("");
     try {
       const [tRes, kRes] = await Promise.all([
-        fetch(apiUrl + "/api/ticket-types?server=" + encodeURIComponent(server)),
-        fetch(apiUrl + "/api/tickets"),
+        botFetch(apiUrl + "/api/ticket-types?server=" + encodeURIComponent(server)),
+        botFetch(apiUrl + "/api/tickets"),
       ]);
       const tData = await tRes.json().catch(() => ({}));
       if (tData.error) {
@@ -200,8 +201,8 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
     if (!server) return;
     try {
       const [cRes, rRes] = await Promise.all([
-        fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server)),
-        fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(server)),
+        botFetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server)),
+        botFetch(apiUrl + "/api/roles?server=" + encodeURIComponent(server)),
       ]);
       const data = await cRes.json().catch(() => ({}));
       setChannels(Array.isArray(data.channels) ? data.channels : Array.isArray(data) ? data : []);
@@ -288,7 +289,7 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
     setTranscriptBusy(number);
     setTranscriptError("");
     try {
-      const res = await fetch(
+      const res = await botFetch(
         apiUrl +
           "/api/ticket-transcript?server=" +
           encodeURIComponent(server) +
@@ -375,7 +376,7 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
     }
     setSaving(true);
     try {
-      const res = await fetch(apiUrl + "/api/ticket-types", {
+      const res = await botFetch(apiUrl + "/api/ticket-types", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server, types }),
@@ -398,7 +399,7 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
   const postPanel = async (type: TicketType) => {
     setBusy("panel-" + type.id);
     try {
-      const res = await fetch(apiUrl + "/api/ticket-panel", {
+      const res = await botFetch(apiUrl + "/api/ticket-panel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server, type_id: type.id, channel_id: type.panel_channel }),

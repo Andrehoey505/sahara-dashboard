@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Users, ShieldAlert, ShieldOff, ShieldCheck } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 type Member = {
   id: string;
@@ -77,7 +78,7 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
     setSaving(m.id);
     setSaveError("");
     try {
-      const res = await fetch(apiUrl + `/api/members/${m.id}/exempt`, {
+      const res = await botFetch(apiUrl + `/api/members/${m.id}/exempt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -125,7 +126,7 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch(apiUrl + "/api/exempt-users").catch(() => null);
+      const res = await botFetch(apiUrl + "/api/exempt-users").catch(() => null);
       const data = await res?.json().catch(() => ({}));
       if (Array.isArray(data?.reasons) && data.reasons.length) setReasons(data.reasons);
     })();
@@ -137,7 +138,7 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(apiUrl + "/api/members");
+        const res = await botFetch(apiUrl + "/api/members");
         if (!res.ok) throw new Error("bad status");
         const data = await res.json().catch(() => ({}));
         if (!cancelled) setMembers(Array.isArray(data) ? data : data.members || []);

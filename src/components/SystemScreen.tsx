@@ -14,6 +14,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 /**
  * The health of the machine the bot actually runs on.
@@ -182,7 +183,7 @@ export default function SystemScreen({ apiUrl, notify }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl + "/api/system", { cache: "no-store" });
+      const res = await botFetch(apiUrl + "/api/system");
       if (res.status === 404) {
         setMissing(true);
         setError("");

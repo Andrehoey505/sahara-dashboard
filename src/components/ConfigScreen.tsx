@@ -1,3 +1,4 @@
+import { botFetch } from "../lib/bot";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -139,8 +140,8 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
     setLoading(true);
     try {
       const [sRes, cRes] = await Promise.all([
-        fetch(apiUrl + "/api/config/schema"),
-        fetch(apiUrl + `/api/config/${guildId}`),
+        botFetch(apiUrl + "/api/config/schema"),
+        botFetch(apiUrl + `/api/config/${guildId}`),
       ]);
       if (sRes.ok) {
         const s = await sRes.json();
@@ -151,8 +152,8 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
       // Names for the ids: a settings screen full of snowflakes is not a settings
       // screen, it is a database browser.
       Promise.all([
-        fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(guildId)),
-        fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(guildId)),
+        botFetch(apiUrl + "/api/channels?server=" + encodeURIComponent(guildId)),
+        botFetch(apiUrl + "/api/roles?server=" + encodeURIComponent(guildId)),
       ])
         .then(async ([ch, ro]) => {
           const cd = await ch.json().catch(() => ({}));
@@ -191,7 +192,7 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
       for (const k of Object.keys(values)) {
         if (JSON.stringify(values[k]) !== JSON.stringify(saved[k])) changes[k] = values[k];
       }
-      const res = await fetch(apiUrl + `/api/config/${guildId}`, {
+      const res = await botFetch(apiUrl + `/api/config/${guildId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ settings: changes }),
@@ -214,7 +215,7 @@ export default function ConfigScreen({ apiUrl, server, servers, notify }: Props)
   const reset = async () => {
     if (!guildId) return;
     try {
-      const res = await fetch(apiUrl + `/api/config/${guildId}`, { method: "DELETE" });
+      const res = await botFetch(apiUrl + `/api/config/${guildId}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         setValues(data.settings);

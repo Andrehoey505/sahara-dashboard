@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 /**
  * What the bot is keeping on its disk, and what it should stop keeping.
@@ -138,7 +139,7 @@ export default function StorageScreen({ apiUrl, notify }: Props) {
     setError("");
     setMissing(false);
     try {
-      const res = await fetch(apiUrl + "/api/storage", { cache: "no-store" });
+      const res = await botFetch(apiUrl + "/api/storage");
       const data = await res.json().catch(() => ({}));
       if (res.status === 404) {
         setMissing(true);
@@ -207,7 +208,7 @@ export default function StorageScreen({ apiUrl, notify }: Props) {
   const remove = async (item: Item) => {
     setBusy(item.id);
     try {
-      const res = await fetch(apiUrl + "/api/storage/delete", {
+      const res = await botFetch(apiUrl + "/api/storage/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: item.id, tier: item.tier }),
@@ -237,7 +238,7 @@ export default function StorageScreen({ apiUrl, notify }: Props) {
   const removeExpired = async () => {
     setBusy("__bulk__");
     try {
-      const res = await fetch(apiUrl + "/api/storage/delete", {
+      const res = await botFetch(apiUrl + "/api/storage/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Deliberately the tier, not a list of ids: the bot decides what is

@@ -5,6 +5,7 @@ import { motionTokens } from "../lib/design";
 import HeadacheWizard from "./HeadacheWizard";
 import type { Match } from "../lib/headache";
 import { formatShort } from "../lib/time";
+import { botFetch } from "../lib/bot";
 
 /**
  * Migraine diary.
@@ -149,14 +150,14 @@ export default function MigraineScreen({ apiUrl }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl + "/api/migraines");
+      const res = await botFetch(apiUrl + "/api/migraines");
       if (!res.ok) throw new Error("bad status");
       const data = await res.json().catch(() => ({}));
       setEntries(Array.isArray(data.migraines) ? data.migraines : []);
       setSummary(data.summary || null);
       setError("");
       try {
-        const nres = await fetch(apiUrl + "/api/migraines/notes");
+        const nres = await botFetch(apiUrl + "/api/migraines/notes");
         if (nres.ok) {
           const nd = await nres.json().catch(() => ({}));
           setGeneralNotes(nd.notes || "");
@@ -196,7 +197,7 @@ export default function MigraineScreen({ apiUrl }: Props) {
   const save = async () => {
     setSaving(true);
     try {
-      const res = await fetch(apiUrl + "/api/migraines", {
+      const res = await botFetch(apiUrl + "/api/migraines", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -224,7 +225,7 @@ export default function MigraineScreen({ apiUrl }: Props) {
 
   const remove = async (id: string) => {
     try {
-      const res = await fetch(apiUrl + "/api/migraines/" + id, { method: "DELETE" });
+      const res = await botFetch(apiUrl + "/api/migraines/" + id, { method: "DELETE" });
       // fetch only rejects on a network failure. A 500 resolves, so without this
       // the entry stayed on screen and the app said nothing.
       if (!res.ok) throw new Error(String(res.status));
@@ -559,7 +560,7 @@ export default function MigraineScreen({ apiUrl }: Props) {
               onClick={async () => {
                 setGeneralNotes("");
                 try {
-                  const res = await fetch(apiUrl + "/api/migraines/notes", {
+                  const res = await botFetch(apiUrl + "/api/migraines/notes", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ notes: "" }),
@@ -578,7 +579,7 @@ export default function MigraineScreen({ apiUrl }: Props) {
             <button
               onClick={async () => {
                 try {
-                  const r = await fetch(apiUrl + "/api/migraines/notes", {
+                  const r = await botFetch(apiUrl + "/api/migraines/notes", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ notes: generalNotes }),

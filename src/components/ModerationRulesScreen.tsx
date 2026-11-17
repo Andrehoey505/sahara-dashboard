@@ -1,3 +1,4 @@
+import { botFetch } from "../lib/bot";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -254,8 +255,8 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
     setError("");
     try {
       const [chRes, ruleRes] = await Promise.all([
-        fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server)),
-        fetch(apiUrl + "/api/channel-rules?server=" + encodeURIComponent(server)),
+        botFetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server)),
+        botFetch(apiUrl + "/api/channel-rules?server=" + encodeURIComponent(server)),
       ]);
       if (!chRes.ok) throw new Error("Could not read this server's channels");
       const chans = await chRes.json();
@@ -358,7 +359,7 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
           channel_name: channels.find((c) => String(c.id) === String(r.channel_id))?.name || "",
         })),
       };
-      const res = await fetch(apiUrl + "/api/channel-rules", {
+      const res = await botFetch(apiUrl + "/api/channel-rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

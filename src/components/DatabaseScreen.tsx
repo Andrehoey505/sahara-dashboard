@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { formatShort } from "../lib/time";
+import { botFetch } from "../lib/bot";
 
 type Namespace = {
   ns: string;
@@ -79,7 +80,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl + "/api/db");
+      const res = await botFetch(apiUrl + "/api/db");
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(
@@ -115,7 +116,7 @@ export default function DatabaseScreen({ apiUrl, notify }: Props) {
           offset: String(nextOffset),
         });
         if (q.trim()) params.set("q", q.trim());
-        const res = await fetch(
+        const res = await botFetch(
           apiUrl + "/api/db/" + encodeURIComponent(ns.ns) + "?" + params.toString()
         );
         const body = await res.json().catch(() => ({}));

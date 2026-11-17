@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, ExternalLink, TriangleAlert } from "lucide-react";
 import { motionTokens, waitTone, relativeMinutes } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 type Waits = { Mater?: number; "Royal Victoria"?: number };
 
@@ -32,7 +33,7 @@ export default function EdWaits({ apiUrl, variant = "page" }: Props) {
   const fetchEd = useCallback(async () => {
     setBusy(true);
     try {
-      const res = await fetch(apiUrl + "/api/ed-waits");
+      const res = await botFetch(apiUrl + "/api/ed-waits");
       if (!res.ok) throw new Error("bad status");
       const data = await res.json().catch(() => ({}));
       if (data.waits && Object.keys(data.waits).length) {

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Hash, Link2, Gift, RefreshCw, Trophy } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { formatDateTime, formatShort } from "../lib/time";
+import { botFetch } from "../lib/bot";
 
 type Activities = {
   guild_id: string;
@@ -39,7 +40,7 @@ export default function ActivitiesScreen({ apiUrl, notify }: Props) {
   const reset = async (which: ResetTarget) => {
     setResetting(true);
     try {
-      const res = await fetch(apiUrl + "/api/activities/reset", {
+      const res = await botFetch(apiUrl + "/api/activities/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ which }),
@@ -80,7 +81,7 @@ export default function ActivitiesScreen({ apiUrl, notify }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl + "/api/activities");
+      const res = await botFetch(apiUrl + "/api/activities");
       if (!res.ok) throw new Error("bad status");
       setData(await res.json());
       setError("");

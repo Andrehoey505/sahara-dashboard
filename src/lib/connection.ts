@@ -20,7 +20,7 @@
  * first is alive kicks the first one off its session.
  */
 
-import { botRequest } from "./bot";
+import { botFetch } from "./bot";
 
 export type AddressKind = "lan" | "fallback";
 
@@ -110,7 +110,7 @@ export function addresses(lan: string, fallback?: string): { kind: AddressKind; 
 async function hit(url: string, timeoutMs: number): Promise<ProbeResult & { kind: AddressKind }> {
   const started = Date.now();
   const kind: AddressKind = "lan";
-  const r = await botRequest(url, "/api/health", { timeoutMs });
+  const r = await botFetch(url + "/api/health", { signal: AbortSignal.timeout(timeoutMs) });
   const ms = Date.now() - started;
   if (r.ok) return { kind, url, ok: true, ms };
   return {

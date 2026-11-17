@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Hash, Server, AlertTriangle, RefreshCw, Bell, BellOff } from "lucide-react";
+import { botFetch } from "../lib/bot";
 
 /**
  * Where the schedule goes.
@@ -62,7 +63,7 @@ export default function ScheduleSettings({ apiUrl, notify, servers, selectedServ
     let cancelled = false;
     setLoading(true);
     setError("");
-    fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(serverName))
+    botFetch(apiUrl + "/api/channels?server=" + encodeURIComponent(serverName))
       .then(async (r) => {
         if (!r.ok) throw new Error("The bot couldn't list this server's channels");
         const data = await r.json();

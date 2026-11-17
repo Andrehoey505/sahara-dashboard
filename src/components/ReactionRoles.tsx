@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import type { Server } from "../lib/servers";
+import { botFetch } from "../lib/bot";
 
 type RoleMapping = { emoji: string; role_id: string; label?: string };
 
@@ -102,7 +103,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(apiUrl + "/api/reaction-roles");
+      const res = await botFetch(apiUrl + "/api/reaction-roles");
       if (!res.ok) throw new Error(`the bot answered ${res.status}`);
       const data = await res.json().catch(() => ({}));
       const entry = data?.servers?.[serverId];
@@ -133,7 +134,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
     if (!serverId) return;
     let cancelled = false;
     setRolesError("");
-    fetch(apiUrl + "/api/roles?server=" + encodeURIComponent(serverId))
+    botFetch(apiUrl + "/api/roles?server=" + encodeURIComponent(serverId))
       .then((r) => {
         if (!r.ok) throw new Error(`the bot answered ${r.status}`);
         return r.json();
@@ -213,7 +214,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
     }
     setSaving(true);
     try {
-      const res = await fetch(apiUrl + "/api/reaction-roles", {
+      const res = await botFetch(apiUrl + "/api/reaction-roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -247,7 +248,7 @@ export default function ReactionRoles({ apiUrl, server, servers, notify }: Props
   const remove = async (messageId: string) => {
     setSaving(true);
     try {
-      const res = await fetch(
+      const res = await botFetch(
         apiUrl + "/api/reaction-roles/" + encodeURIComponent(serverId) + "/" + encodeURIComponent(messageId),
         { method: "DELETE" }
       );

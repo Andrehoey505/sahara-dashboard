@@ -20,6 +20,7 @@ import {
   Search,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 /**
  * The bot's music, from the app.
@@ -105,7 +106,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     if (!server) return;
     setLoading(true);
     try {
-      const res = await fetch(apiUrl + "/api/music/queue?server=" + encodeURIComponent(server));
+      const res = await botFetch(apiUrl + "/api/music/queue?server=" + encodeURIComponent(server));
       const data = await res.json().catch(() => ({}));
       if (data.error) {
         setState(null);
@@ -122,7 +123,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
 
   const loadPlaylists = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl + "/api/playlists");
+      const res = await botFetch(apiUrl + "/api/playlists");
       const data = await res.json().catch(() => []);
       setPlaylists(Array.isArray(data) ? data : []);
     } catch {
@@ -157,7 +158,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     if (!userId) return notify("Add your Discord User ID in Settings first", "error");
     setBusy("join");
     try {
-      const res = await fetch(apiUrl + "/api/music/join", {
+      const res = await botFetch(apiUrl + "/api/music/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server: state.guild_name, user_id: userId }),
@@ -180,7 +181,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     if (!state) return;
     setBusy("leave");
     try {
-      const res = await fetch(apiUrl + "/api/music/leave", {
+      const res = await botFetch(apiUrl + "/api/music/leave", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server: state.guild_name }),
@@ -201,7 +202,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     if (!state) return;
     setBusy(action);
     try {
-      const res = await fetch(apiUrl + "/api/music", {
+      const res = await botFetch(apiUrl + "/api/music", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, guild_id: state.guild_id, ...extra }),
@@ -225,7 +226,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     if (!query.trim()) return notify("Type a song name or a YouTube link", "error");
     setBusy("add");
     try {
-      const res = await fetch(apiUrl + "/api/music/queue", {
+      const res = await botFetch(apiUrl + "/api/music/queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server: state.guild_name, query: query.trim() }),
@@ -256,7 +257,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     if (!state) return notify("Pick a server first", "error");
     setBusy("play-" + name);
     try {
-      const res = await fetch(apiUrl + "/api/music/queue", {
+      const res = await botFetch(apiUrl + "/api/music/queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server: state.guild_name, playlist: name }),
@@ -281,7 +282,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
   const playlistAction = async (action: string, body: Record<string, unknown>) => {
     setBusy(action + (body.name || ""));
     try {
-      const res = await fetch(apiUrl + "/api/playlists", {
+      const res = await botFetch(apiUrl + "/api/playlists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...body }),
@@ -307,7 +308,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
     }
     let cancelled = false;
     setSearching(true);
-    fetch(apiUrl + "/api/music/search?q=" + encodeURIComponent(q) + "&limit=8")
+    botFetch(apiUrl + "/api/music/search?q=" + encodeURIComponent(q) + "&limit=8")
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
@@ -328,7 +329,7 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
   const playHit = async (hit: SearchHit) => {
     setBusy("play-" + hit.url);
     try {
-      const res = await fetch(apiUrl + "/api/music/queue", {
+      const res = await botFetch(apiUrl + "/api/music/queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ server, query: hit.url }),

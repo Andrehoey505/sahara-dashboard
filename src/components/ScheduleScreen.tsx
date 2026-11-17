@@ -1,3 +1,4 @@
+import { botFetch } from "../lib/bot";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -230,7 +231,7 @@ export default function ScheduleScreen({
       const url = apiUrl.replace(/\/$/, "") + "/api/schedule/sync";
       for (const when of [addDays(now, 0), addDays(now, 1)]) {
         const body = mirrorPayload(slots, ticks, serverName, target.channelId, target.nag, when, plans);
-        fetch(url, {
+        botFetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Moon, X, MessageCircle, Clock } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { formatDateTime } from "../lib/time";
+import { botFetch } from "../lib/bot";
 
 type Night = {
   asleep_at: string;
@@ -48,7 +49,7 @@ export default function SleepLog({ open, onClose, apiUrl }: Props) {
     if (!open) return;
     setNights(null);
     setError("");
-    fetch(apiUrl.replace(/\/$/, "") + "/api/sleep-log")
+    botFetch(apiUrl.replace(/\/$/, "") + "/api/sleep-log")
       .then((r) => r.json())
       .then((d) => {
         setNights(Array.isArray(d?.nights) ? d.nights : []);

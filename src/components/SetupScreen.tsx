@@ -18,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 export type AppSettings = {
   apiUrl: string;
@@ -175,7 +176,7 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch(draft.apiUrl.replace(/\/$/, "") + "/api/health");
+      const res = await botFetch(draft.apiUrl.replace(/\/$/, "") + "/api/health");
       setTestResult(res.ok ? "ok" : "fail");
     } catch {
       setTestResult("fail");

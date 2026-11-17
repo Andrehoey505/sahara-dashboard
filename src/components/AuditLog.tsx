@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { formatShort, formatTitle } from "../lib/time";
 import { RefreshCw, UserPlus, ShieldAlert, FileText, Search } from "lucide-react";
 import { motionTokens, severity } from "../lib/design";
+import { botFetch } from "../lib/bot";
 
 type Entry = {
   timestamp: string;
@@ -139,7 +140,7 @@ export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverI
     // The screen shows a server picker, so it has to actually narrow to it.
     if (serverId) params.set("guild_id", serverId);
     try {
-      const res = await fetch(apiUrl + "/api/audit?" + params.toString());
+      const res = await botFetch(apiUrl + "/api/audit?" + params.toString());
       if (!res.ok) throw new Error("bad status");
       const data = await res.json().catch(() => ({}));
       setEntries(data.entries || []);
@@ -163,7 +164,7 @@ export default function AuditLog({ apiUrl, notify, serverId }: Props & { serverI
   const addTroll = async (e: Entry, target: string, name?: string) => {
     setBusy(target);
     try {
-      const res = await fetch(apiUrl + "/api/trolls", {
+      const res = await botFetch(apiUrl + "/api/trolls", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

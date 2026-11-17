@@ -79,6 +79,7 @@ import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers
 import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 import { formatDateTime, formatShort, formatClock, formatTitle } from "./lib/time";
+import { botFetch } from "./lib/bot";
 
 // Screens whose content belongs to one server. Everything else must not show a
 // server picker — it was in the global header before, in the way everywhere.
@@ -230,7 +231,7 @@ export default function App() {
       setUserProfile({ name: "User " + saved.slice(-4), avatar: "👤", id: saved });
       setLoggedIn(true);
       // Fetch real profile from bot API on launch (so username shows immediately)
-      fetch(api + "/api/user/" + saved)
+      botFetch(api + "/api/user/" + saved)
         .then((r) => r.json())
         .then((data) => {
           if (data?.name) setUserProfile({ name: data.name, avatar: "👤", id: saved, avatarUrl: data.avatar });
@@ -314,15 +315,15 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const healthRes = await fetch(apiUrl + "/api/health");
+      const healthRes = await botFetch(apiUrl + "/api/health");
       if (!healthRes.ok) throw new Error("not ok");
       setConnected(true);
       setConnectionError("");
       const [msgRes, violRes, srvRes, statsRes] = await Promise.all([
-        fetch(apiUrl + "/api/messages?limit=50"),
-        fetch(apiUrl + "/api/violations?limit=200" + (violationFilter !== "all" ? "&status=" + encodeURIComponent(violationFilter) : "")),
-        fetch(apiUrl + "/api/servers"),
-        fetch(apiUrl + "/api/stats"),
+        botFetch(apiUrl + "/api/messages?limit=50"),
+        botFetch(apiUrl + "/api/violations?limit=200" + (violationFilter !== "all" ? "&status=" + encodeURIComponent(violationFilter) : "")),
+        botFetch(apiUrl + "/api/servers"),
+        botFetch(apiUrl + "/api/stats"),
       ]);
       if (msgRes.ok) {
         const msgs = await msgRes.json();
@@ -403,7 +404,7 @@ export default function App() {
       try {
         const totals = await Promise.all(
           servers.map((s: any) =>
-            fetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.id) + "&limit=2000")
+            botFetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.id) + "&limit=2000")
               .then((r) => (r.ok ? r.json() : []))
               .then((list) => (Array.isArray(list) ? list.length : 0))
               .catch(() => 0)
@@ -473,7 +474,7 @@ export default function App() {
   // disagreeing with the bot the first time either one restarted alone. So the sleep
   // state is READ from the API on load and written to the API when it changes.
   const loadSleepState = React.useCallback(() => {
-    fetch(apiUrl.replace(/\/$/, "") + "/api/sleep")
+    botFetch(apiUrl.replace(/\/$/, "") + "/api/sleep")
       .then((r) => r.json())
       .then((d) => {
         setSleepMode(d?.sleeping === true);
@@ -481,7 +482,7 @@ export default function App() {
         // Mentions caught during that sleep, so reopening the Mac tomorrow shows the
         // same night rather than an empty box.
         if (d?.sleeping === true) {
-          fetch(apiUrl.replace(/\/$/, "") + "/api/mentions" + (d.since ? `?since=${encodeURIComponent(d.since)}` : ""))
+          botFetch(apiUrl.replace(/\/$/, "") + "/api/mentions" + (d.since ? `?since=${encodeURIComponent(d.since)}` : ""))
             .then((r) => r.json())
             .then((m) => setSleepMentions(Array.isArray(m?.mentions) ? m.mentions : []))
             .catch(() => {});
@@ -564,7 +565,7 @@ export default function App() {
   const fetchEd = useCallback(async () => {
     if (!isAndre || !loggedIn) return;
     try {
-      const res = await fetch(apiUrl + "/api/ed-waits");
+      const res = await botFetch(apiUrl + "/api/ed-waits");
       if (!res.ok) throw new Error("not ok");
       const data = await res.json().catch(() => ({}));
       if (data.waits && Object.keys(data.waits).length) {
@@ -695,7 +696,7 @@ export default function App() {
     } catch {}
     notify("Welcome back", "success");
     if (soundEnabled) playSound("wake");
-    fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
+    botFetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sleeping: false }),
@@ -727,8 +728,8 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedServer || !connected) return;
-    fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(selectedServer)).then(r => r.json()).then(setChannels).catch(() => {});
-    fetch(apiUrl + "/api/members?server=" + encodeURIComponent(selectedServer) + "&staff_only=" + staffOnly).then(r => r.json()).then((m) => {
+    botFetch(apiUrl + "/api/channels?server=" + encodeURIComponent(selectedServer)).then(r => r.json()).then(setChannels).catch(() => {});
+    botFetch(apiUrl + "/api/members?server=" + encodeURIComponent(selectedServer) + "&staff_only=" + staffOnly).then(r => r.json()).then((m) => {
       const newIds = new Set((m || []).map((x: any) => x.id));
       const added = (m || []).filter((x: any) => !prevMemberIds.has(x.id) && prevMemberIds.size > 0);
       if (added.length > 0) {
@@ -745,7 +746,7 @@ export default function App() {
     if (!userId.trim()) { notify("Enter your Discord User ID", "error"); return; }
     localStorage.setItem("sahara_user", userId);
     try {
-      const res = await fetch(apiUrl + "/api/user/" + userId);
+      const res = await botFetch(apiUrl + "/api/user/" + userId);
       const data = await res.json().catch(() => ({}));
       if (!res.ok && !data.error) data.error = `HTTP ${res.status}`;
       if (data.name) setUserProfile({ name: data.name, avatar: "👤", id: userId, avatarUrl: data.avatar });
@@ -781,7 +782,7 @@ export default function App() {
     let srvs: any[] = servers;
     if (!srvs.length) {
       try {
-        const r = await fetch(apiUrl + "/api/servers");
+        const r = await botFetch(apiUrl + "/api/servers");
         const body = await r.json().catch(() => null);
         srvs = Array.isArray(body) ? body : [];
       } catch {
@@ -799,7 +800,7 @@ export default function App() {
       setTrollSweepServer(s.name);
       setTrollSweepProgress(Math.round(((i) / total) * 100));
       try {
-        const mres = await fetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.name));
+        const mres = await botFetch(apiUrl + "/api/members?server=" + encodeURIComponent(s.name));
         const mbody = await mres.json().catch(() => null);
         const members = Array.isArray(mbody) ? mbody : [];
         if (!Array.isArray(mbody)) {
@@ -888,7 +889,7 @@ export default function App() {
       // The old version never checked the response, so a failed save still
       // looked like it worked and came back wrong on the next refresh.
       try {
-        const res = await fetch(apiUrl + "/api/violation/" + encodeURIComponent(msg.id) + "/resolve", {
+        const res = await botFetch(apiUrl + "/api/violation/" + encodeURIComponent(msg.id) + "/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -954,7 +955,7 @@ export default function App() {
     // channel apart, and returns no flagged message at all.
     const params = new URLSearchParams({ before: "4", after: "4" });
     if (contextViolation.server) params.set("guild_id", String(contextViolation.server));
-    fetch(apiUrl + "/api/violations/" + encodeURIComponent(contextViolation.id) + "/context?" + params.toString())
+    botFetch(apiUrl + "/api/violations/" + encodeURIComponent(contextViolation.id) + "/context?" + params.toString())
       .then(async (r) => {
         const body = await r.json().catch(() => null);
         if (!r.ok) return { error: body?.error || "Couldn't read the conversation." };
@@ -1726,7 +1727,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                       <div className="flex gap-1 mt-1">
                         <button onClick={() => hideMessage(String(m.id))} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20" title="Delete from feed" data-tip="Remove this message from the feed">🗑</button>
                         <button onClick={() => { setMoreOptionsMsg(m); setMoreOptionsAction("warn"); setMoreOptionsReason(""); }} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" title="More options" data-tip="Warn, mute, kick or ban this person">⋯</button>
-                        <button onClick={async () => { const who = m.user_id || m.user; if (!who) { notify("That message has no user id", "error"); return; } const reason = await Promise.resolve(window.prompt(`Warn ${m.user} — why?`, "Breach of server rules")); if (reason === null) return; if (!reason.trim()) { notify("A warning needs a reason — it goes in the record", "error"); return; } try { const res = await fetch(apiUrl + "/api/warn", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: who, server: m.server_id || m.server, reason: reason.trim(), issued_by: "dashboard" }) }); const data = await res.json().catch(() => ({})); if (res.ok && !data.error) { notify(data.dm_delivered ? `Warning ${data.warning_number} recorded and DM'd to ${data.user}` : `Warning ${data.warning_number} recorded. ${data.detail || "The DM did not land."}`, data.dm_delivered ? "success" : "info"); } else { notify(data.error || `That did not work (${res.status})`, "error"); } } catch { notify("Connection failed — is the bot running?", "error"); } }} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 hover:bg-amber-500/20" data-tip="Warn this person now, in one press — the reason goes in the record">⚠</button>
+                        <button onClick={async () => { const who = m.user_id || m.user; if (!who) { notify("That message has no user id", "error"); return; } const reason = await Promise.resolve(window.prompt(`Warn ${m.user} — why?`, "Breach of server rules")); if (reason === null) return; if (!reason.trim()) { notify("A warning needs a reason — it goes in the record", "error"); return; } try { const res = await botFetch(apiUrl + "/api/warn", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_id: who, server: m.server_id || m.server, reason: reason.trim(), issued_by: "dashboard" }) }); const data = await res.json().catch(() => ({})); if (res.ok && !data.error) { notify(data.dm_delivered ? `Warning ${data.warning_number} recorded and DM'd to ${data.user}` : `Warning ${data.warning_number} recorded. ${data.detail || "The DM did not land."}`, data.dm_delivered ? "success" : "info"); } else { notify(data.error || `That did not work (${res.status})`, "error"); } } catch { notify("Connection failed — is the bot running?", "error"); } }} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 hover:bg-amber-500/20" data-tip="Warn this person now, in one press — the reason goes in the record">⚠</button>
                       </div>
                     </div>
                   </motion.div>
@@ -1766,7 +1767,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                         if (!moreOptionsReason) { notify("Enter a reason", "error"); return; }
                         try {
                           const warnOnly = moreOptionsAction === "warn";
-                          const res = await fetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server_id || moreOptionsMsg.server, reason: moreOptionsReason, duration: 10, issued_by: "dashboard" }) });
+                          const res = await botFetch(apiUrl + (warnOnly ? "/api/warn" : "/api/moderation-action"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: moreOptionsAction, target_id: moreOptionsMsg.user_id || moreOptionsMsg.user, server: moreOptionsMsg.server_id || moreOptionsMsg.server, reason: moreOptionsReason, duration: 10, issued_by: "dashboard" }) });
                           const data = await res.json().catch(() => ({}));
                           if (res.ok && !data.error) {
                             // A warning is a record first: say what was saved, and whether
@@ -2050,7 +2051,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           setSleepMode(true);
           notify("Sleep mode on, goodnight 🌙", "success");
           if (soundEnabled) playSound("sleep");
-          fetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
+          botFetch(apiUrl.replace(/\/$/, "") + "/api/sleep", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sleeping: true }),

@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Server } from "../lib/servers";
+import { botFetch } from "../lib/bot";
 
 type RelayConfig = {
   enabled: boolean;
@@ -97,7 +98,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
     setSendError("");
     setSent("");
     try {
-      const r = await fetch(apiUrl + "/api/relay/send", {
+      const r = await botFetch(apiUrl + "/api/relay/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
@@ -121,7 +122,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
 
   const loadConfig = useCallback(async () => {
     try {
-      const r = await fetch(apiUrl + "/api/relay");
+      const r = await botFetch(apiUrl + "/api/relay");
       if (!r.ok) throw new Error(`the bot answered ${r.status}`);
       setConfig(await r.json());
       setError("");
@@ -132,7 +133,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
 
   const loadPosts = useCallback(async () => {
     try {
-      const r = await fetch(apiUrl + "/api/relay/pending?status=" + filter);
+      const r = await botFetch(apiUrl + "/api/relay/pending?status=" + filter);
       if (!r.ok) throw new Error(`the bot answered ${r.status}`);
       const data = await r.json();
       setPosts(Array.isArray(data.messages) ? data.messages : []);
@@ -162,7 +163,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
     }
     (async () => {
       try {
-        const r = await fetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server));
+        const r = await botFetch(apiUrl + "/api/channels?server=" + encodeURIComponent(server));
         const data = await r.json().catch(() => null);
         if (!r.ok) {
           // Say WHY, rather than showing an empty dropdown that looks like a server
@@ -208,7 +209,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
     setConfig(next);
     setBusy("save");
     try {
-      const r = await fetch(apiUrl + "/api/relay", {
+      const r = await botFetch(apiUrl + "/api/relay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
@@ -229,7 +230,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
   const decide = async (id: string, decision: "approve" | "reject") => {
     setBusy(id + decision);
     try {
-      const r = await fetch(apiUrl + "/api/relay/decide", {
+      const r = await botFetch(apiUrl + "/api/relay/decide", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, decision, by: "andre" }),
@@ -249,7 +250,7 @@ export default function RelayScreen({ apiUrl, servers, selectedServer, notify }:
   const remove = async (id: string) => {
     setBusy(id + "delete");
     try {
-      const r = await fetch(apiUrl + "/api/relay/pending/" + encodeURIComponent(id), { method: "DELETE" });
+      const r = await botFetch(apiUrl + "/api/relay/pending/" + encodeURIComponent(id), { method: "DELETE" });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `the bot answered ${r.status}`);
       notify("Deleted — the message is gone from the database entirely", "success", { sound: false });
