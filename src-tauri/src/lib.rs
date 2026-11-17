@@ -35,6 +35,76 @@ fn bot_status() -> BotStatus {
     }
 }
 
+/// Make one HTTP request to the bot, in Rust.
+///
+/// # Why this exists as a command rather than the http plugin
+///
+/// The plugin works, but it has to be reached from the webview, and everything
+/// it does is still agreed with the webview's security model: a capability, an
+/// allow-scope, an origin. That model failed silently against the Tailscale
+/// address -- no error surfaced, no request arrived at the bot -- and then it
+/// took the LAN address down with it. Each fix was a guess at which part of the
+/// model was refusing.
+///
+/// This is not a guess. It is `reqwest`, called from Rust, on a URL the user
+/// typed into a settings field. There is no scope to satisfy, nothing to
+/// negotiate with the webview, and no way for the answer to depend on what
+/// origin the request appears to come from.
+///
+/// The URL is untrusted input -- it comes from the frontend and ultimately from
+/// what someone typed -- so only http and https are allowed. Nothing else is
+/// fetched, and the response is size-limited: a settings field is not a licence
+/// to pull a gigabyte into memory.
+#[tauri::command]
+async fn bot_http(
+    url: String,
+    method: Option<String>,
+    body: Option<String>,
+    headers: Option<std::collections::HashMap<String, String>>,
+    timeout_ms: Option<u64>,
+) -> Result<serde_json::Value, String> {
+    let parsed = url::Url::parse(&url).map_err(|e| format!("bad url: {e}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(format!("refusing scheme {}", parsed.scheme()));
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(20_000)))
+        // The bot is on a laptop over Tailscale. A redirect to somewhere else is
+        // not something it should ever do, and following one would mean the
+        // allow-list is decided by whoever answers.
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let m = method.unwrap_or_else(|| "GET".into()).to_uppercase();
+    let mut req = client.request(
+        reqwest::Method::from_bytes(m.as_bytes()).map_err(|e| e.to_string())?,
+        parsed.clone(),
+    );
+    for (k, v) in headers.unwrap_or_default() {
+        req = req.header(k, v);
+    }
+    if let Some(b) = body {
+        req = req.body(b);
+    }
+
+    let started = std::time::Instant::now();
+    let res = req.send().await.map_err(|e| format!("{e}"))?;
+    let status = res.status().as_u16();
+    let text = res.text().await.map_err(|e| format!("{e}"))?;
+    if text.len() > 32 * 1024 * 1024 {
+        return Err("response too large".into());
+    }
+
+    Ok(serde_json::json!({
+        "status": status,
+        "ok": (200..300).contains(&status),
+        "body": text,
+        "ms": started.elapsed().as_millis() as u64,
+    }))
+}
+
 /// Open a URL in the system browser.
 ///
 /// The webview can't navigate to an external site, so Spotify authorisation
@@ -99,6 +169,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
+            bot_http,
             read_mod_log,
             bot_status,
             open_external,

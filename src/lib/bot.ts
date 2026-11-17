@@ -14,10 +14,15 @@
  *
  * ## What it does instead
  *
- * Tauri's HTTP plugin performs the request in Rust, on the other side of the
- * webview, and returns the body. Rust has no origin header to be judged on, no
- * CORS, no allow-list of hosts -- it is a socket, which is what `curl` was
- * doing successfully all along.
+ * The `bot_http` command in `src-tauri/src/lib.rs` performs the request with
+ * `reqwest`, in Rust, and returns the body. There is no capability to satisfy,
+ * no allow-scope, no origin, and nothing to negotiate with the webview -- it is
+ * a socket, which is what `curl` was doing successfully all along.
+ *
+ * (The `tauri-plugin-http` route was tried first and made things worse: it took
+ * the LAN address down too. A command is not a smaller version of the plugin,
+ * it is a different thing -- there is no security model in between to disagree
+ * with us.)
  *
  * ## Why the return shape is the same as `fetch`
  *
@@ -45,26 +50,35 @@ export type BotResponse = {
   headers: { get: (name: string) => string | null };
 };
 
-type FetchLike = (input: string, init?: any) => Promise<any>;
+/**
+ * How long a request to the bot may take.
+ *
+ * The bot lives on a laptop that can be asleep, on 98% memory, or mid-restart.
+ * Twenty seconds is long enough that a slow answer arrives and short enough that
+ * a dead one gives the UI back instead of leaving a spinner forever.
+ */
+const TIMEOUT_MS = 20_000;
 
-let cachedPlugin: FetchLike | null | undefined;
+/** The Rust side: one command, called directly. */
+type Invoke = (cmd: string, args?: any) => Promise<any>;
+
+let cachedInvoke: Invoke | null | undefined;
 
 /**
- * The Rust path, if this is a real Tauri window.
+ * Tauri's `invoke`, if this is a real Tauri window.
  *
- * Cached because the dynamic import is a promise and every request would
- * otherwise pay for it. `undefined` means "not asked yet", `null` means "asked,
- * and there is no plugin" -- which is the case in a plain browser.
+ * `undefined` means "not asked yet"; `null` means "asked, and there is no
+ * Tauri" -- which is the case in a plain browser (`npm run dev`).
  */
-async function rustFetch(): Promise<FetchLike | null> {
-  if (cachedPlugin !== undefined) return cachedPlugin;
+async function rustInvoke(): Promise<Invoke | null> {
+  if (cachedInvoke !== undefined) return cachedInvoke;
   try {
-    const mod = await import("@tauri-apps/plugin-http");
-    cachedPlugin = typeof mod.fetch === "function" ? (mod.fetch as unknown as FetchLike) : null;
+    const mod = await import("@tauri-apps/api/core");
+    cachedInvoke = typeof mod.invoke === "function" ? (mod.invoke as unknown as Invoke) : null;
   } catch {
-    cachedPlugin = null;
+    cachedInvoke = null;
   }
-  return cachedPlugin;
+  return cachedInvoke;
 }
 
 /** Strip a trailing slash so paths do not double up. */
@@ -93,28 +107,28 @@ export async function botFetch(
   // for the plain-browser path.
   if (!("Cache-Control" in headers)) headers["Cache-Control"] = "no-store";
 
-  const rust = await rustFetch();
+  const invoke = await rustInvoke();
 
   let status = 0;
   let ok = false;
   let text = "";
   let hdrs: { get: (n: string) => string | null } = { get: () => null };
 
-  if (rust) {
+  if (invoke) {
     try {
-      const res = await rust(url, {
+      const reply = await invoke("bot_http", {
+        url,
         method: init.method || "GET",
+        body: typeof init.body === "string" ? init.body : undefined,
         headers,
-        body: init.body,
-        // A hung request must not hang the UI with it: the bot lives on a laptop
-        // that can sleep mid-answer, so this is a real case, not a guard.
-        signal: init.signal,
+        timeoutMs: TIMEOUT_MS,
       });
-      status = res.status;
-      ok = res.ok;
-      text = await res.text();
-      hdrs = { get: (n: string) => (res.headers && res.headers.get ? res.headers.get(n) : null) };
+      status = Number(reply?.status ?? 0);
+      ok = !!reply?.ok;
+      text = String(reply?.body ?? "");
     } catch (e: any) {
+      // The command rejects with a plain string when the request did not
+      // complete: no socket, no route, refused, or the timeout.
       return failed(String(e?.message || e || "no answer"));
     }
   } else {
