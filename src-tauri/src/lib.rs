@@ -90,7 +90,19 @@ async fn bot_http(
     }
 
     let started = std::time::Instant::now();
-    let res = req.send().await.map_err(|e| format!("{e}"))?;
+    let res = req.send().await.map_err(|e| {
+        // A bare `{e}` from reqwest is "error sending request for url (...)",
+        // which says nothing about why. The layers underneath do know: DNS,
+        // connect, TLS, timeout. Walk the source chain, because the outer
+        // message is always the useless one.
+        let mut detail = e.to_string();
+        let mut src: Option<&(dyn std::error::Error + 'static)> = std::error::Error::source(&e);
+        while let Some(s) = src {
+            detail.push_str(&format!(" <- {s}"));
+            src = std::error::Error::source(s);
+        }
+        detail
+    })?;
     let status = res.status().as_u16();
     let text = res.text().await.map_err(|e| format!("{e}"))?;
     if text.len() > 32 * 1024 * 1024 {

@@ -57,6 +57,9 @@ export type BotResponse = {
  * Twenty seconds is long enough that a slow answer arrives and short enough that
  * a dead one gives the UI back instead of leaving a spinner forever.
  */
+import { trace } from "./trace";
+import { queueRequest, counted } from "./queue";
+
 const TIMEOUT_MS = 20_000;
 
 /** The Rust side: one command, called directly. */
@@ -116,30 +119,46 @@ export async function botFetch(
 
   if (invoke) {
     try {
-      const reply = await invoke("bot_http", {
+      // One at a time. See src/lib/queue.ts: the bot is a 6 GB laptop at 98%
+      // memory, and eleven polling screens plus two probes is more sockets than
+      // it can answer quickly, which makes every one of them slower.
+      const reply = await queueRequest(() =>
+        counted(() =>
+          invoke("bot_http", {
         url,
         method: init.method || "GET",
         body: typeof init.body === "string" ? init.body : undefined,
         headers,
         timeoutMs: TIMEOUT_MS,
-      });
+          }),
+        ),
+      );
       status = Number(reply?.status ?? 0);
       ok = !!reply?.ok;
       text = String(reply?.body ?? "");
     } catch (e: any) {
       // The command rejects with a plain string when the request did not
-      // complete: no socket, no route, refused, or the timeout.
-      return failed(String(e?.message || e || "no answer"));
+      // complete: no socket, no route, refused, or the timeout. That string now
+      // carries reqwest's whole cause chain, so it names the layer.
+      const why = String(e?.message || e || "no answer");
+      trace("error", `${(init.method || "GET")} ${url} failed: ${why}`);
+      return failed(why);
     }
   } else {
     try {
-      const res = await fetch(url, {
+      // Serialised for the same reason as the Rust path: one bot, one laptop,
+      // and no reason for the browser dev build to behave differently.
+      const res = await queueRequest(() =>
+        counted(() =>
+          fetch(url, {
         method: init.method || "GET",
         headers,
         body: init.body,
         cache: "no-store",
         signal: init.signal,
-      });
+          }),
+        ),
+      );
       status = res.status;
       ok = res.ok;
       text = await res.text();

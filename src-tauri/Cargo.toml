@@ -1,6 +1,6 @@
 [package]
 name = "sahara-dashboard"
-version = "0.12.49"
+version = "0.12.50"
 description = "Sahara Discord Bot Dashboard"
 authors = ["Andre Hoey"]
 edition = "2021"
