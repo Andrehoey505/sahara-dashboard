@@ -36,6 +36,7 @@ import {
   Ticket,
   Database,
   Clock,
+  WifiOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
@@ -47,6 +48,7 @@ import SleepLog from "./components/SleepLog";
 import ScheduleScreen from "./components/ScheduleScreen";
 import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
+import { probeOnce, waitForBot, explain, addressLabel, botIsDown, type ConnectionState } from "./lib/connection";
 import MentionsScreen from "./components/MentionsScreen";
 import MembersScreen from "./components/MembersScreen";
 import ModerationScreen from "./components/ModerationScreen";
@@ -147,6 +149,22 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState("");
+  /**
+   * Which address is answering, and the state of the last full probe.
+   *
+   * The app used to show the setup wizard the instant /api/health failed once,
+   * which meant a dropped packet looked like a broken bot. Now a failure starts a
+   * patient probe of every address, and the wizard only appears if none of them
+   * answer — with a sentence that says which addresses were tried.
+   */
+  const [conn, setConn] = useState<ConnectionState | null>(null);
+  // Declared here rather than further down: the failover probe reads the
+  // fallback address out of it, and a hook cannot be used before its own line.
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [failoverBusy, setFailoverBusy] = useState(false);
+  const [failoverAttempt, setFailoverAttempt] = useState<{ n: number; of: number } | null>(null);
+  const [emergencyOffer, setEmergencyOffer] = useState(false);
+  const [emergencyDeclined, setEmergencyDeclined] = useState(false);
   const [apiUrl, setApiUrl] = useState(localStorage.getItem("sahara_api_url") || "http://localhost:8080");
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showContext, setShowContext] = useState(false);
@@ -239,6 +257,57 @@ export default function App() {
     }
   });
 
+  /**
+   * The patient probe: local address, then fallback, then the emergency offer.
+   *
+   * Only ever called when a request has actually failed, so a normal day never
+   * runs it and the LAN stays the fast path. On success it moves apiUrl to the
+   * address that answered — every other request in the app follows that one, so
+   * a failover is not a special mode the rest of the code has to know about.
+   */
+  const runFailover = useCallback(async () => {
+    if (failoverBusy) return;
+    setFailoverBusy(true);
+    setEmergencyOffer(false);
+    try {
+      const lan = settings.apiUrl || apiUrl;
+      const fallback = settings.apiFallbackUrl || "";
+      // One quick knock at each first: if either answers, there is nothing to
+      // wait for and the wizard must not appear.
+      const quick = await probeOnce(lan, fallback);
+      setConn(quick);
+      if (quick.status === "connected") {
+        if (quick.url !== apiUrl) setApiUrl(quick.url);
+        setConnected(true);
+        setConnectionError("");
+        return;
+      }
+      const patient = await waitForBot(lan, fallback, {
+        onTick: (n, of) => setFailoverAttempt({ n, of }),
+      });
+      setConn(patient);
+      if (patient.status === "connected") {
+        if (patient.url !== apiUrl) setApiUrl(patient.url);
+        setConnected(true);
+        setConnectionError("");
+      } else {
+        setConnectionError(explain(patient));
+        // An offer, never an auto-start: BabbleBot Lite shares the same Discord
+        // token, so starting it while Windows is merely unreachable would kick a
+        // healthy bot off its session.
+        //
+        // And never when this Mac has no network of its own. An offline machine
+        // fails every address the same way, and offering to start a second bot
+        // then is offering to fix the wrong thing. Bot down requires the laptop
+        // to be online first.
+        if (botIsDown(patient) && !emergencyDeclined) setEmergencyOffer(true);
+      }
+    } finally {
+      setFailoverAttempt(null);
+      setFailoverBusy(false);
+    }
+  }, [apiUrl, failoverBusy, settings.apiUrl, settings.apiFallbackUrl, emergencyDeclined]);
+
   const fetchData = async () => {
     try {
       const healthRes = await fetch(apiUrl + "/api/health");
@@ -303,9 +372,12 @@ export default function App() {
       }
       setBotHealthy(true);
     } catch (e) {
-      setConnected(false);
       setBotHealthy(false);
+      // Do not show the setup wizard on one failed request. Probe every address
+      // patiently first; only if none of them answer does the app admit the bot
+      // is unreachable, and even then it says which addresses it tried.
       setConnectionError("Cannot reach bot API at " + apiUrl);
+      void runFailover();
     }
   };
 
@@ -423,7 +495,8 @@ export default function App() {
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
   // Sleep mode: shown before the Mac is closed. Posts to the bot so anything
   // missed overnight can be surfaced on wake.
-  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  // (settings is declared above, next to the connection state, because the
+  // failover probe reads the fallback address from it.)
 
   useEffect(() => {
     primeVoices();
@@ -928,8 +1001,81 @@ export default function App() {
             <header className="mb-6">
               <h1 className="text-xl font-semibold">Sahara Dashboard</h1>
               <p className="text-sm text-slate-400 mt-1">
-                {connectionError || "Set up the connection to Babblebot to continue."}
+                {failoverBusy && failoverAttempt
+                  ? `Trying to reach the bot — attempt ${failoverAttempt.n} of ${failoverAttempt.of}…`
+                  : failoverBusy
+                  ? "Looking for the bot on the local network and the fallback address…"
+                  : connectionError || "Set up the connection to Babblebot to continue."}
               </p>
+              {conn && conn.status === "unreachable" && conn.network === "offline" && (
+                <div className="mt-3 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3">
+                  <p className="text-sm text-sky-200 font-medium flex items-center gap-2">
+                    <WifiOff className="w-4 h-4" /> No internet on this Mac
+                  </p>
+                  <p className="text-xs text-sky-100/80 mt-1">
+                    Nothing is being tried — there is nowhere to try. Turn wifi back on, or connect
+                    to your phone's hotspot, and the app picks the bot up again on its own. The
+                    Windows machine and the bot are not necessarily in any trouble at all.
+                  </p>
+                  <button
+                    onClick={() => void runFailover()}
+                    disabled={failoverBusy}
+                    className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60 disabled:opacity-40"
+                  >
+                    Check again
+                  </button>
+                </div>
+              )}
+              {conn && conn.status === "unreachable" && conn.network !== "offline" && conn.results.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {conn.results.slice(-4).map((r, i) => (
+                    <p key={i} className="text-[11px] text-slate-500 flex items-center gap-2">
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800/70 text-slate-400">
+                        {addressLabel[r.kind]}
+                      </span>
+                      <span className="truncate">{r.url}</span>
+                      <span className="text-rose-300/80 shrink-0">{r.error || "no answer"}</span>
+                    </p>
+                  ))}
+                  <button
+                    onClick={() => void runFailover()}
+                    disabled={failoverBusy}
+                    className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60 disabled:opacity-40"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+              {emergencyOffer && (
+                <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+                  <p className="text-sm text-amber-200 font-medium">BabbleBot Lite</p>
+                  <p className="text-xs text-amber-100/80 mt-1">
+                    Neither address answered. If the Windows machine is off, BabbleBot Lite can
+                    take over on this Mac with the same Discord bot — troll watch, join monitoring
+                    and text checks only. It never starts on its own: it uses the same bot token,
+                    so starting it while the main bot is merely unreachable would kick that one
+                    off its session.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      disabled
+                      className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-500 cursor-not-allowed"
+                      data-tip="BabbleBot Lite is not built yet"
+                    >
+                      Start BabbleBot Lite
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEmergencyOffer(false);
+                        setEmergencyDeclined(true);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60"
+                    >
+                      Keep trying
+                    </button>
+                  </div>
+                </div>
+              )}
             </header>
           )}
           <SetupScreen
@@ -1056,6 +1202,42 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 <p className="text-sm font-medium mb-2">"{contextViolation.full_message || contextViolation.message}"</p>
                 <p className="text-xs text-slate-400">Flagged words: {contextViolation.words?.join(", ")}</p>
               </div>
+
+              {/* The media itself, above the conversation. A flag about a video is
+                  unreadable without the video: the text can be "[Content preserved]"
+                  and the whole judgement rests on what was in the file. The same
+                  strip serves every attachment type, and a video opens full size
+                  rather than being watched through a 220px thumbnail. */}
+              {(contextViolation.attachments?.length > 0 ||
+                contextViolation.embeds?.length > 0) && (
+                <div className="p-3 rounded-lg bg-slate-800/30">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-slate-500">
+                      What was posted
+                      <span className="ml-1.5 opacity-60">
+                        {contextViolation.attachments?.length || 0} attachment
+                        {(contextViolation.attachments?.length || 0) === 1 ? "" : "s"}
+                      </span>
+                    </p>
+                    {contextViolation.media_available === false && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">
+                        media no longer available
+                      </span>
+                    )}
+                  </div>
+                  <MessageMedia
+                    attachments={contextViolation.attachments}
+                    embeds={contextViolation.embeds}
+                    apiBase={apiUrl}
+                  />
+                  {contextViolation.media_available === false && (
+                    <p className="text-[10px] text-slate-500 mt-2">
+                      The bot cannot load this any more — usually because the message
+                      was deleted. The record of it is below.
+                    </p>
+                  )}
+                </div>
+              )}
               {contextMessages ? (
                 <div className="space-y-2">
                   <p className="text-xs text-slate-500">
@@ -1364,6 +1546,27 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               <span className={"text-xs " + (botHealthy ? "text-emerald-300" : "text-rose-300")}>
                 {botHealthy ? "Bot online" : "Bot unreachable"}
               </span>
+              {/* Which road the app is on. LAN is fast but only works on the same
+                  network; Tailscale is the fallback that survives a power cut. It
+                  is worth one word, because "why is this slow" and "why does this
+                  work here but not at Eoin's" are both answered by it. */}
+              {conn && conn.status === "connected" && (
+                <span
+                  className={
+                    "text-[10px] px-1.5 py-0.5 rounded font-medium " +
+                    (conn.via === "lan"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-violet-500/15 text-violet-300")
+                  }
+                  data-tip={
+                    conn.via === "lan"
+                      ? "Reaching the bot directly on your own network — the fastest road"
+                      : "Reaching the bot over Tailscale, not your own network — this is the fallback"
+                  }
+                >
+                  {addressLabel[conn.via]}
+                </span>
+              )}
             </div>
           </div>
         </div>

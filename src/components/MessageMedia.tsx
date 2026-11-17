@@ -28,6 +28,10 @@ export type Attachment = {
   width?: number | null;
   height?: number | null;
   spoiler?: boolean;
+  /** The bot could not load it — a deleted message's CDN link 404s. */
+  media_available?: boolean;
+  /** One line saying why it cannot be shown, when it cannot. */
+  unavailable_reason?: string;
 };
 
 export type Embed = {
@@ -66,6 +70,29 @@ export const bytes = (n?: number) => {
 
 /** Where to actually load the bytes from: the bot's proxy when it is there. */
 const srcFor = (a: Attachment) => a.proxy_url || a.url || "";
+
+/** The bot says this one is gone. Render the fact, never a broken player. */
+const isGone = (a: Attachment) => a.media_available === false || !srcFor(a);
+
+/** What kind of thing it is, for a label when it cannot be shown. */
+const kindOf = (a: Attachment) =>
+  isImage(a) ? "Image" : isVideo(a) ? "Video" : isAudio(a) ? "Audio" : "File";
+
+function GoneTile({ a }: { a: Attachment }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/40 border border-slate-700/70 max-w-[300px]">
+      <ImageOff className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-[11px] text-slate-400 truncate">
+          {kindOf(a)} — {a.filename || "no filename"}
+        </p>
+        <p className="text-[10px] text-slate-500 truncate">
+          {a.unavailable_reason || "deleted, so it can no longer be shown"}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function Spoiler({ children }: { children: React.ReactNode }) {
   const [shown, setShown] = useState(false);
@@ -143,7 +170,9 @@ export default function MessageMedia({
   /** The bot's base URL, so a relative proxy_url resolves. */
   apiBase?: string;
 }) {
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  // The lightbox takes a video as readily as a picture: a flagged clip is the
+  // thing a moderator most needs to watch, and a 220px strip is not watching it.
+  const [lightbox, setLightbox] = useState<{ src: string; video: boolean } | null>(null);
 
   // The bot returns proxy_url as a path on itself ("/api/media?url=…"), which is the
   // right thing for it to return — it does not know what host the app reached it on.
@@ -165,7 +194,7 @@ export default function MessageMedia({
       url: a.url ? resolve(a.url) : a.url,
     }));
 
-  const files = withBase(attachments).filter((a) => srcFor(a));
+  const files = withBase(attachments).filter((a) => srcFor(a) || a.media_available === false);
   const linked = Array.isArray(embeds) ? embeds : [];
 
   // An embed's image is an attachment in all but name; only the ones with artwork
@@ -182,13 +211,15 @@ export default function MessageMedia({
       {(files.length > 0 || embedImages.length > 0) && (
         <div className="mt-2 flex flex-wrap items-start gap-2">
           {files.map((a, i) =>
-            a.spoiler ? (
+            isGone(a) ? (
+              <GoneTile key={i} a={a} />
+            ) : a.spoiler ? (
               <Spoiler key={i}>
                 <ImageTile
                   src={srcFor(a)}
                   alt={a.filename || "attachment"}
                   filename={a.filename}
-                  onOpen={setLightbox}
+                  onOpen={(src) => setLightbox({ src, video: false })}
                 />
               </Spoiler>
             ) : isImage(a) ? (
@@ -197,16 +228,24 @@ export default function MessageMedia({
                 src={srcFor(a)}
                 alt={a.filename || "attachment"}
                 filename={a.filename}
-                onOpen={setLightbox}
+                onOpen={(src) => setLightbox({ src, video: false })}
               />
             ) : isVideo(a) ? (
-              <video
-                key={i}
-                src={srcFor(a)}
-                controls
-                preload="metadata"
-                className="rounded-xl border border-slate-700/70 max-h-[220px]"
-              />
+              <div key={i} className="relative group">
+                <video
+                  src={srcFor(a)}
+                  controls
+                  preload="metadata"
+                  className="rounded-xl border border-slate-700/70 max-h-[220px]"
+                />
+                <button
+                  onClick={() => setLightbox({ src: srcFor(a), video: true })}
+                  className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-black/60 text-[10px] text-slate-200 opacity-0 group-hover:opacity-100 transition"
+                  data-tip="Watch it full size"
+                >
+                  Full size
+                </button>
+              </div>
             ) : isAudio(a) ? (
               <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700">
                 <Music className="w-3.5 h-3.5 text-emerald-300" />
@@ -234,7 +273,7 @@ export default function MessageMedia({
             /\.(mp4|webm|mov)(\?|$)/i.test(u) ? (
               <video key={`e${i}`} src={u} controls preload="metadata" className="rounded-xl border border-slate-700/70 max-h-[220px]" />
             ) : (
-              <ImageTile key={`e${i}`} src={u} alt="embed" onOpen={setLightbox} />
+              <ImageTile key={`e${i}`} src={u} alt="embed" onOpen={(src) => setLightbox({ src, video: false })} />
             )
           )}
         </div>
@@ -270,15 +309,29 @@ export default function MessageMedia({
             exit={{ opacity: 0 }}
             onClick={() => setLightbox(null)}
           >
-            <motion.img
-              src={lightbox}
-              alt="attachment"
+            <motion.div
               initial={{ scale: 0.94 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.94 }}
-              className="max-h-full max-w-full rounded-xl shadow-2xl"
+              className="max-h-full max-w-full"
               onClick={(e) => e.stopPropagation()}
-            />
+            >
+              {lightbox.video ? (
+                <video
+                  src={lightbox.src}
+                  controls
+                  autoPlay
+                  preload="auto"
+                  className="max-h-[85vh] max-w-full rounded-xl shadow-2xl"
+                />
+              ) : (
+                <img
+                  src={lightbox.src}
+                  alt="attachment"
+                  className="max-h-full max-w-full rounded-xl shadow-2xl"
+                />
+              )}
+            </motion.div>
             <button
               onClick={() => setLightbox(null)}
               className="absolute top-4 right-4 p-2 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white"

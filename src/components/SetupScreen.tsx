@@ -21,6 +21,13 @@ import { motionTokens } from "../lib/design";
 
 export type AppSettings = {
   apiUrl: string;
+  /**
+   * The bot's address on Tailscale (100.x.y.z or *.ts.net), tried when the local
+   * one does not answer. Stored here, in the settings blob, rather than beside
+   * everything else that is machine-local: it describes the bot, not this laptop,
+   * and it is the lifeline on the day the LAN is gone.
+   */
+  apiFallbackUrl?: string;
   spotifyClientId: string;
   spotifyClientSecret: string;
   spotifyRedirectUri: string;
@@ -33,6 +40,7 @@ export type AppSettings = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   apiUrl: "http://192.168.1.128:8080",
+  apiFallbackUrl: "",
   spotifyClientId: "",
   spotifyClientSecret: "",
   spotifyRedirectUri: "http://127.0.0.1:5173/callback",

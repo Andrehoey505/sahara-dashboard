@@ -14,8 +14,10 @@ import {
   Bell,
   Activity,
   ExternalLink,
+  WifiOff,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
+import { looksLikeTailscale, networkState, type OfflineState } from "../lib/connection";
 import type { AppSettings } from "./SetupScreen";
 
 /**
@@ -136,8 +138,13 @@ export default function SettingsScreen({
   const [update, setUpdate] = useState<UpdateState>({ status: "idle" });
   const [pending, setPending] = useState<{ version: string; downloadAndInstall: (cb?: any) => Promise<void> } | null>(null);
   const [apiDraft, setApiDraft] = useState(apiUrl);
+  const [fallbackDraft, setFallbackDraft] = useState(settings.apiFallbackUrl || "");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
+  /** What this Mac's own network was when the last test ran. */
+  const [network, setNetwork] = useState<OfflineState>("unknown");
+  const [testingFallback, setTestingFallback] = useState(false);
+  const [fallbackResult, setFallbackResult] = useState<"ok" | "fail" | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -218,6 +225,15 @@ export default function SettingsScreen({
   const testConnection = async () => {
     setTesting(true);
     setTestResult(null);
+    // Asked first: "it failed" and "this Mac is offline" look identical from a
+    // throw, and only one of them is the bot's fault.
+    const net = await networkState();
+    setNetwork(net);
+    if (net === "offline") {
+      setTestResult("fail");
+      setTesting(false);
+      return;
+    }
     try {
       const res = await fetch(apiDraft.replace(/\/$/, "") + "/api/health");
       setTestResult(res.ok ? "ok" : "fail");
@@ -228,9 +244,27 @@ export default function SettingsScreen({
     }
   };
 
+  const testFallback = async () => {
+    setTestingFallback(true);
+    setFallbackResult(null);
+    try {
+      const res = await fetch(fallbackDraft.trim().replace(/\/$/, "") + "/api/health");
+      setFallbackResult(res.ok ? "ok" : "fail");
+    } catch {
+      setFallbackResult("fail");
+    } finally {
+      setTestingFallback(false);
+    }
+  };
+
   const saveApi = () => {
     const clean = apiDraft.trim().replace(/\/$/, "");
+    const cleanFallback = fallbackDraft.trim().replace(/\/$/, "");
     setApiDraft(clean);
+    setFallbackDraft(cleanFallback);
+    // Both saved together: the fallback is a property of the bot, not of this
+    // laptop, and half a pair is worse than none.
+    onSaveSettings({ ...settings, apiFallbackUrl: cleanFallback });
     onSaveApiUrl(clean);
   };
 
@@ -373,9 +407,74 @@ export default function SettingsScreen({
               <XCircle className="w-3.5 h-3.5" /> Couldn't reach it — is the Windows machine awake?
             </span>
           )}
+          {/* A failed test has two very different causes, and the wrong one sends
+              you restarting a bot that was never in trouble. Ask the machine
+              itself rather than guessing from the failed request. */}
+          {testResult === "fail" && network === "offline" && (
+            <span className="text-sky-300 flex items-center gap-1.5 w-full">
+              <WifiOff className="w-3.5 h-3.5" />
+              This Mac has no internet at all — connect to wifi or your hotspot first
+            </span>
+          )}
           {testResult === null && (
             <span className="text-slate-500">Local IP for same-network, or a tunnel URL for remote.</span>
           )}
+        </div>
+
+        {/* The fallback. Separate from the address above because it is a different
+            road, not a different bot: tried only when the local one does not answer,
+            so the LAN stays the fast path on a normal day. */}
+        <div className="mt-4 pt-3 border-t border-slate-700/60">
+          <p className="text-xs text-slate-400 mb-2 flex items-center gap-1.5">
+            Fallback address
+            <span className="text-slate-600">— tried only if the one above fails</span>
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={fallbackDraft}
+              onChange={(e) => setFallbackDraft(e.target.value)}
+              placeholder="http://100.x.y.z:8080"
+              spellCheck={false}
+              className="flex-1 px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500"
+            />
+            <button
+              onClick={testFallback}
+              disabled={testingFallback || !fallbackDraft.trim()}
+              className="px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm text-slate-300 hover:bg-slate-700/60 disabled:opacity-40 transition-colors"
+              data-tip="Test the fallback address on its own"
+            >
+              {testingFallback ? "Testing…" : "Test"}
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
+            {fallbackResult === "ok" && (
+              <span className="text-emerald-300 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Fallback reachable
+              </span>
+            )}
+            {fallbackResult === "fail" && (
+              <span className="text-rose-300 flex items-center gap-1.5">
+                <XCircle className="w-3.5 h-3.5" /> No answer — is Tailscale connected on both machines?
+              </span>
+            )}
+            {fallbackResult === "fail" && network === "offline" && (
+              <span className="text-sky-300 flex items-center gap-1.5 w-full">
+                <WifiOff className="w-3.5 h-3.5" />
+                This Mac has no internet — a hotspot or wifi is needed before any address can work
+              </span>
+            )}
+            {fallbackResult === null && fallbackDraft.trim() && !looksLikeTailscale(fallbackDraft) && (
+              <span className="text-amber-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                That does not look like a Tailscale address (100.x.y.z or *.ts.net)
+              </span>
+            )}
+            {fallbackResult === null && (!fallbackDraft.trim() || looksLikeTailscale(fallbackDraft)) && (
+              <span className="text-slate-500">
+                The bot's Tailscale address. Works from a hotspot or anywhere off your home wifi.
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={onOpenSetup}

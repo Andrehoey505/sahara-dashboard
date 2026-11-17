@@ -33,7 +33,7 @@ import {
  * the app and the bot cannot disagree about what a channel is set to.
  */
 
-type Preset = "off" | "spoiler" | "normal" | "strict";
+type Preset = "off" | "quiet" | "spoiler" | "normal" | "strict";
 
 type ChannelRule = {
   channel_id: string;
@@ -51,6 +51,15 @@ type ChannelRule = {
   nsfw_images?: string | null;
   nsfw_videos?: string | null;
   sensitivity?: string | null;
+  // Discord's own age-restricted flag, as the bot last read it. Read-only here:
+  // it is what Discord says, not what we think.
+  nsfw?: boolean;
+  // Andre's override. null/undefined means "believe Discord"; true means "treat
+  // this channel as age-restricted whatever Discord reports". It exists because
+  // the live API reports nsfw:false on every channel in every server -- 0 of 376
+  // -- including channels that plainly are age-restricted, so Discord's flag is
+  // not a usable answer on its own.
+  nsfw_override?: boolean | null;
 };
 
 const PRESETS: {
@@ -67,6 +76,14 @@ const PRESETS: {
     tone: "text-slate-400",
     explain:
       "The bot ignores this channel completely. Nothing is checked, nothing is flagged, nothing is deleted.",
+  },
+  {
+    id: "quiet",
+    label: "Quiet",
+    icon: EyeOff,
+    tone: "text-violet-300",
+    explain:
+      "Everything is seen and filed for you to look at later, but nothing is flagged and nobody is told. For a channel where this content is simply allowed.",
   },
   {
     id: "spoiler",
@@ -166,6 +183,18 @@ const SWITCHES: {
 /** What each preset sets the switches to. Kept here so the UI can show the diff. */
 const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
   off: {
+    links: "allow",
+    profanity: "off",
+    spam: "off",
+    nsfw_images: "off",
+    nsfw_videos: "off",
+    sensitivity: "normal",
+  },
+  // Seen, filed, never judged. The difference from Off is that Off stores
+  // nothing at all, while Quiet keeps the record so a moderator can review it
+  // afterwards. The difference from Spoiler is that nothing here is a rule
+  // somebody could break -- spoilered or not is fine.
+  quiet: {
     links: "allow",
     profanity: "off",
     spam: "off",
@@ -303,6 +332,22 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
     });
   };
 
+  /** The age-restricted override. Its own setter because it is a boolean that is
+   *  allowed to be null ("believe Discord"), and a select of three states is the
+   *  only honest control for that. */
+  const setOverride = (id: string, value: "discord" | "yes" | "no") => {
+    setRules((prev) => {
+      const current = prev[id] || { channel_id: id, preset: "normal" as Preset };
+      return {
+        ...prev,
+        [id]: {
+          ...current,
+          nsfw_override: value === "discord" ? null : value === "yes",
+        },
+      };
+    });
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -339,7 +384,7 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
   };
 
   const counts = useMemo(() => {
-    const out: Record<string, number> = { off: 0, spoiler: 0, normal: 0, strict: 0, custom: 0 };
+    const out: Record<string, number> = { off: 0, quiet: 0, spoiler: 0, normal: 0, strict: 0, custom: 0 };
     for (const c of textChannels) {
       const r = ruleFor(c.id);
       out[r.preset] = (out[r.preset] || 0) + 1;
@@ -420,7 +465,9 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
             const rule = ruleFor(c.id);
             const eff = effective(rule);
             const custom = isCustom(rule);
-            const preset = PRESETS.find((p) => p.id === rule.preset) || PRESETS[2];
+            // Falls back to Normal by id, not by array position: adding a preset
+            // used to silently change what an unknown rule was displayed as.
+            const preset = PRESETS.find((p) => p.id === rule.preset) || PRESETS.find((p) => p.id === "normal")!;
             const isOpen = open === c.id;
             return (
               <motion.div key={c.id} layout className="glass rounded-xl overflow-hidden">
@@ -430,6 +477,23 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
                   {custom && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">
                       custom
+                    </span>
+                  )}
+
+                  {c.nsfw && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300 shrink-0"
+                      data-tip="Discord reports this channel as age-restricted"
+                    >
+                      18+
+                    </span>
+                  )}
+                  {rule.nsfw_override === true && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 shrink-0"
+                      data-tip="You set this channel as age-restricted — NSFW is allowed here whatever Discord says"
+                    >
+                      set 18+
                     </span>
                   )}
 
@@ -479,6 +543,44 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
                       className="overflow-hidden border-t border-slate-700/60 bg-slate-900/30"
                     >
                       <div className="px-3 py-2 space-y-2">
+                        {/* Age-restricted, as its own line above the switches: it is not
+                            one of the preset's permissions, it is a fact about the
+                            channel that changes what the rest of them mean. */}
+                        <div className="p-2 rounded-lg bg-slate-800/30 border border-slate-700/60">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span
+                              className="text-[12px] w-36 shrink-0 text-slate-300"
+                              data-tip="Discord's own age-restricted flag for this channel, and whether you are overriding it"
+                            >
+                              Age-restricted
+                            </span>
+                            <select
+                              value={
+                                rule.nsfw_override === true
+                                  ? "yes"
+                                  : rule.nsfw_override === false
+                                  ? "no"
+                                  : "discord"
+                              }
+                              onChange={(e) =>
+                                setOverride(c.id, e.target.value as "discord" | "yes" | "no")
+                              }
+                              className="px-2 py-1 rounded-lg bg-slate-800/60 border border-slate-700 text-[12px] focus:outline-none focus:border-indigo-500"
+                            >
+                              <option value="discord">
+                                Follow Discord{c.nsfw ? " (says 18+)" : " (says not)"}
+                              </option>
+                              <option value="yes">Treat as 18+</option>
+                              <option value="no">Treat as not 18+</option>
+                            </select>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1.5">
+                            An age-restricted channel is one where NSFW is allowed, so nothing is
+                            flagged or deleted for being NSFW here. Discord's own flag reads false on
+                            every channel in every server, so set it here if it matters.
+                          </p>
+                        </div>
+
                         <p className="text-[11px] text-slate-500">
                           Advanced permissions — the preset filled these in. Change one and this
                           channel becomes custom.
