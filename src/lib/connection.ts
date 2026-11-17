@@ -142,12 +142,21 @@ export async function probeOnce(lan: string, fallback?: string): Promise<Connect
   if (network === "offline") return { status: "unreachable", results: [], network };
   if (list.length === 0) return { status: "unreachable", results: [], network };
 
-  const results = await Promise.all(
+  // Knocked at together, then judged in order.
+  //
+  // They used to be raced and the winner taken by how the array happened to be
+  // sorted, which meant a Tailscale address that happened to answer 30ms sooner
+  // won over a LAN address sitting right there. Whichever road answered first is
+  // not the question. LAN first is: it is the same room, it cannot be metered,
+  // and it does not depend on a VPN being up.
+  const probed = await Promise.all(
     list.map(async (a) => ({ ...(await hit(a.url, QUICK_PROBE_MS)), kind: a.kind })),
   );
+  const results = list.map((a) => probed.find((r) => r.kind === a.kind && r.url === a.url)!);
 
-  const lanHit = results.find((r) => r.kind === "lan" && r.ok);
-  const anyHit = lanHit || results.find((r) => r.ok);
+  // First address that answered, in the order the list is in -- which is LAN,
+  // then fallback.
+  const anyHit = results.find((r) => r.ok);
   if (anyHit) {
     return { status: "connected", via: anyHit.kind, url: anyHit.url, results };
   }
