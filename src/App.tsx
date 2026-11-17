@@ -37,6 +37,8 @@ import {
   Database,
   Clock,
   WifiOff,
+  HardDrive,
+  Cpu,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import EdWaits from "./components/EdWaits";
@@ -69,6 +71,8 @@ import DatabaseScreen from "./components/DatabaseScreen";
 import { SCREENS } from "./lib/screens";
 import { areaFor, areaTone } from "./lib/design";
 import ServerBar from "./components/ServerBar";
+import StorageScreen from "./components/StorageScreen";
+import SystemScreen from "./components/SystemScreen";
 import ConfigScreen from "./components/ConfigScreen";
 import MessageMedia, { type Attachment, type Embed } from "./components/MessageMedia";
 import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers";
@@ -1157,6 +1161,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
         { id: "relay", label: "Texan Relay", icon: Sparkles },
         { id: "mentions", label: "Mentions", icon: MessageCircle },
         { id: "database", label: "Database", icon: Database },
+        { id: "storage", label: "Storage", icon: HardDrive },
+        { id: "system", label: "System", icon: Cpu },
       ],
     },
     {
@@ -1944,6 +1950,8 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
               <AuditLog apiUrl={apiUrl} notify={notify} serverId={activeServer} />
             )}
             {active === "database" && <DatabaseScreen apiUrl={apiUrl} notify={notify} />}
+            {active === "storage" && <StorageScreen apiUrl={apiUrl} notify={notify} />}
+            {active === "system" && <SystemScreen apiUrl={apiUrl} notify={notify} />}
             {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
             {active === "activities" && <ActivitiesScreen apiUrl={apiUrl} notify={notify} />}
             {active === "reactionroles" && (
