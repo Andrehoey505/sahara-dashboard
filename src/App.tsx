@@ -537,6 +537,37 @@ export default function App() {
     })();
   }, []);
   const [showSetup, setShowSetup] = useState(false);
+  /**
+   * Set when someone stuck on the setup screen asks for a later version.
+   *
+   * The setup screen is a full takeover: no nav, no Settings, so no "Check for
+   * updates" -- and the connection is the very thing that is broken, so the app
+   * that would fix it cannot be reached from inside the app. The only way out
+   * used to be finding the release on GitHub by hand.
+   */
+  const [updatingFromSetup, setUpdatingFromSetup] = useState(false);
+
+  /** Install a newer release without needing a working connection to the bot. */
+  const updateFromSetup = useCallback(async () => {
+    setUpdatingFromSetup(true);
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (!update) {
+        setConnectionError(
+          "This is already the newest version. The problem is between this Mac and the bot, not the app -- try the LAN address, or check the Windows machine.",
+        );
+        return;
+      }
+      await update.downloadAndInstall();
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch (e: any) {
+      setConnectionError(`Could not update: ${String(e?.message || e)}`);
+    } finally {
+      setUpdatingFromSetup(false);
+    }
+  }, []);
 
   const [catchUp, setCatchUp] = useState<{
     flags: number;
@@ -1012,6 +1043,16 @@ export default function App() {
                   ? "Looking for the bot on the local network and the fallback address…"
                   : connectionError || "Set up the connection to Babblebot to continue."}
               </p>
+              {/* Stuck here means no working connection, so Settings -- and the
+                  update button inside it -- are unreachable. The app that fixes a
+                  connection problem cannot be behind that connection. */}
+              <button
+                onClick={() => void updateFromSetup()}
+                disabled={updatingFromSetup}
+                className="mt-3 mr-2 px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-xs text-indigo-200 hover:bg-indigo-500/30 disabled:opacity-40"
+              >
+                {updatingFromSetup ? "Checking for a newer version…" : "Update the app instead"}
+              </button>
               {conn && conn.status === "unreachable" && conn.network === "offline" && (
                 <div className="mt-3 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3">
                   <p className="text-sm text-sky-200 font-medium flex items-center gap-2">
