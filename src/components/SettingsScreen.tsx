@@ -19,7 +19,59 @@ import {
 import { motionTokens } from "../lib/design";
 import { looksLikeTailscale, networkState, type OfflineState } from "../lib/connection";
 import { pingBot } from "../lib/bot";
+import { trace, traceRead, traceWatch, traceClear, type TraceEvent } from "../lib/trace";
 import type { AppSettings } from "./SetupScreen";
+
+  function TracePanel() {
+    const [events, setEvents] = useState<TraceEvent[]>(() => traceRead());
+    useEffect(() => traceWatch(setEvents), []);
+    return (
+      <Card
+        icon={Activity}
+        title="Connection log"
+        data-tip="What the app actually did"
+        blurb="Which address it tried, what answered, and what was saved"
+        tone="text-slate-300"
+      >
+        {events.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Nothing recorded yet in this session. Press Test above, or restart the app.
+          </p>
+        ) : (
+          <div className="space-y-1 max-h-64 overflow-auto rounded-xl bg-slate-950/50 border border-slate-800 p-3">
+            {events
+              .slice()
+              .reverse()
+              .map((e, i) => (
+                <p
+                  key={i}
+                  className={
+                    "text-xs font-mono break-words " +
+                    (e.kind === "error"
+                      ? "text-rose-300"
+                      : e.kind === "chosen"
+                        ? "text-emerald-300"
+                        : e.kind === "saved"
+                          ? "text-indigo-300"
+                          : "text-slate-400")
+                  }
+                >
+                  <span className="text-slate-600">{e.at} </span>
+                  {e.line}
+                </p>
+              ))}
+          </div>
+        )}
+        <button
+          onClick={() => traceClear()}
+          className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60"
+        >
+          Clear
+        </button>
+      </Card>
+    );
+  }
+
 
 /**
  * Settings.
@@ -279,6 +331,10 @@ export default function SettingsScreen({
     onSaveSettings({ ...settings, apiFallbackUrl: cleanFallback });
     // The primary only moves when the primary field is what was saved.
     if (primary === "api") onSaveApiUrl(clean);
+    trace(
+      "saved",
+      `saved primary=${clean}${primary === "api" ? "" : " (unchanged)"}, fallback=${cleanFallback || "none"}`,
+    );
   };
 
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
@@ -387,6 +443,7 @@ export default function SettingsScreen({
           </div>
         )}
       </motion.section>
+
 
       <Card icon={Server} title="Babblebot connection" data-tip="Babblebot connection" blurb="Where the bot's API is listening" tone="text-sky-300">
         <div className="flex flex-col sm:flex-row gap-2">
@@ -525,6 +582,8 @@ export default function SettingsScreen({
           <Settings2 className="w-3.5 h-3.5" /> Open the full setup wizard
         </button>
       </Card>
+
+      <TracePanel />
 
       <Card icon={Activity} title="Health features" data-tip="Health features" blurb="What appears in the Health section" tone="text-rose-300">
         <Row

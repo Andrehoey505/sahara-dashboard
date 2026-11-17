@@ -21,6 +21,7 @@
  */
 
 import { botFetch } from "./bot";
+import { trace } from "./trace";
 
 export type AddressKind = "lan" | "fallback";
 
@@ -112,6 +113,10 @@ async function hit(url: string, timeoutMs: number): Promise<ProbeResult & { kind
   const kind: AddressKind = "lan";
   const r = await botFetch(url + "/api/health", { signal: AbortSignal.timeout(timeoutMs) });
   const ms = Date.now() - started;
+  trace(
+    "probe",
+    `probe ${url} → ${r.status === 0 ? "no answer" : "HTTP " + r.status} in ${ms}ms`,
+  );
   if (r.ok) return { kind, url, ok: true, ms };
   return {
     kind,
@@ -158,8 +163,10 @@ export async function probeOnce(lan: string, fallback?: string): Promise<Connect
   // then fallback.
   const anyHit = results.find((r) => r.ok);
   if (anyHit) {
+    trace("chosen", `using ${anyHit.kind} → ${anyHit.url}`);
     return { status: "connected", via: anyHit.kind, url: anyHit.url, results };
   }
+  trace("error", `nothing answered (${results.length} address${results.length === 1 ? "" : "es"} tried)`);
   return { status: "unreachable", results, network };
 }
 

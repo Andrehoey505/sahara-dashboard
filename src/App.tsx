@@ -50,6 +50,7 @@ import SleepLog from "./components/SleepLog";
 import ScheduleScreen from "./components/ScheduleScreen";
 import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
+import { trace } from "./lib/trace";
 import { probeOnce, waitForBot, explain, addressLabel, botIsDown, type ConnectionState } from "./lib/connection";
 import MentionsScreen from "./components/MentionsScreen";
 import MembersScreen from "./components/MembersScreen";
@@ -170,7 +171,16 @@ export default function App() {
   const [failoverAttempt, setFailoverAttempt] = useState<{ n: number; of: number } | null>(null);
   const [emergencyOffer, setEmergencyOffer] = useState(false);
   const [emergencyDeclined, setEmergencyDeclined] = useState(false);
-  const [apiUrl, setApiUrl] = useState(localStorage.getItem("sahara_api_url") || "http://localhost:8080");
+  // One source of truth for where the bot is: the settings record.
+  //
+  // `sahara_api_url` is still written alongside it for older builds, but nothing
+  // reads it any more -- two readers of two keys is how the address in the box
+  // stops matching the address being connected to.
+  const [apiUrl, setApiUrl] = useState(() => {
+    const s = loadSettings();
+    trace("load", `started with primary=${s.apiUrl}, fallback=${s.apiFallbackUrl || "none"}`);
+    return s.apiUrl;
+  });
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showContext, setShowContext] = useState(false);
   const [contextViolation, setContextViolation] = useState<any>(null);
@@ -225,7 +235,10 @@ export default function App() {
   useEffect(() => {
     const saved = localStorage.getItem("sahara_user");
     const savedPin = localStorage.getItem("sahara_pin");
-    const api = localStorage.getItem("sahara_api_url") || "http://localhost:8080";
+    // The saved pair, not just the primary: the fallback lives in the same
+    // settings record, and reading only the primary here made the app's idea of
+    // "where the bot is" differ from the settings object it had just loaded.
+    const api = loadSettings().apiUrl || "http://localhost:8080";
     if (saved) {
       setUserId(saved);
       setUserProfile({ name: "User " + saved.slice(-4), avatar: "👤", id: saved });

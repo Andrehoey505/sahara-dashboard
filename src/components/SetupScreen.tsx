@@ -59,13 +59,16 @@ export function loadSettings(): AppSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch {}
-  const legacy = localStorage.getItem("sahara_api_url");
-  return { ...DEFAULT_SETTINGS, ...(legacy ? { apiUrl: legacy } : {}) };
+  // Nothing readable: the defaults.
+  //
+  // There used to be a legacy `sahara_api_url` key folded in here as well, and
+  // saveSettings wrote that same key -- two places holding one answer, which is
+  // how a field ends up showing one address while the app connects to another.
+  return { ...DEFAULT_SETTINGS };
 }
 
 export function saveSettings(s: AppSettings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
-  localStorage.setItem("sahara_api_url", s.apiUrl);
 }
 
 type Props = {
