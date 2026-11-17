@@ -12,6 +12,8 @@ import {
   Ban,
   UserMinus,
   Clock,
+  Trash2,
+  Crosshair,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 
@@ -67,9 +69,31 @@ const ACTIONS = [
   { id: "mute", label: "Mute", icon: VolumeX, hint: "Silence them in voice" },
   { id: "kick", label: "Kick", icon: UserMinus, hint: "Remove from the server, they can rejoin" },
   { id: "ban", label: "Ban", icon: Ban, hint: "Remove and block from rejoining" },
+  // The most important one on this screen. A moderator who can only punish will
+  // punish; a moderator who can also say "I looked and it's fine" will use that
+  // instead, and the record stays honest either way.
+  {
+    id: "none",
+    label: "No action",
+    icon: Crosshair,
+    hint: "Looked at it and it's fine — records that you decided, and does nothing to them",
+  },
 ] as const;
 
 const DESTRUCTIVE = new Set(["kick", "ban"]);
+
+/**
+ * The delete step, as a separate question from what happens to the person.
+ *
+ * They are genuinely separate: a message can be removed with nobody punished,
+ * and someone can be warned about a message that stays up because the context
+ * matters. Folding them into one list of five would force a choice that often
+ * is not the right one.
+ */
+const DELETE_CHOICES = [
+  { id: "keep", label: "Leave the message", hint: "The message stays where it is" },
+  { id: "delete", label: "Delete the message", hint: "Remove it, then apply the action above" },
+] as const;
 
 export default function ModerationScreen({ apiUrl, notify, servers, selectedServer }: Props) {
   const [server, setServer] = useState(selectedServer || "");
@@ -82,6 +106,8 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
   const [minutes, setMinutes] = useState(10);
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string>("");
+  /** What to do with the message itself, separate from what happens to the person. */
+  const [deleteMode, setDeleteMode] = useState<"keep" | "delete">("keep");
 
   const [channel, setChannel] = useState("");
   const [channelMessage, setChannelMessage] = useState("");
@@ -160,12 +186,20 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
   const run = async () => {
     if (!target) return notify("Pick who this is for", "error");
     if (!server) return notify("Pick a server first", "error");
-    if (!reason.trim()) return notify("Give a reason — it goes in the record", "error");
+    // A reason is still required for everything that changes something for the
+    // person. It is the record that makes a future decision possible. The one
+    // exception is "no action" with the message left alone, which changes
+    // nothing at all and should never be harder to do than doing nothing.
+    const changesNothing = action === "none" && deleteMode === "keep";
+    if (!changesNothing && !reason.trim())
+      return notify("Give a reason — it goes in the record", "error");
     if (DESTRUCTIVE.has(action)) {
       const who = target.display_name || target.name;
       if (!window.confirm(`${action === "ban" ? "Ban" : "Kick"} ${who}? This takes effect immediately.`))
         return;
     }
+    if (deleteMode === "delete" && !window.confirm("Delete the message? That cannot be undone."))
+      return;
     setBusy(true);
     setLastResult("");
     try {
@@ -175,6 +209,11 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
         server,
         reason: reason.trim(),
         duration: action === "timeout" ? minutes : 0,
+        // One request, not two. Deleting first and acting second as separate
+        // calls leaves a half-done state when the second fails: a message gone
+        // with nobody punished, or the reverse, and no record saying which.
+        // The bot is told the whole intention and does it as one step.
+        delete_message: deleteMode === "delete",
         issued_by: "dashboard",
       };
       const endpoint = action === "warn" ? "/api/warn" : "/api/moderation-action";
@@ -190,18 +229,29 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
         return;
       }
       const who = data.user || target.display_name || target.name;
-      if (action === "warn") {
+      // Say what actually happened, including the half the bot did not do. A
+      // "success" that hides a failed delete is the message you trust right up
+      // until you look at the channel and the message is still there.
+      const deleted = data.deleted ? " Message deleted." : "";
+      const deleteFailed = data.delete_error ? ` The message was NOT deleted: ${data.delete_error}` : "";
+      if (action === "none") {
+        const line =
+          "Recorded as no action" + (deleted || " — nothing changed for them.") + deleteFailed;
+        setLastResult(line + (data.note ? ` ${data.note}` : ""));
+        notify(line, deleteFailed ? "error" : "success");
+      } else if (action === "warn") {
         const line = data.dm_delivered
-          ? `Warning ${data.warning_number} recorded and DM'd to ${who}.`
-          : `Warning ${data.warning_number} recorded. ${data.detail || "The DM did not land."}`;
+          ? `Warning ${data.warning_number} recorded and DM'd to ${who}.${deleted}${deleteFailed}`
+          : `Warning ${data.warning_number} recorded. ${data.detail || "The DM did not land."}${deleted}${deleteFailed}`;
         setLastResult(line);
-        notify(line, data.dm_delivered ? "success" : "info");
+        notify(line, data.dm_delivered && !deleteFailed ? "success" : "info");
       } else {
-        const line = `${action} applied to ${who}.`;
+        const line = `${action} applied to ${who}.${deleted}${deleteFailed}`;
         setLastResult(line);
-        notify(line, "success");
+        notify(line, deleteFailed ? "error" : "success");
       }
       setReason("");
+      setDeleteMode("keep");
       loadWarnings(target.id);
     } catch (e: any) {
       notify("Connection failed — is the bot running?", "error");
@@ -405,6 +455,32 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
             data-tip="Required — a warning with no reason is not a record you can act on later"
           />
 
+          {/* The message and the person are two separate decisions. */}
+          <label className="text-xs text-slate-400 block mb-1 mt-3">The message</label>
+          <div className="grid grid-cols-2 gap-2">
+            {DELETE_CHOICES.map((d) => {
+              const on = deleteMode === d.id;
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => setDeleteMode(d.id)}
+                  className={
+                    "flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition border " +
+                    (on
+                      ? d.id === "delete"
+                        ? "bg-rose-500/20 border-rose-500/40 text-rose-200"
+                        : "bg-slate-700/40 border-slate-600 text-slate-200"
+                      : "border-slate-800 hover:bg-slate-800/50 text-slate-400")
+                  }
+                  data-tip={d.hint}
+                >
+                  {d.id === "delete" ? <Trash2 className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
+
           <button
             onClick={run}
             disabled={busy}
@@ -412,16 +488,26 @@ export default function ModerationScreen({ apiUrl, notify, servers, selectedServ
               "mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-50 " +
               (DESTRUCTIVE.has(action)
                 ? "bg-rose-500/20 text-rose-200 hover:bg-rose-500/30"
+                : action === "none"
+                ? "bg-slate-700/40 text-slate-200 hover:bg-slate-700/60"
                 : "bg-indigo-500/20 text-indigo-200 hover:bg-indigo-500/30")
             }
             data-tip={
-              action === "warn"
+              action === "none"
+                ? "Record what you decided. Nothing happens to them."
+                : action === "warn"
                 ? "Record the warning and DM them"
                 : `Apply this ${action} to the member you picked`
             }
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-            {busy ? "Working…" : `Apply ${action}`}
+            {busy
+              ? "Working…"
+              : action === "none"
+              ? deleteMode === "delete"
+                ? "Delete the message only"
+                : "Record as no action"
+              : `Apply ${action}`}
           </button>
 
           {lastResult && (
