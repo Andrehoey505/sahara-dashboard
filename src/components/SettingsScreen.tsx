@@ -445,6 +445,21 @@ export default function SettingsScreen({
             >
               {testingFallback ? "Testing…" : "Test"}
             </button>
+            {/* Save, right here. It used to be only the Save at the top of the card,
+                which looks like it belongs to the primary field — so a fallback typed
+                in and never saved is the obvious mistake, and it fails silently. */}
+            <button
+              onClick={saveApi}
+              disabled={fallbackDraft.trim() === (settings.apiFallbackUrl || "").trim()}
+              className="px-3 py-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/30 disabled:opacity-40 transition-colors"
+              data-tip={
+                fallbackDraft.trim() === (settings.apiFallbackUrl || "").trim()
+                  ? "Already saved"
+                  : "Save the fallback address so it survives a restart"
+              }
+            >
+              Save
+            </button>
           </div>
           <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
             {fallbackResult === "ok" && (
@@ -452,6 +467,19 @@ export default function SettingsScreen({
                 <CheckCircle2 className="w-3.5 h-3.5" /> Fallback reachable
               </span>
             )}
+            {/* The distinction that matters: saved or not. A tested address that was
+                never saved is gone after a restart and looks like the app forgot it. */}
+            {fallbackDraft.trim() !== (settings.apiFallbackUrl || "").trim() && (
+              <span className="text-amber-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" /> Not saved yet — press Save
+              </span>
+            )}
+            {fallbackDraft.trim() === (settings.apiFallbackUrl || "").trim() &&
+              !!fallbackDraft.trim() && (
+                <span className="text-emerald-300/80 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Saved
+                </span>
+              )}
             {fallbackResult === "fail" && (
               <span className="text-rose-300 flex items-center gap-1.5">
                 <XCircle className="w-3.5 h-3.5" /> No answer — is Tailscale connected on both machines?
