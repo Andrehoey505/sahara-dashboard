@@ -51,6 +51,13 @@ import ScheduleScreen from "./components/ScheduleScreen";
 import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
 import { trace } from "./lib/trace";
+
+/**
+ * How long the app waits, with the offer on screen and counting, before it
+ * would hand over to the emergency bot by itself. Long enough to notice and
+ * cancel; short enough that an outage does not mean standing around.
+ */
+const HANDOVER_SECONDS = 90;
 import { probeOnce, waitForBot, explain, addressLabel, botIsDown, type ConnectionState } from "./lib/connection";
 import MentionsScreen from "./components/MentionsScreen";
 import MembersScreen from "./components/MembersScreen";
@@ -153,6 +160,30 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  /**
+   * Whether this app has ever reached the bot on this machine.
+   *
+   * The difference between "never set up" and "the bot is down right now" is
+   * the whole question the first screen has to answer, and `connected` cannot
+   * tell them apart -- both are false. One failure used to drop the user into
+   * the setup wizard, which reads as "nothing has ever worked" and offers to
+   * re-enter an address that is not the problem.
+   *
+   * It is in localStorage, not just state, because the bot can be down when the
+   * app launches and that is exactly when it must not pretend to be new.
+   */
+  /** Seconds left on the automatic handover, or null when it is not counting. */
+  const [emergencyCountdown, setEmergencyCountdown] = useState<number | null>(null);
+  const [everConnected, setEverConnected] = useState<boolean>(
+    () => localStorage.getItem("sahara_ever_connected") === "1",
+  );
+  const markConnected = useCallback(() => {
+    setConnected(true);
+    setEverConnected((was) => {
+      if (!was) localStorage.setItem("sahara_ever_connected", "1");
+      return true;
+    });
+  }, []);
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState("");
   /**
@@ -283,6 +314,43 @@ export default function App() {
    * address that answered — every other request in the app follows that one, so
    * a failover is not a special mode the rest of the code has to know about.
    */
+  /**
+   * The 90-second auto-handover.
+   *
+   * Runs only while `emergencyOffer` is up, which `runFailover` only raises when
+   * both addresses failed AND this Mac has a network AND Andre has not already
+   * said no. The countdown is visible the whole time and cancellable.
+   *
+   * The handover itself is not implemented yet -- BabbleBot Lite is designed and
+   * not built -- so reaching zero currently keeps trying rather than lying about
+   * having started something.
+   */
+  useEffect(() => {
+    if (!emergencyOffer) {
+      setEmergencyCountdown(null);
+      return;
+    }
+    setEmergencyCountdown(HANDOVER_SECONDS);
+    const id = setInterval(() => {
+      setEmergencyCountdown((n) => {
+        if (n === null) return null;
+        if (n <= 1) {
+          clearInterval(id);
+          // Nothing to start yet. Recorded rather than pretended.
+          trace("error", "90s elapsed with no answer — BabbleBot Lite is not built, still retrying");
+          setEmergencyCountdown(null);
+          void runFailover();
+          return null;
+        }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+    // runFailover is stable enough here: re-running the effect on a new closure
+    // would restart the countdown on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emergencyOffer]);
+
   const runFailover = useCallback(async () => {
     if (failoverBusy) return;
     setFailoverBusy(true);
@@ -296,7 +364,7 @@ export default function App() {
       setConn(quick);
       if (quick.status === "connected") {
         if (quick.url !== apiUrl) setApiUrl(quick.url);
-        setConnected(true);
+        markConnected();
         setConnectionError("");
         return;
       }
@@ -306,7 +374,7 @@ export default function App() {
       setConn(patient);
       if (patient.status === "connected") {
         if (patient.url !== apiUrl) setApiUrl(patient.url);
-        setConnected(true);
+        markConnected();
         setConnectionError("");
       } else {
         setConnectionError(explain(patient));
@@ -330,7 +398,7 @@ export default function App() {
     try {
       const healthRes = await botFetch(apiUrl + "/api/health");
       if (!healthRes.ok) throw new Error("not ok");
-      setConnected(true);
+      markConnected();
       setConnectionError("");
       const [msgRes, violRes, srvRes, statsRes] = await Promise.all([
         botFetch(apiUrl + "/api/messages?limit=50"),
@@ -1042,11 +1110,24 @@ export default function App() {
     );
   }
 
+  /**
+   * The first screen, split by what actually happened.
+   *
+   * `showSetup` and "never connected" mean set up an address: there is nothing
+   * to preserve and nothing to fall back to.
+   *
+   * Everything else -- an address that used to work and does not right now --
+   * is an outage, and an outage must not look like a first run. It gets a
+   * sentence, the two addresses it tried, and the offer of the emergency bot,
+   * while the app keeps tapping on the door in the background so it comes back
+   * by itself when the Windows machine does.
+   */
   if (!connected || showSetup) {
+    const setupWizard = showSetup || !everConnected;
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
         <div className="max-w-3xl mx-auto p-6">
-          {!showSetup && (
+          {!setupWizard && (
             <header className="mb-6">
               <h1 className="text-xl font-semibold">Sahara Dashboard</h1>
               <p className="text-sm text-slate-400 mt-1">
@@ -1054,6 +1135,8 @@ export default function App() {
                   ? `Trying to reach the bot — attempt ${failoverAttempt.n} of ${failoverAttempt.of}…`
                   : failoverBusy
                   ? "Looking for the bot on the local network and the fallback address…"
+                  : conn?.status === "unreachable"
+                  ? "Cannot connect to the Babblebot server. It will keep trying — this screen closes on its own when it answers."
                   : connectionError || "Set up the connection to Babblebot to continue."}
               </p>
               {/* Stuck here means no working connection, so Settings -- and the
@@ -1105,6 +1188,32 @@ export default function App() {
                   </button>
                 </div>
               )}
+              {/* The offer has a clock on it.
+                  90 seconds without an answer and BabbleBot Lite takes over,
+                  because "the Windows machine is asleep and I am standing in a
+                  shop wanting to check a report" is the actual reason this
+                  exists. It is not silent: the banner says it will, and it
+                  names the countdown, so nobody is surprised by a second bot
+                  appearing.
+                  Still never when this Mac has no network of its own. */}
+              {emergencyCountdown !== null && emergencyOffer && (
+                <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="text-xs text-amber-100/80">
+                    Starting BabbleBot Lite in <span className="font-semibold tabular-nums">{emergencyCountdown}s</span> unless
+                    the main bot answers first.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEmergencyCountdown(null);
+                      setEmergencyOffer(false);
+                      setEmergencyDeclined(true);
+                    }}
+                    className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60"
+                  >
+                    Don't — keep trying
+                  </button>
+                </div>
+              )}
               {emergencyOffer && (
                 <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
                   <p className="text-sm text-amber-200 font-medium">BabbleBot Lite</p>
@@ -1139,8 +1248,8 @@ export default function App() {
           )}
           <SetupScreen
             initial={settings}
-            firstRun={!showSetup}
-            onClose={showSetup ? () => setShowSetup(false) : undefined}
+            firstRun={setupWizard}
+            onClose={setupWizard ? undefined : () => setShowSetup(false)}
             onSave={(next) => {
               setSettings(next);
               setApiUrl(next.apiUrl);
