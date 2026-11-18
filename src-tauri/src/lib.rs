@@ -654,8 +654,24 @@ async fn babblebot_lite(action: String) -> Result<serde_json::Value, String> {
             // gets a real Lite endpoint that says nobody is watching yet, which
             // is the truth, rather than a cheerful lie.
             lite_server::lite_reset();
-            lite_server::lite_server_start()
-                .map_err(|e| format!("could not start the Lite API: {e}"))?;
+            // Only bind if nobody already holds the port. A second start used to
+            // fail the whole command with "Address already in use" *after* it had
+            // reset the state -- so Lite looked like it had crashed while an older
+            // copy of itself was still quietly serving, and every screen showed a
+            // fresh, empty Lite. Ask whether our own API is already answering and
+            // treat that as "already running" rather than as a failure.
+            let already = lite_server::lite_is_serving();
+            if !already {
+                lite_server::lite_server_start()
+                    .map_err(|e| format!("could not start the Lite API: {e}"))?;
+            } else {
+                lite_server::lite_event(
+                    "note",
+                    "Lite's API was already up on this Mac, so it was kept rather than bound again".into(),
+                    None,
+                    None,
+                );
+            }
 
             // Keep this Mac awake for the shift. Released when Lite stops, so an
             // idle laptop is not held awake for a bot that has finished.

@@ -366,6 +366,35 @@ pub fn lite_server_start() -> Result<(), String> {
     Ok(())
 }
 
+/// Is Lite's own API already answering on this Mac?
+///
+/// Asked over HTTP rather than by trying to bind: binding is the destructive test
+/// (a failed bind can still have reset state), and the question "is there a Lite
+/// here" is exactly the question its own /api/lite answers. Anything that answers
+/// with `"lite": true` is ours; anything else on the port is not, and the caller
+/// should say so rather than pretend.
+pub fn lite_is_serving() -> bool {
+    use std::io::{Read, Write};
+    let addr = format!("127.0.0.1:{LITE_PORT}");
+    let Ok(mut stream) = std::net::TcpStream::connect_timeout(
+        &match addr.parse() {
+            Ok(a) => a,
+            Err(_) => return false,
+        },
+        std::time::Duration::from_millis(800),
+    ) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(1200)));
+    let req = format!("GET /api/lite HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    if stream.write_all(req.as_bytes()).is_err() {
+        return false;
+    }
+    let mut buf = String::new();
+    let _ = stream.read_to_string(&mut buf);
+    buf.contains("\"lite\":true")
+}
+
 /// Where the read-only copy of the Windows database is kept.
 pub fn snapshot_path() -> std::path::PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
