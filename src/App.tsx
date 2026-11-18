@@ -1389,7 +1389,10 @@ export default function App() {
    * while the app keeps tapping on the door in the background so it comes back
    * by itself when the Windows machine does.
    */
-  if (!connected || showSetup) {
+  // The connection is the very thing that is broken, so this screen has to work
+  // without it: it reads the saved address, lets you change it, and offers the
+  // app update for when the problem is this app rather than the bot.
+  if (!everConnected || showSetup) {
     const setupWizard = showSetup || !everConnected;
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -1416,25 +1419,6 @@ export default function App() {
               >
                 {updatingFromSetup ? "Checking for a newer version…" : "Update the app instead"}
               </button>
-              {conn && conn.status === "unreachable" && conn.network === "offline" && (
-                <div className="mt-3 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3">
-                  <p className="text-sm text-sky-200 font-medium flex items-center gap-2">
-                    <WifiOff className="w-4 h-4" /> No internet on this Mac
-                  </p>
-                  <p className="text-xs text-sky-100/80 mt-1">
-                    Nothing is being tried — there is nowhere to try. Turn wifi back on, or connect
-                    to your phone's hotspot, and the app picks the bot up again on its own. The
-                    Windows machine and the bot are not necessarily in any trouble at all.
-                  </p>
-                  <button
-                    onClick={() => void runFailover()}
-                    disabled={failoverBusy}
-                    className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60 disabled:opacity-40"
-                  >
-                    Check again
-                  </button>
-                </div>
-              )}
               {conn && conn.status === "unreachable" && conn.network !== "offline" && conn.results.length > 0 && (
                 <div className="mt-3 space-y-1">
                   {conn.results.slice(-4).map((r, i) => (
@@ -1558,17 +1542,211 @@ export default function App() {
               )}
             </header>
           )}
-          <SetupScreen
-            initial={settings}
-            firstRun={setupWizard}
-            onClose={setupWizard ? undefined : () => setShowSetup(false)}
-            onSave={(next) => {
-              setSettings(next);
-              setApiUrl(next.apiUrl);
-              setShowSetup(false);
-              fetchData();
-            }}
-          />
+          {/* Only a real first run gets the wizard. Being here because the bot is
+              down is not a first run: the setup screen asks for an address, and
+              the address is not the problem. What is wanted in an outage is the
+              alarm, what was tried, and a button -- so the form is a door at the
+              bottom, opened on purpose, not the screen. */}
+          {setupWizard ? (
+            <SetupScreen
+              initial={settings}
+              firstRun
+              onSave={(next) => {
+                setSettings(next);
+                setApiUrl(next.apiUrl);
+                setShowSetup(false);
+                fetchData();
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => setShowSetup(true)}
+              className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2"
+            >
+              Change the bot's address instead
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * An outage, drawn as an outage.
+   *
+   * The normal dashboard keeps running underneath: what is on screen does not
+   * stop being useful because the machine it reads from went quiet, and the app
+   * keeps tapping on the door by itself. This is the strip that says so, and it
+   * is where the alarm, the countdown and the Lite offer live.
+   */
+  if (!connected) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="max-w-3xl mx-auto p-6">
+          <header className="mb-6">
+            <h1 className="text-xl font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-400" /> Babblebot is not answering
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              {failoverBusy
+                ? "Trying every address again — this closes on its own when one answers."
+                : conn?.status === "unreachable"
+                ? "This screen closes on its own when the bot answers. Nothing needs doing unless the Windows machine is staying off."
+                : connectionError || "Looking for the bot…"}
+            </p>
+            <button
+              onClick={() => void runFailover()}
+              disabled={failoverBusy}
+              className="mt-3 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700/60 disabled:opacity-40"
+            >
+              {failoverBusy ? "Trying…" : "Try again now"}
+            </button>
+            <button
+              onClick={() => void updateFromSetup()}
+              disabled={updatingFromSetup}
+              className="mt-3 ml-2 px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-xs text-indigo-200 hover:bg-indigo-500/30 disabled:opacity-40"
+            >
+              {updatingFromSetup ? "Checking…" : "Update the app"}
+            </button>
+          </header>
+
+          {/* The alarm's own line: it says what the noise means and what stops
+              it, because an alarm with no explanation gets muted at the system
+              level and then protects nothing. */}
+          {emergencyOffer && !alarmAcknowledged && (
+            <div className="mb-3 rounded-xl border border-rose-500/50 bg-rose-500/10 p-3">
+              <p className="text-sm text-rose-200 font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" /> Babblebot is not reachable — nobody is moderating
+              </p>
+              <p className="text-xs text-rose-100/80 mt-1">
+                This alarm keeps sounding until you acknowledge it or the bot comes back.
+                Acknowledging silences the sound; it does not start anything.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button
+                  onClick={() => {
+                    alarmStop();
+                    setAlarmAcknowledged(true);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-xs text-rose-100 hover:bg-rose-500/30"
+                >
+                  Acknowledge — stop the noise
+                </button>
+                <button
+                  onClick={async () => {
+                    const r = await liteCommand("start");
+                    if (r.running) {
+                      alarmStop();
+                      setAlarmAcknowledged(true);
+                      const url = await liteUrl();
+                      setApiUrl(url);
+                      setConnected(false);
+                      setLiteMode(true);
+                      await keepAwake(true);
+                      notify("BabbleBot Lite is running on this Mac", "success");
+                    } else {
+                      notify(r.error || "Could not start BabbleBot Lite", "error");
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-xs text-amber-100 hover:bg-amber-500/30"
+                >
+                  Switch to BabbleBot Lite now
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* The clock on the offer. 90 seconds without an answer and Lite takes
+              over, because "the Windows machine is asleep and I am standing in a
+              shop wanting to check a report" is the actual reason this exists. It
+              is not silent: the line names the countdown, so nobody is surprised
+              by a second bot appearing. Still never when this Mac has no network
+              of its own. */}
+          {emergencyCountdown !== null && emergencyOffer && (
+            <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="text-xs text-amber-100/80">
+                Starting BabbleBot Lite in{" "}
+                <span className="font-semibold tabular-nums">{emergencyCountdown}s</span> unless the
+                main bot answers first.
+              </p>
+              <button
+                onClick={() => {
+                  setEmergencyCountdown(null);
+                  setEmergencyOffer(false);
+                  setEmergencyDeclined(true);
+                }}
+                className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60"
+              >
+                Don't — keep trying
+              </button>
+            </div>
+          )}
+
+          {emergencyOffer && (
+            <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+              <p className="text-sm text-amber-200 font-medium">BabbleBot Lite</p>
+              <p className="text-xs text-amber-100/80 mt-1">
+                Neither address answered. If the Windows machine is off, BabbleBot Lite can take
+                over on this Mac with the same Discord bot — troll watch, text checks, tickets and
+                bb!verify. It uses the same bot token, so starting it while the main bot is merely
+                unreachable would kick that one off its session.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button
+                  onClick={async () => {
+                    const r = await liteCommand("start");
+                    if (r.running) {
+                      alarmStop();
+                      setAlarmAcknowledged(true);
+                      const url = await liteUrl();
+                      setApiUrl(url);
+                      setConnected(false);
+                      setLiteMode(true);
+                      await keepAwake(true);
+                      setEmergencyCountdown(null);
+                      setEmergencyOffer(false);
+                      notify("BabbleBot Lite is running on this Mac", "success");
+                    } else {
+                      notify(r.error || "Could not start BabbleBot Lite", "error");
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/25 border border-amber-500/50 text-xs font-semibold text-amber-100 hover:bg-amber-500/35"
+                >
+                  Start BabbleBot Lite
+                </button>
+                <button
+                  onClick={() => {
+                    setEmergencyCountdown(null);
+                    setEmergencyOffer(false);
+                    setEmergencyDeclined(true);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60"
+                >
+                  Keep trying Windows
+                </button>
+              </div>
+            </div>
+          )}
+
+          {conn && conn.status === "unreachable" && conn.network === "offline" && (
+          <div className="mt-3 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3">
+            <p className="text-sm text-sky-200 font-medium flex items-center gap-2">
+              <WifiOff className="w-4 h-4" /> No internet on this Mac
+            </p>
+            <p className="text-xs text-sky-100/80 mt-1">
+              Nothing is being tried — there is nowhere to try. Turn wifi back on, or connect
+              to your phone's hotspot, and the app picks the bot up again on its own. The
+              Windows machine and the bot are not necessarily in any trouble at all.
+            </p>
+            <button
+              onClick={() => void runFailover()}
+              disabled={failoverBusy}
+              className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60 disabled:opacity-40"
+            >
+              Check again
+            </button>
+          </div>
+        )}
         </div>
       </div>
     );
