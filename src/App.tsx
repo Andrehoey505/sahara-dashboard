@@ -550,6 +550,17 @@ export default function App() {
       // normal dashboard over the top of the silence. The alarm was the only
       // evidence an outage was happening at all.
       if (patient.status === "unreachable") setConnected(false);
+
+      // And raise the alarm from HERE, not only from the poll.
+      //
+      // This was the last hole, and it was the one that made every attempt look
+      // like nothing had happened: with the bot down, the five-second poll was
+      // running failover and setting failoverInFlight, so the probe that would
+      // have offered Lite never ran -- and the poll's own catch path cleared the
+      // busy flag before anything could look at the result. The verdict that
+      // matters is arriving right here, both roads tried and neither answering,
+      // so this is where the alarm and the offer belong.
+      if (botIsDown(patient) && !emergencyDeclined) setEmergencyOffer(true);
       if (patient.status === "connected") {
         if (patient.url !== apiUrl) setApiUrl(patient.url);
         markConnected();
@@ -684,12 +695,25 @@ export default function App() {
       // the patient probe is. Letting it rewrite the error line every five
       // seconds put "Cannot reach bot API at ..." on a screen that had already
       // stopped pretending to try.
-      if (conn && conn.status === "unreachable") return;
+      if (conn?.status === "unreachable") {
+        // ...but it is still the most frequent proof that the bot is gone, and
+        // the offer must exist even if the patient probe never got to run.
+        if (!emergencyDeclined) setEmergencyOffer(true);
+        return;
+      }
       // Once per outage, not once every five seconds. Six patient probes of two
       // addresses, each up to two minutes, fired every poll would mean the
       // countdown never gets to finish and the screen never settles. The
       // "Try again" button is there for a deliberate second attempt.
-      if (!failoverRan.current) void runFailover();
+      if (!failoverRan.current) {
+        void runFailover();
+      } else if (!emergencyDeclined) {
+        // An earlier probe already ran, so this poll does not start another --
+        // but it is still proof the bot is gone, and the alarm is this poll's
+        // business too, not only a later probe's. This is the branch that runs
+        // for the whole of an outage, which is why the alarm has to live here.
+        setEmergencyOffer(true);
+      }
     }
   };
 
