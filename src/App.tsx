@@ -500,6 +500,12 @@ export default function App() {
         onTick: (n, of) => setFailoverAttempt({ n, of }),
       });
       setConn(patient);
+      // Both roads failed. `connected` is still true from the last good poll --
+      // it is only ever cleared by a handover -- and the outage screen is gated
+      // on it, so without this the app sounded the alarm and then showed the
+      // normal dashboard over the top of the silence. The alarm was the only
+      // evidence an outage was happening at all.
+      if (patient.status === "unreachable") setConnected(false);
       if (patient.status === "connected") {
         if (patient.url !== apiUrl) setApiUrl(patient.url);
         markConnected();
