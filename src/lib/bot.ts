@@ -616,3 +616,22 @@ export async function discoverBot(
     return { found: false };
   }
 }
+
+/**
+ * Tell Lite which address to check when looking for Windows to come back.
+ *
+ * Lite holds the Discord session while it covers, so Windows cannot start until
+ * Lite lets go -- which means waiting for a human to notice is how a laptop ends
+ * up moderating for days. The watcher asks this address every minute and steps
+ * down once it gets two clean answers in a row.
+ */
+export async function liteSetWatchAddress(url: string | null): Promise<void> {
+  try {
+    const invoke = await rustInvoke();
+    if (!invoke) return;
+    await invoke("lite_set_watch_address", { url });
+  } catch {
+    /* the watcher simply never fires; Lite still covers, it just will not step
+       down on its own until the app is on a working road again */
+  }
+}

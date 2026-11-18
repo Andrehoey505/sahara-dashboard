@@ -92,6 +92,8 @@ impl Default for LiteConfig {
 }
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
+/// Set only by a deliberate stop, which is what makes a handback honest.
+static STOPPED: AtomicBool = AtomicBool::new(false);
 static CONFIG: Mutex<Option<LiteConfig>> = Mutex::new(None);
 
 pub fn is_running() -> bool {
@@ -121,6 +123,31 @@ fn config() -> LiteConfig {
 pub fn stop() {
     RUNNING.store(false, Ordering::SeqCst);
 }
+
+/// Did the client stop because it was told to, rather than because the socket
+/// dropped? Only a deliberate stop is a handback.
+pub fn was_stopped() -> bool {
+    STOPPED.load(Ordering::SeqCst)
+}
+
+/// Which Windows address the watcher should treat as "the bot is back", if the
+/// app has decided on one.
+static WATCH_ADDRESS: Mutex<Option<String>> = Mutex::new(None);
+
+/// Tell the watcher where Windows lives. Called by the app whenever it knows a
+/// working address, and cleared when it does not.
+pub fn set_watch_address(url: Option<String>) {
+    if let Ok(mut w) = WATCH_ADDRESS.lock() {
+        *w = url;
+    }
+}
+
+/// How often to look, and how many consecutive clean answers mean Windows is
+/// really back. One answer is not enough: a machine coming up can serve a page
+/// before its Discord session is live, and stepping down on that would leave the
+/// server with a Lite that has left and a Windows that cannot listen.
+const WATCH_SECONDS: u64 = 60;
+const WATCH_CONFIRMATIONS: u32 = 2;
 
 /// The gateway URL and a fresh session, or the reason it could not connect.
 async fn identify(token: &str) -> Result<String, String> {
@@ -282,6 +309,7 @@ pub async fn run(token: String) {
         None,
     );
 
+    STOPPED.store(false, Ordering::SeqCst);
     let mut backoff = 2u64;
     let mut was_stopped = false;
     while RUNNING.load(Ordering::SeqCst) {
@@ -302,6 +330,7 @@ pub async fn run(token: String) {
 
     lite_server::lite_set_connected(false);
     RUNNING.store(false, Ordering::SeqCst);
+    STOPPED.store(was_stopped, Ordering::SeqCst);
     // Only on a deliberate stop: a dropped socket is not a handback, and telling
     // staff Windows is back while Lite is still the only thing running would be
     // the worst message this bot could send.
@@ -1128,4 +1157,87 @@ async fn respond(interaction_id: &str, interaction_token: &str, content: &str, e
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Is Windows answering *and* connected to Discord?
+///
+/// Two conditions, because they are not the same thing and the difference is the
+/// whole point. A machine whose API is up but whose session is not live would
+/// take the token and moderate nothing, so handing back to it would leave the
+/// server uncovered -- the one outcome worse than Lite staying.
+async fn windows_is_back(url: &str) -> bool {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let health = format!("{}/api/health", url.trim_end_matches('/'));
+    let resp = match client.get(&health).send().await {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    if !resp.status().is_success() {
+        return false;
+    }
+    let body: serde_json::Value = match resp.json().await {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+    body.get("bot_online").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// Watch for Windows coming back, and step down when it does.
+///
+/// Lite is an emergency cover, not a second bot: while it holds the session
+/// Windows cannot start, so waiting for a human to notice is how a server ends up
+/// running on a laptop indefinitely. The app points this at the road it last
+/// reached Windows on; if it does not know one, the watcher says so once rather
+/// than guessing an address that may belong to another machine.
+pub async fn watch_for_windows() {
+    let mut clean = 0u32;
+    let mut said_no_address = false;
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(WATCH_SECONDS)).await;
+        if !is_running() {
+            return;
+        }
+        let target = match WATCH_ADDRESS.lock() {
+            Ok(w) => w.clone(),
+            Err(e) => e.into_inner().clone(),
+        };
+        let Some(url) = target else {
+            if !said_no_address {
+                said_no_address = true;
+                lite_server::lite_event(
+                    "note",
+                    "Windows has no address to check yet, so Lite is not watching for it to come back".into(),
+                    None,
+                    None,
+                );
+            }
+            continue;
+        };
+        said_no_address = false;
+        if windows_is_back(&url).await {
+            clean += 1;
+            if clean >= WATCH_CONFIRMATIONS {
+                lite_server::lite_event(
+                    "note",
+                    format!("Windows is back at {url} -- Lite is stepping down"),
+                    None,
+                    None,
+                );
+                // Order matters. The stop is what releases the Discord session, and
+                // the handback notice is posted by the client on its way out while
+                // it still holds the socket. Waiting for Windows to take the
+                // session first would mean neither of them moderating.
+                stop();
+                return;
+            }
+        } else {
+            clean = 0;
+        }
+    }
 }

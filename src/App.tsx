@@ -52,7 +52,7 @@ import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
 import { trace } from "./lib/trace";
 import { alarmStart, alarmStop } from "./lib/alarm";
-import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, liteSetLiveRoad, discoverBot } from "./lib/bot";
+import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, liteSetLiveRoad, liteSetWatchAddress, discoverBot } from "./lib/bot";
 
 /**
  * How long the app waits, with the offer on screen and counting, before it
@@ -780,6 +780,10 @@ export default function App() {
   // answered the question; the sync only has to be told.
   useEffect(() => {
     void liteSetLiveRoad(conn && conn.status === "connected" ? conn.url : null);
+    // The same address, for the watcher that decides when Windows has come back.
+    // Two answers to one question is how the sync ended up probing a dead road
+    // while the app was on a live one.
+    void liteSetWatchAddress(conn && conn.status === "connected" ? conn.url : null);
   }, [conn]);
 
   // While Lite is in charge, ask it whether it is genuinely connected. A Lite

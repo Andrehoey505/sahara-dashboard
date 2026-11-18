@@ -707,6 +707,20 @@ async fn babblebot_lite(action: String) -> Result<serde_json::Value, String> {
                 rt.block_on(lite_discord::run(token_for_client));
             });
 
+            // Windows may come back while nobody is watching. Waiting for a human
+            // to notice is how a laptop ends up moderating for three days, so the
+            // handover is watched for rather than waited for.
+            std::thread::spawn(|| {
+                let rt = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(rt) => rt,
+                    Err(_) => return,
+                };
+                rt.block_on(lite_discord::watch_for_windows());
+            });
+
             Ok(serde_json::json!({
                 "running": true,
                 "detail": "Lite API is up on 127.0.0.1:8099 — Discord client not connected yet",
@@ -718,16 +732,30 @@ async fn babblebot_lite(action: String) -> Result<serde_json::Value, String> {
             // Leave the gateway cleanly before anything else: the session is what
             // another process would have to take over, and dropping the socket is
             // how Discord learns we are gone.
+            let deliberate = lite_discord::is_running();
             lite_discord::stop();
             lite_images::stop();
             let _ = keep_awake_off();
             Ok(serde_json::json!({
                 "running": false,
+                "deliberate": deliberate,
                 "detail": "Lite stopped, its API closed, and this Mac may sleep again",
             }))
         }
         _ => Ok(serde_json::json!({ "running": false, "detail": "not running" })),
     }
+}
+
+/// Point Lite's watcher at the road the app last reached Windows on.
+///
+/// Lite only covers while Windows is gone, so this is the address it checks to
+/// find out whether that is still true. Cleared when the app has no working
+/// address, because guessing one risks finding a different machine that happens
+/// to answer -- and stepping down for that would leave the server uncovered.
+#[tauri::command]
+fn lite_set_watch_address(url: Option<String>) -> Result<(), String> {
+    lite_discord::set_watch_address(url);
+    Ok(())
 }
 
 /// Open a URL in the system browser.
@@ -804,6 +832,7 @@ pub fn run() {
             lite_url,
             lite_server::lite_auto_sync_start,
             lite_server::lite_set_live_road,
+            lite_set_watch_address,
             keep_awake_on,
             keep_awake_off,
             lite_server::lite_db_snapshot,
