@@ -1611,6 +1611,43 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
     },
   ];
 
+  /**
+   * What BabbleBot Lite can actually serve.
+   *
+   * Lite is a tripwire, not a replacement: it moderates text, opens tickets and
+   * runs bb!verify. Everything else on this list needs Windows, and a tab that
+   * opens onto an empty list is worse than a tab that is not there -- it looks
+   * like there are no violations, no members and no logs, when the truth is
+   * that nobody is asking. So while Lite is in charge, only these exist.
+   */
+  const LITE_SCREENS = new Set([
+    "dashboard",
+    "moderation",
+    "moderationrules",
+    "violations",
+    "livefeed",
+    "tickets",
+    "settings",
+    "schedule",
+    "migraine",
+    "armcare",
+    ...(settings.edWaitsEnabled ? ["edwaits"] : []),
+  ]);
+  const visibleNav = liteMode
+    ? NAV.map((g) => ({ ...g, items: g.items.filter((i) => LITE_SCREENS.has(i.id)) })).filter(
+        (g) => g.items.length > 0
+      )
+    : NAV;
+
+  // A screen that disappeared with Lite must not stay selected: the render
+  // block for a hidden tab would fall through to an empty pane, which reads as
+  // "there is nothing here" rather than "this needs Windows".
+  useEffect(() => {
+    if (!liteMode) return;
+    if (!LITE_SCREENS.has(active)) setActive("dashboard");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liteMode, active]);
+
   // Dev-time safety net: every nav item must have a screen defined below.
   // (A screen that exists in NAV but has no render block used to fail silently,
   // showing a heading with nothing under it.)
@@ -1848,7 +1885,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
           <div><h1 className="font-bold text-lg">Sahara</h1><p className="text-xs text-slate-400">Control Center</p></div>
         </div>
         <nav className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {NAV.map((group, gi) => (
+          {visibleNav.map((group, gi) => (
             <div key={group.group || "root-" + gi} className="space-y-0.5">
               {group.group && (
                 <p className="flex items-center gap-2 px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
@@ -2027,13 +2064,30 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 }
               />
               <span className={"text-xs " + (botHealthy ? "text-emerald-300" : "text-rose-300")}>
-                {botHealthy ? "Bot online" : "Bot unreachable"}
+                {liteMode
+                  ? liteClient?.connected
+                    ? "Lite — moderating"
+                    : "Lite — not connected"
+                  : botHealthy
+                  ? "Bot online"
+                  : "Bot unreachable"}
               </span>
+              {/* In Lite the one word that matters is not which road to Windows --
+                  there is no Windows -- but that a different bot is holding the
+                  session, and that it is Lite doing the watching. */}
+              {liteMode && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-500/15 text-amber-300"
+                  data-tip="BabbleBot Lite is moderating because Windows is not answering. Emergency mode — text only."
+                >
+                  LITE
+                </span>
+              )}
               {/* Which road the app is on. LAN is fast but only works on the same
                   network; Tailscale is the fallback that survives a power cut. It
                   is worth one word, because "why is this slow" and "why does this
                   work here but not at Eoin's" are both answered by it. */}
-              {conn && conn.status === "connected" && (
+              {!liteMode && conn && conn.status === "connected" && (
                 <span
                   className={
                     "text-[10px] px-1.5 py-0.5 rounded font-medium " +
