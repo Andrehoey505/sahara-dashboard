@@ -581,7 +581,7 @@ async fn connect_once(token: &str) -> Result<(), String> {
                     "op": 2,
                     "d": {
                         "token": token_owned,
-                        "intents": 1 | 512 | 4096 | 32768,   // GUILDS | GUILD_MESSAGES | DIRECT_MESSAGES | MESSAGE_CONTENT
+                        "intents": 1 | 2 | 512 | 4096 | 32768,   // GUILDS | GUILD_MEMBERS | GUILD_MESSAGES | DIRECT_MESSAGES | MESSAGE_CONTENT
                         "properties": { "os": "macos", "browser": "sahara-dashboard", "device": "sahara-dashboard" },
                         "presence": { "status": "online", "activities": [{ "name": "BabbleBot Lite", "type": 0 }] }
                     }
@@ -631,6 +631,8 @@ async fn connect_once(token: &str) -> Result<(), String> {
                     announce_switch(token, &cfg).await;
                 } else if t == "MESSAGE_CREATE" {
                     handle_message(token, &v).await;
+                } else if t == "GUILD_MEMBER_ADD" {
+                    handle_member_add(token, &v).await;
                 } else if t == "INTERACTION_CREATE" {
                     handle_interaction(token, &v).await;
                 }
@@ -650,6 +652,216 @@ async fn connect_once(token: &str) -> Result<(), String> {
         return Err("closed before becoming ready".into());
     }
     Ok(())
+}
+
+/// What Lite can actually do, in Discord's own message limit.
+///
+/// Read from the live configuration, so a Mac covering six servers with no troll
+/// list says exactly that. The rule everywhere else in this file is that Lite must
+/// never pretend; a help text that overstated its powers would be the cheapest
+/// way to break it.
+fn help_text() -> String {
+    let cfg = config();
+    let servers = cfg.guilds.len();
+    let rules = cfg.rules.len();
+    let trolls = cfg.trolls.len();
+    let tickets = cfg.ticket_types.len();
+    let saved = crate::lite_discord::saved_config_at().map(|at| {
+        let secs = lite_server::lite_now_ms().saturating_sub(at) / 1000;
+        crate::lite_discord::describe_seconds(secs)
+    });
+
+    let mut out = String::from("**BabbleBot Lite — what I can do**\n");
+    out.push_str(&format!(
+        "Covering {servers} server{} with {rules} channel rule{} and {trolls} known troll{}.\n",
+        if servers == 1 { "" } else { "s" },
+        if rules == 1 { "" } else { "s" },
+        if trolls == 1 { "" } else { "s" },
+    ));
+    if let Some(age) = saved {
+        out.push_str(&format!("Rules copied from Babblebot {age} ago.\n"));
+    } else {
+        out.push_str("No copy of the rules on this machine yet.\n");
+    }
+    out.push_str("\n**Commands**\n");
+    out.push_str("`bb!verify @member` — give someone the Verified role (staff only)\n");
+    out.push_str("`bb!help` — this\n");
+    if tickets > 0 {
+        // Named only to say Lite has not got it. Advertising a command it would
+        // ignore is the pretence this file exists to avoid.
+        out.push_str(&format!(
+            "Tickets ({tickets} type{} configured) are a Windows command, not mine yet.\n",
+            if tickets == 1 { "" } else { "s" }
+        ));
+    }
+    out.push_str("\n**Moderation, all running now**\n");
+    out.push_str("• known trolls are banned on sight\n");
+    out.push_str("• messages are checked for banned phrases, invites, links, spam and profanity, per channel\n");
+    out.push_str("• a breach is deleted and logged here\n");
+    out.push_str("\n**Not me** — images, tickets, relay, mentions, music and the database are on the Windows machine.\n");
+    out.push_str("I only run while Babblebot is down, and I hand back the moment it returns.");
+    out
+}
+
+/// A member joined, and the troll list says we already know them.
+///
+/// ## Why this is the one place Lite bans
+///
+/// Everywhere else Lite refuses to kick, ban or time out, because those are a
+/// human's decision. A known troll is the exception the whole troll list exists
+/// for: Windows bans on sight, and a Lite that stayed quiet while a known troll
+/// walked into the server would be covering nothing. It is a list a human wrote,
+/// not a judgement Lite is making.
+///
+/// ## What it will not do
+///
+/// Ban anyone who is not on the list, or anyone with a staff role, or anyone on
+/// the exempt list. No list means no bans -- and it says so, rather than looking
+/// like it checked and found nothing.
+async fn handle_member_add(token: &str, v: &Value) {
+    let d = match v.get("d") {
+        Some(d) => d,
+        None => return,
+    };
+    let guild_id = d.get("guild_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let user = match d.get("user") {
+        Some(u) => u,
+        None => return,
+    };
+    // Bots are never troll candidates: an offline bot looks exactly like a
+    // suspicious new account.
+    if user.get("bot").and_then(|b| b.as_bool()).unwrap_or(false) {
+        return;
+    }
+    let user_id = user.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    if user_id.is_empty() {
+        return;
+    }
+    let name = user
+        .get("username")
+        .and_then(|x| x.as_str())
+        .unwrap_or("someone")
+        .to_string();
+
+    let cfg = config();
+    if cfg.exempt_users.contains(&user_id) {
+        return;
+    }
+    let roles: Vec<String> = d
+        .get("roles")
+        .and_then(|r| r.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let staff = cfg.staff_roles.get(&guild_id).cloned().unwrap_or_default();
+    if roles.iter().any(|r| staff.contains(r)) {
+        return;
+    }
+
+    let Some((_, _, reason)) = cfg.trolls.iter().find(|(id, _, _)| id == &user_id) else {
+        return;
+    };
+    // A ban needs a reason in the audit log, and the saved reason is whatever the
+    // staff member typed on Windows. An empty one is not a reason.
+    let reason = if reason.trim().is_empty() {
+        "known troll from the troll list".to_string()
+    } else {
+        reason.clone()
+    };
+
+    let guild_name = cfg
+        .guilds
+        .iter()
+        .find(|(id, _)| id == &guild_id)
+        .map(|(_, n)| n.clone())
+        .unwrap_or_else(|| guild_id.clone());
+
+    let url = format!("https://discord.com/api/v10/guilds/{guild_id}/bans/{user_id}");
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            lite_server::lite_event(
+                "error",
+                format!("could not build a request to ban a known troll: {e}"),
+                None,
+                None,
+            );
+            return;
+        }
+    };
+    let res = client
+        .put(&url)
+        .header("Authorization", format!("Bot {token}"))
+        .header("X-Audit-Log-Reason", urlencoded(&format!("Known troll: {reason}")))
+        .json(&json!({ "delete_message_seconds": 0 }))
+        .send()
+        .await;
+
+    match res {
+        Ok(r) if r.status().is_success() || r.status().as_u16() == 204 => {
+            lite_server::lite_event(
+                "ban",
+                format!("banned a known troll on join: {name} ({user_id}) in {guild_name} -- {reason}"),
+                Some(user_id.clone()),
+                None,
+            );
+            record_troll_ban(&user_id, &name, &reason, &guild_name);
+        }
+        Ok(r) => {
+            let code = r.status().as_u16();
+            lite_server::lite_event(
+                "error",
+                format!("could not ban a known troll {name} ({user_id}) in {guild_name}: Discord said {code}"),
+                Some(user_id.clone()),
+                None,
+            );
+        }
+        Err(e) => {
+            lite_server::lite_event(
+                "error",
+                format!("could not ban a known troll {name} ({user_id}) in {guild_name}: {e}"),
+                Some(user_id.clone()),
+                None,
+            );
+        }
+    }
+}
+
+/// Percent-encode for a header value. Only what a reason can contain: the audit
+/// log line is free text, and a raw newline in a header is a protocol error.
+fn urlencoded(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b' ' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Remember a troll ban Lite made, so the handover can tell Windows about it.
+/// Windows keeps its own record; this is the list of what happened while it was
+/// gone, which nothing else holds.
+fn record_troll_ban(user_id: &str, name: &str, reason: &str, guild: &str) {
+    let line = format!(
+        "{}\t{}\t{}\t{}\t{}\n",
+        lite_server::lite_now_ms(),
+        user_id,
+        name.replace('\t', " "),
+        reason.replace('\t', " "),
+        guild.replace('\t', " ")
+    );
+    let path = crate::lite_discord::config_path().with_file_name("lite-troll-bans.txt");
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
 }
 
 /// One incoming message, judged.
@@ -815,12 +1027,23 @@ static SPAM: Mutex<Option<crate::lite_rules::SpamClock>> = Mutex::new(None);
 async fn handle_command(token: &str, d: &Value, content: &str) {
     let mut parts = content.split_whitespace();
     let cmd = parts.next().unwrap_or("").trim_start_matches("bb!");
+    let channel_id = d.get("channel_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+
+    // `bb!help` and `bb!commands`: what this copy actually does, said by the copy.
+    //
+    // Anyone may ask. It is the only honest answer to "is Lite covering us?", and
+    // it is built from the running configuration rather than a list typed by hand,
+    // so it cannot drift into claiming a command Lite has not got.
+    if cmd == "help" || cmd == "commands" {
+        say(token, &channel_id, &help_text()).await;
+        return;
+    }
+
     if cmd != "verify" {
         return;
     }
 
     let guild_id = d.get("guild_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let channel_id = d.get("channel_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
     let author_id = d.pointer("/author/id").and_then(|x| x.as_str()).unwrap_or("").to_string();
     let author_name = d
         .pointer("/author/username")

@@ -111,10 +111,11 @@ const LITE_SCREENS = new Set([
   "violations",
   "livefeed",
   "tickets",
-  // The troll list is a copy synced from Windows and kept on disk, so it reads a
-  // real list during an outage rather than opening onto nothing. Troll Watch is
-  // its pending-queue counterpart and needs the live bot, so it stays out.
+  // Both troll screens. The list is a copy synced from Windows and kept on disk;
+  // Troll Watch reads that same copy, so Lite shows a real list and a real queue
+  // instead of a tab that opens onto nothing.
   "trolls",
+  "trollwatch",
   "settings",
   "schedule",
   "migraine",

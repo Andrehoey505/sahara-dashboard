@@ -304,6 +304,23 @@ fn handle(path: &str) -> Option<serde_json::Value> {
         }));
     }
 
+    if path == "/api/troll-watch" {
+        // The pending queue is empty in Lite, and that is the truth rather than a
+        // refusal: Lite has no join watch, so it has nothing pending. The troll
+        // list beside it is real -- copied from Windows and kept on disk.
+        let cfg = crate::lite_discord::current_config();
+        return Some(serde_json::json!({
+            "lite": true,
+            "pending": [],
+            "trolls": cfg.trolls.iter().map(|(id, name, reason)| serde_json::json!({
+                "user_id": id,
+                "name": name,
+                "reason": reason,
+            })).collect::<Vec<_>>(),
+            "note": "Lite bans a known troll on sight and has no join watch, so nothing is ever waiting for a decision.",
+        }));
+    }
+
     if path == "/api/system" {
         return Some(serde_json::json!({
             "lite": true,
@@ -316,7 +333,6 @@ fn handle(path: &str) -> Option<serde_json::Value> {
     // useful rather than "404".
     const NAMED: &[(&str, &str)] = &[
         ("/api/violations", "The violations list"),
-        ("/api/troll-watch", "Troll watch's pending queue"),
         ("/api/storage", "Stored media"),
         ("/api/db", "The database"),
         ("/api/music", "Music"),
@@ -1375,9 +1391,15 @@ pub fn sync_state() -> serde_json::Value {
         Ok(g) => g,
         Err(e) => e.into_inner(),
     };
+    // The in-memory timestamp is empty after a relaunch, but the saved copy is
+    // not: reporting "never synced" over rules that are on disk and being
+    // enforced would be the wrong answer to the only question this screen asks.
+    let saved = crate::lite_discord::saved_config_at();
+    let last = g.0.or(saved);
     serde_json::json!({
-        "last_sync": g.0,
+        "last_sync": last,
         "last_error": g.1,
+        "from_disk": g.0.is_none() && saved.is_some(),
         "interval_seconds": AUTO_SYNC_SECONDS,
     })
 }
