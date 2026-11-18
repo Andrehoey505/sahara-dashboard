@@ -75,6 +75,11 @@ pub struct LiteState {
     pub db_ok: bool,
 }
 
+/// Unix ms, for other modules that need the same clock as the screen.
+pub fn lite_now_ms() -> u64 {
+    now_ms()
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -279,6 +284,26 @@ fn handle(path: &str) -> Option<serde_json::Value> {
         }));
     }
 
+    if path == "/api/trolls" {
+        // Real, not refused. The list is synced from Windows like the rest of the
+        // flag system, and it is kept on disk, so the Troll Watch screen has
+        // something true to show during an outage -- a list of who Windows has
+        // already decided about, with the date it was copied.
+        let cfg = crate::lite_discord::current_config();
+        let saved = crate::lite_discord::saved_config_at();
+        return Some(serde_json::json!({
+            "lite": true,
+            "source": "copied from Windows",
+            "copied_at": saved,
+            "total": cfg.trolls.len(),
+            "trolls": cfg.trolls.iter().map(|(id, name, reason)| serde_json::json!({
+                "user_id": id,
+                "name": name,
+                "reason": reason,
+            })).collect::<Vec<_>>(),
+        }));
+    }
+
     if path == "/api/system" {
         return Some(serde_json::json!({
             "lite": true,
@@ -291,7 +316,6 @@ fn handle(path: &str) -> Option<serde_json::Value> {
     // useful rather than "404".
     const NAMED: &[(&str, &str)] = &[
         ("/api/violations", "The violations list"),
-        ("/api/trolls", "The troll list"),
         ("/api/troll-watch", "Troll watch's pending queue"),
         ("/api/storage", "Stored media"),
         ("/api/db", "The database"),
@@ -859,6 +883,9 @@ struct LiveRules {
     ticket_category: Vec<(String, String)>,
     /// Ticket types in the client's own shape: guild, id, label, emoji.
     ticket_types: Vec<(String, String, String, String)>,
+    /// The troll list: user id, name and why. Without this Lite can see the list
+    /// but never act on it, which is a tab that lies.
+    trolls: Vec<(String, String, String)>,
 }
 
 impl LiveRules {
@@ -894,6 +921,9 @@ impl LiveRules {
         }
         for (guild, category) in self.ticket_category {
             cfg.ticket_category.insert(guild, category);
+        }
+        if !self.trolls.is_empty() {
+            cfg.trolls = self.trolls;
         }
     }
 }
@@ -1039,6 +1069,43 @@ async fn fetch_live_rules_explained(
             }
         }
 
+        // The troll list, so the Troll Watch screen is a real list rather than a
+        // tab that opens onto nothing. Windows holds it; this is a copy with the
+        // sync's own timestamp on it.
+        if let Ok(resp) = client.get(format!("{base}/api/trolls")).send().await {
+            if resp.status().is_success() {
+                if let Ok(v) = resp.json::<serde_json::Value>().await {
+                    // The endpoint has answered in two shapes over its life: a bare
+                    // array, and an object with a `trolls` key. Both are read here
+                    // rather than picking one and silently getting nothing.
+                    let arr = v
+                        .as_array()
+                        .cloned()
+                        .or_else(|| v.get("trolls").and_then(|t| t.as_array()).cloned())
+                        .unwrap_or_default();
+                    for t in arr {
+                        let id = t
+                            .get("user_id")
+                            .or_else(|| t.get("id"))
+                            .or_else(|| t.get("user"))
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("");
+                        if id.is_empty() {
+                            continue;
+                        }
+                        let name = t.get("name").and_then(|x| x.as_str()).unwrap_or("");
+                        let reason = t
+                            .get("reason")
+                            .or_else(|| t.get("note"))
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("");
+                        live.trolls
+                            .push((id.to_string(), name.to_string(), reason.to_string()));
+                    }
+                }
+            }
+        }
+
         // The servers themselves are part of the flag system: Lite needs to know
         // which guilds it is covering even before any channel has a rule.
         live.guilds = guilds.clone();
@@ -1049,7 +1116,11 @@ async fn fetch_live_rules_explained(
         // endpoint but had none stored came back as "nothing synced" with no
         // explanation, which reads like a broken button rather than an honest
         // "there is nothing to copy yet".
-        if !live.channel_rules.is_empty() || !live.exempt.is_empty() || !live.guilds.is_empty() {
+        if !live.channel_rules.is_empty()
+            || !live.exempt.is_empty()
+            || !live.guilds.is_empty()
+            || !live.trolls.is_empty()
+        {
             return (Some((base.to_string(), live)), why);
         }
         why.push((base.to_string(), "answered but nothing was readable".into()));
@@ -1382,15 +1453,34 @@ pub async fn lite_rules_sync(api_url: Option<String>, fallback_url: Option<Strin
             .join("; ")
     };
     if let Some((base, fresh)) = live_hit {
-        let mut cfg = crate::lite_discord::current_config();
+        // Start from the saved copy, not from whatever is in memory: the screen
+        // may have been relaunched a second ago and memory is empty, while disk
+        // holds the last good sync. A live read then overwrites the parts it
+        // actually read.
+        let mut cfg = crate::lite_discord::load_saved_config()
+            .unwrap_or_else(crate::lite_discord::current_config);
         fresh.apply(&mut cfg);
         let counts = serde_json::json!({
             "servers": cfg.guilds.len(),
             "channel_rules": cfg.rules.len(),
             "ticket_types": cfg.ticket_types.len(),
             "exempt": cfg.exempt_users.len(),
+            "trolls": cfg.trolls.len(),
             "source": "live endpoints",
         });
+        // Persist before anything else looks at it: the next restart reads this
+        // file, and a sync that is not on disk did not happen.
+        if let Err(e) = crate::lite_discord::save_config(&cfg) {
+            // Not fatal: the sync still applies to this run. But it must be said,
+            // because it means the next restart will come back empty and nobody
+            // would know why.
+            lite_event(
+                "error",
+                format!("the synced rules could not be saved, so a restart will not have them: {e}"),
+                None,
+                None,
+            );
+        }
         crate::lite_discord::set_config(cfg);
         // Which road worked matters: a LAN address that never answers means the
         // Mac is off the home network, and that is worth knowing before an outage

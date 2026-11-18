@@ -68,6 +68,9 @@ pub struct LiteConfig {
     /// Learned profanity threshold: how many words count as a breach, from how
     /// staff have judged past flags on Windows.
     pub profanity_threshold: u32,
+    /// The troll list as Windows holds it: user id, name and the reason, so Lite
+    /// can refuse a known troll the same way rather than letting one back in.
+    pub trolls: Vec<(String, String, String)>,
 }
 
 impl Default for LiteConfig {
@@ -87,6 +90,7 @@ impl Default for LiteConfig {
             panel_channels: Vec::new(),
             // The bot's own default before any decisions exist.
             profanity_threshold: 2,
+            trolls: Vec::new(),
         }
     }
 }
@@ -98,6 +102,185 @@ static CONFIG: Mutex<Option<LiteConfig>> = Mutex::new(None);
 
 pub fn is_running() -> bool {
     RUNNING.load(Ordering::SeqCst)
+}
+
+/// Where the rules Lite last synced are kept.
+///
+/// A restart used to throw all of it away: the app came back with an empty Lite,
+/// every count at zero, watching nothing. The rules did not stop being true
+/// because the window was relaunched -- they are a copy of Windows' settings, and
+/// a copy with a timestamp on it is worth keeping. So this file is written on
+/// every successful sync and read on every start.
+pub fn config_path() -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    std::path::Path::new(&home)
+        .join("Library")
+        .join("Application Support")
+        .join("com.sahara.dashboard")
+        .join("lite-config.txt")
+}
+
+/// One line per fact, tab separated, because a half-written file should lose one
+/// fact and not the lot. Every field is optional: an older file simply has fewer
+/// lines and the missing pieces stay at their defaults.
+pub fn save_config(cfg: &LiteConfig) -> Result<(), String> {
+    let path = config_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("could not create {dir:?}: {e}"))?;
+    }
+    let mut out = String::new();
+    out.push_str(&format!("saved_at\t{}\n", now_ms()));
+    for (id, name) in &cfg.guilds {
+        out.push_str(&format!("guild\t{id}\t{name}\n"));
+    }
+    for c in &cfg.ignored_channels {
+        out.push_str(&format!("ignored\t{c}\n"));
+    }
+    for (channel, rule) in &cfg.rules {
+        out.push_str(&format!("rule\t{channel}\t{}\n", rule.preset));
+    }
+    for u in &cfg.exempt_users {
+        out.push_str(&format!("exempt\t{u}\n"));
+    }
+    for (g, id, label, emoji) in &cfg.ticket_types {
+        out.push_str(&format!("ticket_type\t{g}\t{id}\t{label}\t{emoji}\n"));
+    }
+    for (g, cat) in &cfg.ticket_category {
+        out.push_str(&format!("ticket_category\t{g}\t{cat}\n"));
+    }
+    for (g, roles) in &cfg.staff_roles {
+        out.push_str(&format!("staff_roles\t{g}\t{}\n", roles.join(",")));
+    }
+    for (g, role) in &cfg.verify_roles {
+        out.push_str(&format!("verify_role\t{g}\t{role}\n"));
+    }
+    for c in &cfg.panel_channels {
+        out.push_str(&format!("panel\t{c}\n"));
+    }
+    for (id, name, reason) in &cfg.trolls {
+        out.push_str(&format!("troll\t{id}\t{name}\t{reason}\n"));
+    }
+    if let Some(h) = &cfg.helpline_guild_id {
+        out.push_str(&format!("helpline\t{h}\n"));
+    }
+    out.push_str(&format!("profanity_threshold\t{}\n", cfg.profanity_threshold));
+
+    // Written beside and renamed: a crash mid-write must not leave a file that
+    // parses into half a rule set.
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, out).map_err(|e| format!("could not write {tmp:?}: {e}"))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("could not replace {path:?}: {e}"))?;
+    Ok(())
+}
+
+/// When the saved copy was written, for the screen to say how old it is.
+pub fn saved_config_at() -> Option<u64> {
+    let text = std::fs::read_to_string(config_path()).ok()?;
+    text.lines()
+        .find_map(|l| l.strip_prefix("saved_at\t"))
+        .and_then(|v| v.trim().parse::<u64>().ok())
+}
+
+/// Read the saved copy. A missing file is not an error: a first run has nothing
+/// to read, and saying so as a failure would be a lie about a normal state.
+pub fn load_saved_config() -> Option<LiteConfig> {
+    let text = std::fs::read_to_string(config_path()).ok()?;
+    let mut cfg = LiteConfig::default();
+    let mut saw_anything = false;
+    for line in text.lines() {
+        let mut parts = line.split('\t');
+        let Some(kind) = parts.next() else { continue };
+        match kind {
+            "saved_at" => {}
+            "guild" => {
+                if let (Some(id), Some(name)) = (parts.next(), parts.next()) {
+                    cfg.guilds.push((id.to_string(), name.to_string()));
+                    saw_anything = true;
+                }
+            }
+            "ignored" => {
+                if let Some(c) = parts.next() {
+                    cfg.ignored_channels.push(c.to_string());
+                }
+            }
+            "rule" => {
+                if let (Some(c), Some(preset)) = (parts.next(), parts.next()) {
+                    cfg.rules.insert(
+                        c.to_string(),
+                        crate::lite_rules::ChannelRule::from_preset(preset.trim()),
+                    );
+                    saw_anything = true;
+                }
+            }
+            "exempt" => {
+                if let Some(u) = parts.next() {
+                    cfg.exempt_users.push(u.to_string());
+                }
+            }
+            "ticket_type" => {
+                if let (Some(g), Some(id), Some(label), Some(emoji)) =
+                    (parts.next(), parts.next(), parts.next(), parts.next())
+                {
+                    cfg.ticket_types.push((
+                        g.to_string(),
+                        id.to_string(),
+                        label.to_string(),
+                        emoji.to_string(),
+                    ));
+                }
+            }
+            "ticket_category" => {
+                if let (Some(g), Some(c)) = (parts.next(), parts.next()) {
+                    cfg.ticket_category.insert(g.to_string(), c.to_string());
+                }
+            }
+            "staff_roles" => {
+                if let (Some(g), Some(list)) = (parts.next(), parts.next()) {
+                    cfg.staff_roles.insert(
+                        g.to_string(),
+                        list.split(',').filter(|s| !s.is_empty()).map(String::from).collect(),
+                    );
+                }
+            }
+            "verify_role" => {
+                if let (Some(g), Some(r)) = (parts.next(), parts.next()) {
+                    cfg.verify_roles.insert(g.to_string(), r.to_string());
+                }
+            }
+            "panel" => {
+                if let Some(c) = parts.next() {
+                    cfg.panel_channels.push(c.to_string());
+                }
+            }
+            "troll" => {
+                // Three fields now, two in files written earlier: a saved copy
+                // from an older build must not turn into trolls with no names.
+                if let Some(id) = parts.next() {
+                    let name = parts.next().unwrap_or("");
+                    let reason = parts.next().unwrap_or("");
+                    cfg.trolls
+                        .push((id.to_string(), name.to_string(), reason.to_string()));
+                    saw_anything = true;
+                }
+            }
+            "helpline" => {
+                if let Some(h) = parts.next() {
+                    cfg.helpline_guild_id = Some(h.to_string());
+                }
+            }
+            "profanity_threshold" => {
+                if let Some(v) = parts.next().and_then(|v| v.trim().parse::<u32>().ok()) {
+                    cfg.profanity_threshold = v;
+                }
+            }
+            _ => {}
+        }
+    }
+    if saw_anything {
+        Some(cfg)
+    } else {
+        None
+    }
 }
 
 pub fn set_config(cfg: LiteConfig) {
@@ -1239,5 +1422,37 @@ pub async fn watch_for_windows() {
         } else {
             clean = 0;
         }
+    }
+}
+
+/// Unix ms, for the saved copy's timestamp.
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// A one-line summary of a saved rule set, for the trace.
+pub fn describe_saved(cfg: &LiteConfig) -> String {
+    format!(
+        "{} ticket types, {} exempt, {} trolls, {} panels",
+        cfg.ticket_types.len(),
+        cfg.exempt_users.len(),
+        cfg.trolls.len(),
+        cfg.panel_channels.len()
+    )
+}
+
+/// Seconds as something a person reads at a glance.
+pub fn describe_seconds(secs: u64) -> String {
+    if secs < 90 {
+        format!("{secs} seconds")
+    } else if secs < 5400 {
+        format!("{} minutes", secs / 60)
+    } else if secs < 172800 {
+        format!("{} hours", secs / 3600)
+    } else {
+        format!("{} days", secs / 86400)
     }
 }

@@ -653,14 +653,19 @@ async fn babblebot_lite(action: String) -> Result<serde_json::Value, String> {
             // server comes up honestly reporting `connected: false` -- the app
             // gets a real Lite endpoint that says nobody is watching yet, which
             // is the truth, rather than a cheerful lie.
-            lite_server::lite_reset();
+            // Ask before touching anything. A second Start used to reset the state
+            // and only then discover the port was taken, so a running Lite was
+            // emptied and then reported as a failure.
+            let already = lite_server::lite_is_serving();
+            if !already {
+                lite_server::lite_reset();
+            }
             // Only bind if nobody already holds the port. A second start used to
             // fail the whole command with "Address already in use" *after* it had
             // reset the state -- so Lite looked like it had crashed while an older
             // copy of itself was still quietly serving, and every screen showed a
             // fresh, empty Lite. Ask whether our own API is already answering and
             // treat that as "already running" rather than as a failure.
-            let already = lite_server::lite_is_serving();
             if !already {
                 lite_server::lite_server_start()
                     .map_err(|e| format!("could not start the Lite API: {e}"))?;
@@ -677,10 +682,48 @@ async fn babblebot_lite(action: String) -> Result<serde_json::Value, String> {
             // idle laptop is not held awake for a bot that has finished.
             let _ = keep_awake_on();
 
-            // Load the rules Lite enforces, from the snapshot if there is one, so
-            // Lite inherits Babblebot's configuration rather than inventing its
-            // own idea of what is allowed.
-            lite_discord::set_config(load_lite_config());
+            // Load the rules Lite enforces.
+            //
+            // Three sources, in order of how much they deserve to be believed:
+            //  1. the file written by the last successful sync -- a real copy of
+            //     Windows' settings, with a timestamp on it;
+            //  2. the database snapshot taken at handover, if there is one;
+            //  3. nothing, which is what the app must be honest about.
+            //
+            // A relaunch used to land on (3) every time, so Lite came back empty
+            // and reporting nothing, as though the rules had stopped being true
+            // because the window was closed.
+            match lite_discord::load_saved_config() {
+                Some(saved) => {
+                    let age = lite_discord::saved_config_at()
+                        .map(|at| {
+                            let secs = (lite_server::lite_now_ms().saturating_sub(at)) / 1000;
+                            format!("{} ago", lite_discord::describe_seconds(secs))
+                        })
+                        .unwrap_or_else(|| "of unknown age".into());
+                    lite_server::lite_event(
+                        "note",
+                        format!(
+                            "loaded the saved rules from disk ({}, {} servers, {} channel rules) -- {age}",
+                            lite_discord::describe_saved(&saved),
+                            saved.guilds.len(),
+                            saved.rules.len()
+                        ),
+                        None,
+                        None,
+                    );
+                    lite_discord::set_config(saved);
+                }
+                None => {
+                    lite_server::lite_event(
+                        "note",
+                        "no saved rules on this Mac yet, so reading the database snapshot".into(),
+                        None,
+                        None,
+                    );
+                    lite_discord::set_config(load_lite_config());
+                }
+            }
 
             // Image checking comes up with Lite and goes down with it, so the model
             // is only in memory while this Mac is actually covering.
