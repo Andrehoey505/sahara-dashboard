@@ -98,6 +98,39 @@ impl Default for LiteConfig {
 static RUNNING: AtomicBool = AtomicBool::new(false);
 /// Set only by a deliberate stop, which is what makes a handback honest.
 static STOPPED: AtomicBool = AtomicBool::new(false);
+
+/// How many Discord clients this process has actually started.
+///
+/// ## Why this exists
+///
+/// Andre restarted the app and every message Lite sent went out **twice**. One
+/// gateway socket cannot deliver an event twice -- Discord does not do that. Two
+/// sockets on the same token can, and the guard meant to prevent that only asked
+/// whether Lite's *HTTP API* was listening. On a relaunch the old process is
+/// usually gone, so nothing answers on 8099, the guard says "nobody is serving",
+/// and a second client is started on a token whose previous session Discord has
+/// not finished dropping.
+///
+/// So the only thing that can honestly answer "is a client already running" is a
+/// fact inside the client's own process. A start that finds this above zero
+/// refuses before it touches the state, the rules or the socket.
+static CLIENTS_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// True once this process has started a Discord client, whatever happened to it
+/// afterwards. A start after a handback is legitimate, and that path clears it.
+pub fn a_client_was_started() -> bool {
+    CLIENTS_STARTED.load(Ordering::SeqCst)
+}
+
+fn mark_client_started() {
+    CLIENTS_STARTED.store(true, Ordering::SeqCst);
+}
+
+/// Cleared when the client stopped on purpose, which is the one case where
+/// starting again is the right thing to do.
+fn mark_client_finished() {
+    CLIENTS_STARTED.store(false, Ordering::SeqCst);
+}
 static CONFIG: Mutex<Option<LiteConfig>> = Mutex::new(None);
 
 pub fn is_running() -> bool {
@@ -305,6 +338,9 @@ fn config() -> LiteConfig {
 /// Ask the client to stop after the current event.
 pub fn stop() {
     RUNNING.store(false, Ordering::SeqCst);
+    // A deliberate stop is the one place a restart is wanted again. Leaving this
+    // set would mean Lite could never come back after a handback.
+    mark_client_finished();
 }
 
 /// Did the client stop because it was told to, rather than because the socket
@@ -484,6 +520,7 @@ async fn act(token: &str, channel_id: &str, message_id: &str, reason: &str) {
 /// middle of a shift is expected, and an emergency bot that quits on the first
 /// hiccup is not an emergency bot.
 pub async fn run(token: String) {
+    mark_client_started();
     RUNNING.store(true, Ordering::SeqCst);
     lite_server::lite_event(
         "note",
@@ -514,6 +551,9 @@ pub async fn run(token: String) {
     lite_server::lite_set_connected(false);
     RUNNING.store(false, Ordering::SeqCst);
     STOPPED.store(was_stopped, Ordering::SeqCst);
+    // Nothing is holding the token from here, so a later start is legitimate:
+    // this is the handback path, and Windows has taken the session back.
+    mark_client_finished();
     // Only on a deliberate stop: a dropped socket is not a handback, and telling
     // staff Windows is back while Lite is still the only thing running would be
     // the worst message this bot could send.
@@ -1712,5 +1752,33 @@ pub fn describe_seconds(secs: u64) -> String {
         format!("{} hours", secs / 3600)
     } else {
         format!("{} days", secs / 86400)
+    }
+}
+
+#[cfg(test)]
+mod single_client_tests {
+    use super::*;
+
+    /// The bug: a relaunch started a second gateway client on the same token and
+    /// Discord delivered every event twice. The fact that a client has been
+    /// started must survive the API being unreachable, because on a relaunch the
+    /// API *is* unreachable -- that is exactly when the second client started.
+    #[test]
+    fn a_started_client_is_remembered() {
+        mark_client_started();
+        assert!(a_client_was_started());
+        // And a deliberate stop is what makes a new one legal again.
+        mark_client_finished();
+        assert!(!a_client_was_started());
+    }
+
+    /// stop() has to release it too, or Lite could never come back after a
+    /// handback -- the same flag that prevents a double client would prevent a
+    /// legitimate restart.
+    #[test]
+    fn stop_releases_the_single_client_lock() {
+        mark_client_started();
+        stop();
+        assert!(!a_client_was_started(), "a stopped Lite must be startable again");
     }
 }

@@ -629,6 +629,22 @@ async fn babblebot_lite(action: String) -> Result<serde_json::Value, String> {
         "start" => {
             let token = keychain_token()?;
 
+            // The one check that can honestly answer "is a client already
+            // running". Lite's HTTP API being up is not the same question: on a
+            // relaunch the old process is usually gone, nothing answers on 8099,
+            // and starting a second client on the same token made Discord deliver
+            // every event twice -- which is how Andre saw every Lite message
+            // posted in duplicate.
+            if lite_discord::is_running() || lite_discord::a_client_was_started() {
+                return Ok(serde_json::json!({
+                    "running": true,
+                    "already": true,
+                    "detail": "A Discord client is already running in this app -- not starting a second one on the same token",
+                    "url": lite_server::lite_server_url(),
+                    "connected": true,
+                }));
+            }
+
             // Rule 1: is Windows really gone?
             let client = reqwest::Client::builder()
                 .pool_max_idle_per_host(0)
