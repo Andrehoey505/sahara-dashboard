@@ -693,9 +693,33 @@ async fn connect_once(token: &str) -> Result<(), String> {
                     }
                     announce_switch(token, &cfg).await;
                 } else if t == "MESSAGE_CREATE" {
-                    handle_message(token, &v).await;
+                    // Once per message, whatever Discord sends us.
+                    //
+                    // Four copies of every reply in Andre's server was the
+                    // symptom of several clients on one token; a reconnect that
+                    // gets the same events replayed would do it with one client.
+                    // The message id is the only thing that distinguishes a
+                    // replay from a second message, so it is checked here, once,
+                    // before anything acts.
+                    let mid = v
+                        .pointer("/d/id")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("");
+                    if lite_server::first_time_seen(mid) {
+                        handle_message(token, &v).await;
+                    }
                 } else if t == "GUILD_MEMBER_ADD" {
-                    handle_member_add(token, &v).await;
+                    // The same event can arrive twice; a join is a user and a
+                    // guild, and a duplicate would try to ban someone already
+                    // banned. The pair is the key, and it costs nothing.
+                    let key = format!(
+                        "join:{}:{}",
+                        v.pointer("/d/guild_id").and_then(|x| x.as_str()).unwrap_or(""),
+                        v.pointer("/d/user/id").and_then(|x| x.as_str()).unwrap_or("")
+                    );
+                    if lite_server::first_time_seen(&key) {
+                        handle_member_add(token, &v).await;
+                    }
                 } else if t == "INTERACTION_CREATE" {
                     handle_interaction(token, &v).await;
                 }

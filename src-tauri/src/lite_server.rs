@@ -171,6 +171,51 @@ pub fn lite_update(patch: LiteState) {
     }
 }
 
+/// Message ids Lite has already acted on.
+///
+/// ## Why this is not paranoia
+///
+/// Andre saw **four** copies of every Lite reply in Discord. One process with one
+/// socket cannot do that; four clients on the same token can, and a client that
+/// reconnects after a socket drop while Discord still considers the old session
+/// alive will be handed the same events again. Two bugs, one symptom.
+///
+/// The blockers for the first are in: one client per process, and a start that
+/// refuses when the API answers. This set covers the second, because no amount of
+/// guarding the start can stop Discord replaying a message.
+///
+/// The key is the message id, which is unique per message and stable across
+/// deliveries -- so acting on "the same content" is never guessed at, and two
+/// people posting the same words still both get moderated.
+static SEEN_MESSAGES: std::sync::Mutex<std::collections::VecDeque<String>> =
+    std::sync::Mutex::new(std::collections::VecDeque::new());
+
+/// True the first time a message id is offered, false every time after.
+///
+/// Bounded and ordered: a long shift holds a few thousand ids, not a leak. When
+/// the cap is reached the oldest goes, which is safe because Discord does not
+/// replay an event hours later.
+pub fn first_time_seen(message_id: &str) -> bool {
+    if message_id.is_empty() {
+        // No id means no way to tell a replay from a second message, so it is
+        // treated as new rather than silently dropped: dropping a real message
+        // would leave it unmoderated.
+        return true;
+    }
+    let mut seen = match SEEN_MESSAGES.lock() {
+        Ok(s) => s,
+        Err(e) => e.into_inner(),
+    };
+    if seen.iter().any(|id| id == message_id) {
+        return false;
+    }
+    seen.push_back(message_id.to_string());
+    while seen.len() > 5_000 {
+        seen.pop_front();
+    }
+    true
+}
+
 /// Add one event to the rolling list the screen shows.
 pub fn lite_event(kind: &str, text: String, channel: Option<String>, user: Option<String>) {
     if let Ok(mut s) = state().lock() {
@@ -1767,5 +1812,38 @@ mod sync_nudge_tests {
             before + 1,
             "calling the route is what asks for the sync"
         );
+    }
+}
+
+#[cfg(test)]
+mod replay_tests {
+    use super::*;
+
+    /// The symptom was four copies. The cause is the same message delivered more
+    /// than once, so the second and later deliveries must not be acted on.
+    #[test]
+    fn the_same_message_is_only_acted_on_once() {
+        let id = format!("test-{}", now_ms());
+        assert!(first_time_seen(&id), "the first delivery is real");
+        assert!(!first_time_seen(&id), "a replay must not be acted on twice");
+        assert!(!first_time_seen(&id), "and not a third time either");
+    }
+
+    /// Two different messages are two messages, however alike they look.
+    #[test]
+    fn different_messages_are_both_acted_on() {
+        let a = format!("a-{}", now_ms());
+        let b = format!("b-{}", now_ms());
+        assert!(first_time_seen(&a));
+        assert!(first_time_seen(&b));
+    }
+
+    /// No id means no way to tell a replay from a real message. It is treated as
+    /// real: dropping it would leave a message unmoderated, which is worse than
+    /// moderating one twice.
+    #[test]
+    fn a_message_with_no_id_is_never_silently_dropped() {
+        assert!(first_time_seen(""));
+        assert!(first_time_seen(""));
     }
 }

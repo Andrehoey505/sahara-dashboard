@@ -52,7 +52,7 @@ import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
 import { trace } from "./lib/trace";
 import { alarmStart, alarmStop } from "./lib/alarm";
-import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, liteSetLiveRoad, liteSetWatchAddress, discoverBot } from "./lib/bot";
+import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, liteSetLiveRoad, liteSetWatchAddress, liteHandbackTaken, discoverBot } from "./lib/bot";
 
 /**
  * How long the app waits, with the offer on screen and counting, before it
@@ -875,7 +875,18 @@ export default function App() {
     let alive = true;
     const ask = async () => {
       const st = await liteClientState();
-      if (alive) setLiteClient(st);
+      if (!alive) return;
+      setLiteClient(st);
+      // Lite's watcher lives in Rust and can step Lite down on its own the moment
+      // Windows is back. Nothing used to tell this window, so the screen said
+      // "Lite — moderating" over a bot that had already let go, and only a
+      // restart fixed it. Ask every tick instead: one extra call beside the one
+      // already being made.
+      if (await liteHandbackTaken()) {
+        if (!alive) return;
+        setLiteMode(false);
+        notify("Babblebot is back — Lite has handed over and stopped", "success");
+      }
     };
     void ask();
     const t = setInterval(ask, 5000);

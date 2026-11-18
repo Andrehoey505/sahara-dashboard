@@ -682,6 +682,17 @@ export async function discoverBot(
  * up moderating for days. The watcher asks this address every minute and steps
  * down once it gets two clean answers in a row.
  */
+export async function liteHandbackTaken(): Promise<boolean> {
+  try {
+    const invoke = await rustInvoke();
+    if (!invoke) return false;
+    const r = await invoke("lite_handback_taken");
+    return !!r?.handed_back;
+  } catch {
+    return false;
+  }
+}
+
 export async function liteSetWatchAddress(url: string | null): Promise<void> {
   try {
     const invoke = await rustInvoke();

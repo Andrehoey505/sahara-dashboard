@@ -833,6 +833,31 @@ fn lite_set_watch_address(url: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
+/// Has Lite handed back?
+///
+/// ## Why the app has to ask
+///
+/// The watcher lives in Rust and steps Lite down by itself. Nothing told the
+/// window, so Andre had to restart the app before the UI changed back -- Lite had
+/// already let go of Discord and Windows had the session again, and the screen
+/// still said "Lite — moderating". A handback nobody is told about leaves the
+/// screen claiming the opposite of the truth, which is the one thing this app is
+/// not allowed to do.
+///
+/// The answer is "Lite was running at some point and is running no longer", which
+/// is exactly `was_stopped()`: set only by a deliberate stop, so a dropped socket
+/// is not mistaken for a handback. `cleared` resets it once the screen has taken
+/// the news, so the app does not see the same handback twice.
+#[tauri::command]
+fn lite_handback_taken() -> serde_json::Value {
+    let stopped = lite_discord::was_stopped();
+    let running = lite_discord::is_running();
+    serde_json::json!({
+        "handed_back": stopped && !running,
+        "running": running,
+    })
+}
+
 /// Open a URL in the system browser.
 ///
 /// The webview can't navigate to an external site, so Spotify authorisation
@@ -909,6 +934,7 @@ pub fn run() {
             lite_server::lite_sync_now,
             lite_server::lite_set_live_road,
             lite_set_watch_address,
+            lite_handback_taken,
             keep_awake_on,
             keep_awake_off,
             lite_server::lite_db_snapshot,
