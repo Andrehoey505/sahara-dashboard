@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Users, ShieldAlert, ShieldOff, ShieldCheck } from "lucide-react";
 import { motionTokens } from "../lib/design";
-import { botFetch } from "../lib/bot";
+import { botFetch, liteSyncNow } from "../lib/bot";
 
 type Member = {
   id: string;
@@ -109,6 +109,9 @@ export default function MembersScreen({ apiUrl, onLookupViolations }: Props) {
             : x,
         ),
       );
+      // Exemptions travel with the copied rules: Lite skips exempt people on join
+      // and never flags them, so a change here has to reach that copy now.
+      void liteSyncNow();
       setChoosing("");
     } catch (e) {
       setSaveError(

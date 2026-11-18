@@ -260,6 +260,16 @@ fn handle(path: &str) -> Option<serde_json::Value> {
         }));
     }
 
+    if path == "/api/lite/sync-now" {
+        // The nudge: Windows says something it owns has changed, so the copy on
+        // this Mac is out of date before the next timer tick.
+        //
+        // POST only in spirit, but the route table is path-based, so it is guarded
+        // by loopback instead: the server binds 127.0.0.1 and nothing off this Mac
+        // can reach it. A nudge from the dashboard is the only caller.
+        return Some(handle_sync_nudge());
+    }
+
     if path == "/api/lite/tickets" {
         let list = read_tickets();
         let pending = list.iter().filter(|t| !t.transferred).count();
@@ -369,8 +379,26 @@ fn respond(mut stream: TcpStream) {
     let mut lines = req.lines();
     let first = lines.next().unwrap_or("");
     let mut parts = first.split_whitespace();
-    let _method = parts.next().unwrap_or("GET");
+    let method = parts.next().unwrap_or("GET").to_string();
     let path = parts.next().unwrap_or("/").split('?').next().unwrap_or("/");
+
+    // The nudge changes what the next sync does, so it is a POST and nothing else.
+    // The route table is path-based, and a GET on this path arriving from a stray
+    // browser tab would be a resync nobody asked for.
+    if path == "/api/lite/sync-now" && method != "POST" {
+        let text = serde_json::json!({
+            "ok": false,
+            "error": "Use POST to ask for a sync.",
+        })
+        .to_string();
+        let head = format!(
+            "HTTP/1.1 405 Method Not Allowed\r\nContent-Type: application/json\r\nContent-Length: {}\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nAllow: POST\r\nConnection: close\r\n\r\n",
+            text.len()
+        );
+        let _ = stream.write_all(head.as_bytes());
+        let _ = stream.write_all(text.as_bytes());
+        return;
+    }
 
     let body = match handle(path) {
         Some(v) => v,
@@ -798,7 +826,26 @@ const AUTO_SYNC_SECONDS: u64 = 20 * 60;
 pub async fn auto_sync_loop(api_url: String, fallback_url: Option<String>) {
     let mut consecutive_failures = 0u32;
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(AUTO_SYNC_SECONDS)).await;
+        // Sleep, but wake early when someone changed something on Windows.
+        //
+        // ## Why a nudge and not a shorter timer
+        //
+        // The number that matters is not how often this runs, it is how stale the
+        // copy is at the moment Windows dies. A five-minute timer still leaves five
+        // minutes of drift and runs 288 times a day to do it. A nudge is exact: the
+        // dashboard has just written a troll or a rule, it knows, and it tells this
+        // Mac to read it now. The timer stays as the backstop for anything that
+        // changed without saying so -- an edit made on Windows by hand, a nudge
+        // that failed while the Mac was asleep.
+        let woken = wait_for_nudge_or_timeout().await;
+        if woken {
+            lite_event(
+                "note",
+                "Windows said something changed, so the rules were re-read now".into(),
+                None,
+                None,
+            );
+        }
 
         let r = lite_rules_sync(Some(api_url.clone()), fallback_url.clone()).await;
         let ok = r.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -834,6 +881,42 @@ pub async fn auto_sync_loop(api_url: String, fallback_url: Option<String>) {
             }
         }
     }
+}
+
+/// A request for the next sync to happen now rather than at the end of the timer.
+///
+/// A plain counter rather than a channel or a condvar: the loop checks it between
+/// one-second sleeps, so a nudge can never be lost to a race, and a nudge that
+/// arrives while a sync is already running is simply served by the next pass.
+static NUDGE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Ask for a sync now. Cheap and safe to call from anywhere, including the HTTP
+/// handler that took the nudge from the dashboard.
+pub fn request_sync_now() {
+    NUDGE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Sleep up to the sync interval, returning early if a nudge arrived.
+async fn wait_for_nudge_or_timeout() -> bool {
+    let start = NUDGE.load(std::sync::atomic::Ordering::SeqCst);
+    let mut waited = 0u64;
+    while waited < AUTO_SYNC_SECONDS {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        waited += 1;
+        if NUDGE.load(std::sync::atomic::Ordering::SeqCst) != start {
+            return true;
+        }
+    }
+    false
+}
+
+/// The endpoint Windows calls when something it owns has changed.
+///
+/// Loopback only: it is a nudge from the dashboard on this machine, and nothing
+/// off this Mac has any business making Lite re-read its rules.
+fn handle_sync_nudge() -> serde_json::Value {
+    request_sync_now();
+    serde_json::json!({ "ok": true, "note": "the next sync will run now" })
 }
 
 static LAST_SYNC: std::sync::Mutex<(Option<u64>, Option<String>)> =
@@ -1401,6 +1484,7 @@ pub fn sync_state() -> serde_json::Value {
         "last_error": g.1,
         "from_disk": g.0.is_none() && saved.is_some(),
         "interval_seconds": AUTO_SYNC_SECONDS,
+        "nudged": NUDGE.load(std::sync::atomic::Ordering::SeqCst),
     })
 }
 
@@ -1410,6 +1494,18 @@ pub fn sync_state() -> serde_json::Value {
 /// the refresh that happened *before* the outage. It is a no-op when Windows is
 /// unreachable: the request fails, nothing is overwritten, and the last good copy
 /// stays. Safe to call twice -- the second call is ignored.
+/// Ask Lite to re-read its rules now, because Windows has just changed something.
+///
+/// Called by the app when it is the one that made the change (a troll added, a
+/// rule edited), and by anything else on this Mac that knows better than the
+/// timer. It never waits for the sync: the screen must not hang because a read is
+/// slow, and the loop is the only thing allowed to write the copy.
+#[tauri::command]
+pub fn lite_sync_now() -> serde_json::Value {
+    request_sync_now();
+    serde_json::json!({ "ok": true })
+}
+
 #[tauri::command]
 pub fn lite_auto_sync_start(api_url: String, fallback_url: Option<String>) -> serde_json::Value {
     static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -1644,4 +1740,32 @@ pub async fn lite_rules_sync(api_url: Option<String>, fallback_url: Option<Strin
         }
     }
     serde_json::json!({ "ok": false, "error": last })
+}
+
+#[cfg(test)]
+mod sync_nudge_tests {
+    use super::*;
+
+    /// The nudge must be visible to the loop and must not be confused with the
+    /// timer: one increment, one early wake.
+    #[test]
+    fn a_nudge_moves_the_counter() {
+        let before = NUDGE.load(std::sync::atomic::Ordering::SeqCst);
+        request_sync_now();
+        let after = NUDGE.load(std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(after, before + 1, "a nudge has to be observable");
+    }
+
+    /// The endpoint is the one Windows calls, and it answers with what it did.
+    #[test]
+    fn the_nudge_endpoint_answers() {
+        let before = NUDGE.load(std::sync::atomic::Ordering::SeqCst);
+        let r = handle("/api/lite/sync-now").expect("the route must exist");
+        assert_eq!(r.get("ok").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(
+            NUDGE.load(std::sync::atomic::Ordering::SeqCst),
+            before + 1,
+            "calling the route is what asks for the sync"
+        );
+    }
 }

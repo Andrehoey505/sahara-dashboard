@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
-import { botFetch } from "../lib/bot";
+import { botFetch, liteSyncNow } from "../lib/bot";
 
 /**
  * Tickets, as the bot actually stores them.
@@ -386,6 +386,9 @@ export default function TicketScreen({ apiUrl, notify, servers, selectedServer }
         setTypes(Array.isArray(data.types) ? data.types : types);
         setDirty(false);
         notify("Ticket types saved", "success");
+        // Lite copies the ticket types too: during an outage it is Lite that
+        // answers `bb!verify` and opens tickets, so it needs the current set.
+        void liteSyncNow();
       } else {
         notify(data.error || "Could not save", "error");
       }

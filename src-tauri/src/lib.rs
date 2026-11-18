@@ -890,6 +890,7 @@ pub fn run() {
             lite_token_sync,
             lite_url,
             lite_server::lite_auto_sync_start,
+            lite_server::lite_sync_now,
             lite_server::lite_set_live_road,
             lite_set_watch_address,
             keep_awake_on,

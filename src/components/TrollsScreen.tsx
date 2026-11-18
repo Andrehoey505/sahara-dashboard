@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ShieldAlert, Plus, Trash2, RefreshCw, Search, X, UserRoundSearch, Loader2 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { formatShort } from "../lib/time";
-import { botFetch } from "../lib/bot";
+import { botFetch, liteSyncNow } from "../lib/bot";
 
 type Troll = {
   user_id: string;
@@ -96,6 +96,9 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         notify(`${data.name || id} added to the troll list`, "success");
+        // Lite keeps its own copy of this list and bans from it on join. A troll
+        // added here has to reach that copy now, not at the next timer tick.
+        void liteSyncNow();
         setNewId("");
         setNewReason("");
         setAdding(false);
@@ -121,6 +124,9 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         notify(`${t.name || t.user_id} removed`, "success");
+        // Same reason as an add, in reverse: Lite must stop banning someone who
+        // has just been taken off the list.
+        void liteSyncNow();
         setTrolls((prev) => prev.filter((x) => x.user_id !== t.user_id));
       } else if (res.status === 404) {
         notify("The bot doesn't have /api/trolls yet — pull and restart Babblebot", "error");
@@ -332,6 +338,9 @@ export default function TrollsScreen({ apiUrl, notify }: Props) {
                           const d = await r.json().catch(() => ({}));
                           if (r.ok && d.success) {
                             notify("Reason saved", "success");
+                            // The reason is what Lite puts in the audit log when
+                            // it bans, so it travels with the copy too.
+                            void liteSyncNow();
                             load();
                           } else {
                             notify(d.error || "Couldn't save that reason", "error");

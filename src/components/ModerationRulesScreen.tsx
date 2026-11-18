@@ -1,4 +1,4 @@
-import { botFetch } from "../lib/bot";
+import { botFetch, liteSyncNow } from "../lib/bot";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -367,6 +367,10 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
       const data = await res.json().catch(() => ({}));
       if (res.ok && !data.error) {
         notify(`Saved moderation rules for ${payload.rules.length} channel(s)`, "success");
+        // Channel rules are the bulk of what Lite enforces. Saving them here and
+        // letting Lite keep the old set until the next timer tick would mean the
+        // two bots disagreeing about what is allowed.
+        void liteSyncNow();
         // Take the server's version: it is the validated one, and it is what the
         // bot will act on. Keeping our own copy would let the two drift.
         if (Array.isArray(data.rules)) {

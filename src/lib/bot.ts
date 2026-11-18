@@ -318,6 +318,26 @@ export async function liteUrl(): Promise<string> {
   }
 }
 
+/**
+ * Tell Lite to re-read its rules now, because something it copies has just
+ * changed on Windows.
+ *
+ * Called after an edit this app made itself: the dashboard is the one thing that
+ * knows a troll was added or a rule changed, so waiting up to twenty minutes for
+ * the timer would leave Lite enforcing yesterday's settings at the moment it
+ * mattered most. Never waits, never throws: a nudge that fails is a nudge the
+ * timer will cover.
+ */
+export async function liteSyncNow(): Promise<void> {
+  const invoke = await rustInvoke();
+  if (!invoke) return;
+  try {
+    await invoke("lite_sync_now");
+  } catch {
+    /* the timer is the backstop */
+  }
+}
+
 /** Take a read-only copy of the Windows database, while Windows is up. */
 export async function liteDbSnapshot(apiUrl: string, fallbackUrl?: string): Promise<{ ok: boolean; error?: string; bytes?: number; servedBy?: string }> {
   const invoke = await rustInvoke();
