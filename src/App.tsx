@@ -207,6 +207,19 @@ export default function App() {
   // fallback address out of it, and a hook cannot be used before its own line.
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [failoverBusy, setFailoverBusy] = useState(false);
+  /**
+   * The failover already in flight, so the 5-second poll cannot start a second
+   * one behind it.
+   *
+   * `failoverBusy` is state, and a poll that fires before React has committed
+   * the new value still reads `false`. Several polls then queue up their own
+   * runFailover calls, all of them write `setConn` in turn, and the screen
+   * never settles on one answer. A ref is set in the same tick it is checked,
+   * which is what "already running" actually needs.
+   */
+  const failoverInFlight = useRef(false);
+  /** Whether a failover has already been started for this outage. */
+  const failoverRan = useRef(false);
   const [failoverAttempt, setFailoverAttempt] = useState<{ n: number; of: number } | null>(null);
   const [emergencyOffer, setEmergencyOffer] = useState(false);
   /**
@@ -448,7 +461,9 @@ export default function App() {
   }, [emergencyOffer]);
 
   const runFailover = useCallback(async () => {
-    if (failoverBusy) return;
+    if (failoverInFlight.current) return;
+    failoverInFlight.current = true;
+    failoverRan.current = true;
     setFailoverBusy(true);
     setEmergencyOffer(false);
     try {
@@ -478,6 +493,7 @@ export default function App() {
         if (quick.url !== apiUrl) setApiUrl(quick.url);
         markConnected();
         setConnectionError("");
+        failoverRan.current = false;
         return;
       }
       const patient = await waitForBot(lan, fallback, {
@@ -488,6 +504,7 @@ export default function App() {
         if (patient.url !== apiUrl) setApiUrl(patient.url);
         markConnected();
         setConnectionError("");
+        failoverRan.current = false;
       } else {
         setConnectionError(explain(patient));
         // An offer, never an auto-start: BabbleBot Lite shares the same Discord
@@ -503,8 +520,9 @@ export default function App() {
     } finally {
       setFailoverAttempt(null);
       setFailoverBusy(false);
+      failoverInFlight.current = false;
     }
-  }, [apiUrl, failoverBusy, settings.apiUrl, settings.apiFallbackUrl, emergencyDeclined]);
+  }, [apiUrl, settings.apiUrl, settings.apiFallbackUrl, emergencyDeclined]);
 
   const fetchData = async () => {
     try {
@@ -548,6 +566,7 @@ export default function App() {
 
       markConnected();
       setConnectionError("");
+      failoverRan.current = false;
       const [msgRes, violRes, srvRes, statsRes] = await Promise.all([
         botFetch(apiUrl + "/api/messages?limit=50"),
         botFetch(apiUrl + "/api/violations?limit=200" + (violationFilter !== "all" ? "&status=" + encodeURIComponent(violationFilter) : "")),
@@ -611,7 +630,11 @@ export default function App() {
       // patiently first; only if none of them answer does the app admit the bot
       // is unreachable, and even then it says which addresses it tried.
       setConnectionError("Cannot reach bot API at " + apiUrl);
-      void runFailover();
+      // Once per outage, not once every five seconds. Six patient probes of two
+      // addresses, each up to two minutes, fired every poll would mean the
+      // countdown never gets to finish and the screen never settles. The
+      // "Try again" button is there for a deliberate second attempt.
+      if (!failoverRan.current) void runFailover();
     }
   };
 
