@@ -499,8 +499,13 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emergencyOffer]);
 
-  const runFailover = useCallback(async () => {
+  const runFailover = useCallback(async (force = false) => {
     if (failoverInFlight.current) return;
+    // A deliberate "Try again" is a new attempt, so it is allowed through the
+    // once-per-outage guard. Without this, the one button on the outage screen
+    // did nothing at all: the guard saw that a probe had already run and
+    // returned before touching the network.
+    if (force) failoverRan.current = false;
     failoverInFlight.current = true;
     failoverRan.current = true;
     setFailoverBusy(true);
@@ -675,6 +680,11 @@ export default function App() {
       // patiently first; only if none of them answer does the app admit the bot
       // is unreachable, and even then it says which addresses it tried.
       setConnectionError("Cannot reach bot API at " + apiUrl);
+      // During a known outage the poll is not the thing that decides anything:
+      // the patient probe is. Letting it rewrite the error line every five
+      // seconds put "Cannot reach bot API at ..." on a screen that had already
+      // stopped pretending to try.
+      if (conn && conn.status === "unreachable") return;
       // Once per outage, not once every five seconds. Six patient probes of two
       // addresses, each up to two minutes, fired every poll would mean the
       // countdown never gets to finish and the screen never settles. The
@@ -1579,7 +1589,12 @@ export default function App() {
    * keeps tapping on the door by itself. This is the strip that says so, and it
    * is where the alarm, the countdown and the Lite offer live.
    */
-  if (!connected) {
+  // Lite in charge is not an outage: it is the answer to one. `connected` is
+  // about Windows and stays false while Lite covers, so without this the screen
+  // that says "Babblebot is not answering" stayed up over a bot that was
+  // demonstrably answering -- Lite had taken the session and changed its status
+  // to "Playing BabbleBot Lite" while the app still insisted nothing was there.
+  if (!connected && !liteMode) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
         <div className="max-w-3xl mx-auto p-6">
@@ -1587,15 +1602,25 @@ export default function App() {
             <h1 className="text-xl font-semibold flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-rose-400" /> Babblebot is not answering
             </h1>
+            {/* What this screen says must not depend on whether a probe happens to
+                be running. It did, and pressing "Try again" replaced every sentence
+                on the page with "Trying every address again" -- so the alarm, the
+                countdown and the Lite offer vanished at the exact moment they were
+                wanted. The probe's own progress is a small line underneath. */}
             <p className="text-sm text-slate-400 mt-1">
-              {failoverBusy
-                ? "Trying every address again — this closes on its own when one answers."
-                : conn?.status === "unreachable"
+              {conn?.status === "unreachable"
                 ? "This screen closes on its own when the bot answers. Nothing needs doing unless the Windows machine is staying off."
                 : connectionError || "Looking for the bot…"}
             </p>
+            {failoverBusy && (
+              <p className="text-xs text-slate-500 mt-1">
+                {failoverAttempt
+                  ? `Trying again — attempt ${failoverAttempt.n} of ${failoverAttempt.of}…`
+                  : "Trying every address…"}
+              </p>
+            )}
             <button
-              onClick={() => void runFailover()}
+              onClick={() => void runFailover(true)}
               disabled={failoverBusy}
               className="mt-3 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700/60 disabled:opacity-40"
             >
