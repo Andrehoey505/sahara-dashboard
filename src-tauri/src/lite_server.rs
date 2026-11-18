@@ -770,6 +770,37 @@ pub async fn auto_sync_loop(api_url: String, fallback_url: Option<String>) {
 static LAST_SYNC: std::sync::Mutex<(Option<u64>, Option<String>)> =
     std::sync::Mutex::new((None::<u64>, None::<String>));
 
+/// The address the app itself is connected through, once it knows.
+///
+/// The sync used to decide its own road: LAN first, then Tailscale. That is a
+/// guess, and on this Mac the LAN guess is a guaranteed four-second failure --
+/// there is no route to 192.168.1.128 at all -- so every sync paid for a road
+/// that could never work and then reported the failure on screen next to a sync
+/// that had actually succeeded. The app has already probed, already discovered,
+/// and is already talking to the bot. Asking it costs nothing and cannot be
+/// wrong, so the sync follows the app rather than re-deriving the answer.
+static LIVE_ROAD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Told by the app whenever its connection changes. `None` means "no live road",
+/// and the sync falls back to trying both.
+#[tauri::command]
+pub fn lite_set_live_road(url: Option<String>) -> serde_json::Value {
+    let clean = url
+        .map(|u| u.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty());
+    if let Ok(mut g) = LIVE_ROAD.lock() {
+        *g = clean.clone();
+    }
+    serde_json::json!({ "live_road": clean })
+}
+
+fn live_road() -> Option<String> {
+    match LIVE_ROAD.lock() {
+        Ok(g) => g.clone(),
+        Err(e) => e.into_inner().clone(),
+    }
+}
+
 fn set_last_sync(at: Option<u64>, err: Option<String>) {
     if let Ok(mut g) = LAST_SYNC.lock() {
         if at.is_some() {
@@ -1303,7 +1334,14 @@ pub async fn lite_rules_sync(api_url: Option<String>, fallback_url: Option<Strin
     // The flag system's live endpoints first. These are what the dashboard writes
     // to, so they are the freshest truth about what should be flagged -- fresher
     // than a database copy, and they need no file on this Mac.
-    let (live_hit, live_why) = fetch_live_rules_explained(&client, &urls).await;
+    // Follow the app's connection when it has one. Only guess when it does not,
+    // because the guess is what produced a red LAN error beside a green sync.
+    let followed = live_road();
+    let tried: Vec<String> = match &followed {
+        Some(u) => vec![u.clone()],
+        None => urls.clone(),
+    };
+    let (live_hit, live_why) = fetch_live_rules_explained(&client, &tried).await;
 
     let mut last = if live_why.is_empty() {
         String::from("no address answered")

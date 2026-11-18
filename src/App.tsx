@@ -52,7 +52,7 @@ import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
 import { trace } from "./lib/trace";
 import { alarmStart, alarmStop } from "./lib/alarm";
-import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, discoverBot } from "./lib/bot";
+import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, liteSetLiveRoad, discoverBot } from "./lib/bot";
 
 /**
  * How long the app waits, with the offer on screen and counting, before it
@@ -742,6 +742,16 @@ export default function App() {
     if (!loggedIn || !settings.apiUrl) return;
     void liteAutoSyncStart(settings.apiUrl, settings.apiFallbackUrl || undefined);
   }, [loggedIn, settings.apiUrl, settings.apiFallbackUrl]);
+
+  // The road the app is actually on, handed to the sync so it stops guessing.
+  //
+  // This Mac has no route to the LAN address at all, so a sync that tries LAN
+  // first spends its connect timeout on a road that cannot work and then reports
+  // that failure beside a sync that succeeded over Tailscale. The app has already
+  // answered the question; the sync only has to be told.
+  useEffect(() => {
+    void liteSetLiveRoad(conn && conn.status === "connected" ? conn.url : null);
+  }, [conn]);
 
   // While Lite is in charge, ask it whether it is genuinely connected. A Lite
   // that is running but not connected is the worst state to be in silently: the

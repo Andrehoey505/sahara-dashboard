@@ -91,9 +91,11 @@ function LiteRulesPanel({ apiUrl, fallbackUrl }: { apiUrl: string; fallbackUrl?:
           `${r.loaded?.servers ?? 0} servers, ${r.loaded?.channel_rules ?? 0} channel rules, ` +
           `${r.loaded?.ticket_types ?? 0} ticket types.` +
           (warnings.length ? `\n\n${warnings.join("\n")}` : "") +
-          // Which address served it, and why the others did not. A local address
-          // that has stopped working is a real fault with a real fix, and it is
-          // invisible unless it is named here.
+          // Which address served it, and why the others did not -- but only the
+          // ones that were actually tried. The sync follows the app's live
+          // connection now, so an address the app already knows is dead is not
+          // attempted and must not be reported as a failure. A red line beside a
+          // successful sync reads as "something is wrong" when nothing is.
           ((r as any).addresses || [])
             .filter(([u]: [string, string]) => !String(r.served_by || "").startsWith(u))
             .map(([u, why]: [string, string]) => `\n${u}: ${why}`)

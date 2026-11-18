@@ -803,6 +803,7 @@ pub fn run() {
             lite_token_sync,
             lite_url,
             lite_server::lite_auto_sync_start,
+            lite_server::lite_set_live_road,
             keep_awake_on,
             keep_awake_off,
             lite_server::lite_db_snapshot,

@@ -504,6 +504,23 @@ export async function liteAutoSyncStart(apiUrl: string, fallbackUrl?: string) {
   }
 }
 
+/**
+ * Tell the Rust side which address the app is actually connected through.
+ *
+ * The sync used to pick its own road (LAN, then Tailscale) and pay four seconds
+ * for a LAN that this Mac cannot route to, then print that failure next to a
+ * sync that had worked over Tailscale. The app already knows; say so.
+ */
+export async function liteSetLiveRoad(url?: string | null): Promise<void> {
+  const invoke = await rustInvoke();
+  if (!invoke) return;
+  try {
+    await invoke("lite_set_live_road", { url: url || null });
+  } catch {
+    /* a missing hint only costs the sync its old guessing, never its correctness */
+  }
+}
+
 /** When Lite last refreshed itself, and why it failed if it did. */
 export async function liteSyncState(): Promise<{
   last_sync?: number;
