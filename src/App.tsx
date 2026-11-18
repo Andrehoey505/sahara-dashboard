@@ -93,6 +93,32 @@ import { botFetch } from "./lib/bot";
 
 // Screens whose content belongs to one server. Everything else must not show a
 // server picker — it was in the global header before, in the way everywhere.
+/**
+ * What BabbleBot Lite can actually serve.
+ *
+ * Lite is a tripwire, not a replacement: it moderates text, opens tickets and
+ * runs bb!verify. Everything else needs Windows, and a tab that opens onto an
+ * empty list is worse than a tab that is not there -- it looks like there are no
+ * violations, no members and no logs, when the truth is that nobody is asking.
+ *
+ * Module level, not inside the component, because the connection and the screen
+ * both read it and only one of them can be declared after an early return.
+ */
+const LITE_SCREENS = new Set([
+  "dashboard",
+  "moderation",
+  "moderationrules",
+  "violations",
+  "livefeed",
+  "tickets",
+  "settings",
+  "schedule",
+  "migraine",
+  "armcare",
+]);
+
+// ED Waits is Lite-servable too, but only when it is switched on -- it is a
+// settings question, not a Lite one, so it is answered where the nav is built.
 const SERVER_SCOPED = [
   "config",
   "reactionroles",
@@ -270,6 +296,19 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", effective);
     if (!liteMode) localStorage.setItem("sahara_theme", theme);
   }, [theme, liteMode]);
+
+  // A screen that disappeared with Lite must not stay selected: the render block
+  // for a hidden tab would fall through to an empty pane, which reads as "there
+  // is nothing here" rather than "this needs Windows".
+  //
+  // This has to live above the early returns in the render body. A hook after a
+  // conditional return changes the hook order on the next render, and React
+  // unmounts the whole tree when that happens -- which is a blank window, with
+  // nothing on it to say why. That is exactly what the PIN screen did next.
+  useEffect(() => {
+    if (!liteMode) return;
+    if (!LITE_SCREENS.has(active)) setActive("dashboard");
+  }, [liteMode, active, LITE_SCREENS]);
 
   // Update check on launch. LOOKS only — it never downloads.
   //
@@ -1624,33 +1663,14 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
    * like there are no violations, no members and no logs, when the truth is
    * that nobody is asking. So while Lite is in charge, only these exist.
    */
-  const LITE_SCREENS = new Set([
-    "dashboard",
-    "moderation",
-    "moderationrules",
-    "violations",
-    "livefeed",
-    "tickets",
-    "settings",
-    "schedule",
-    "migraine",
-    "armcare",
-    ...(settings.edWaitsEnabled ? ["edwaits"] : []),
-  ]);
   const visibleNav = liteMode
-    ? NAV.map((g) => ({ ...g, items: g.items.filter((i) => LITE_SCREENS.has(i.id)) })).filter(
-        (g) => g.items.length > 0
-      )
+    ? NAV.map((g) => ({
+        ...g,
+        items: g.items.filter(
+          (i) => LITE_SCREENS.has(i.id) || i.id === "edwaits"
+        ),
+      })).filter((g) => g.items.length > 0)
     : NAV;
-
-  // A screen that disappeared with Lite must not stay selected: the render
-  // block for a hidden tab would fall through to an empty pane, which reads as
-  // "there is nothing here" rather than "this needs Windows".
-  useEffect(() => {
-    if (!liteMode) return;
-    if (!LITE_SCREENS.has(active)) setActive("dashboard");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liteMode, active]);
 
   // Dev-time safety net: every nav item must have a screen defined below.
   // (A screen that exists in NAV but has no render block used to fail silently,

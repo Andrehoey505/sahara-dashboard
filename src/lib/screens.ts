@@ -22,6 +22,13 @@ export const SCREENS = [
   "migraine",
   "armcare",
   "reactionroles",
+  "tickets",
+  "relay",
+  "mentions",
+  "database",
+  "storage",
+  "system",
+  "config",
   "settings",
 ] as const;
 
