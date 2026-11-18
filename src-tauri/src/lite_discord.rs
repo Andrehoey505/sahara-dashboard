@@ -627,7 +627,30 @@ async fn connect_once(token: &str) -> Result<(), String> {
                     // Posted only after Discord confirms the session: a notice
                     // sent from a connection that then failed would tell staff
                     // Lite is covering when it is not.
-                    let cfg = config();
+                    //
+                    // The rules are read *fresh from disk* here rather than taken
+                    // from whatever is in memory. Andre's log post said "0 servers
+                    // - 0 channel rules" over a Lite that had just synced: the
+                    // notice was built from a config that had not been loaded yet,
+                    // and it told staff Lite was watching nothing. A start with an
+                    // empty config reads the saved copy first.
+                    let mut cfg = config();
+                    if cfg.guilds.is_empty() && cfg.rules.is_empty() {
+                        if let Some(saved) = load_saved_config() {
+                            lite_server::lite_event(
+                                "note",
+                                format!(
+                                    "the switch notice found no rules in memory, so it read the saved copy ({} servers, {} channel rules)",
+                                    saved.guilds.len(),
+                                    saved.rules.len()
+                                ),
+                                None,
+                                None,
+                            );
+                            set_config(saved.clone());
+                            cfg = saved;
+                        }
+                    }
                     announce_switch(token, &cfg).await;
                 } else if t == "MESSAGE_CREATE" {
                     handle_message(token, &v).await;
@@ -1172,6 +1195,18 @@ async fn announce_switch(token: &str, cfg: &LiteConfig) {
     let client = api();
     let guild_count = cfg.guilds.len();
     let rule_count = cfg.rules.len();
+    // Zero of both is not a status line, it is a fault. Saying "0 servers" in a
+    // staff channel reads as "Lite is fine and covering nothing", when the truth
+    // is that Lite could not read its rules and is enforcing none of them.
+    let watching = if guild_count == 0 && rule_count == 0 {
+        "**No rules loaded.** Lite is connected but is not moderating anything until its rules sync. Check the Lite screen on the Mac.".to_string()
+    } else {
+        format!(
+            "{guild_count} server{} · {rule_count} channel rule{}",
+            if guild_count == 1 { "" } else { "s" },
+            if rule_count == 1 { "" } else { "s" }
+        )
+    };
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -1185,7 +1220,7 @@ async fn announce_switch(token: &str, cfg: &LiteConfig) {
                 { "name": "What still works", "value": "Text checks, invite and link filtering, spam and caps, ticket buttons, and `bb!verify`.", "inline": false },
                 { "name": "What is reduced", "value": "Image and video checking is limited, and commands, music and relay are unavailable until Windows returns.", "inline": false },
                 { "name": "How Lite stays current", "value": "Its rules, flags and database are synced from Windows before an outage, so it is not guessing at your settings.", "inline": false },
-                { "name": "Watching", "value": format!("{guild_count} server{} · {rule_count} channel rule{}", if guild_count == 1 { "" } else { "s" }, if rule_count == 1 { "" } else { "s" }), "inline": true },
+                { "name": "Watching", "value": watching, "inline": true },
                 { "name": "Since", "value": format!("<t:{now}:f>"), "inline": true }
             ],
             "footer": { "text": "BabbleBot Lite · emergency mode on the Mac · nothing is written to the Windows database" }
