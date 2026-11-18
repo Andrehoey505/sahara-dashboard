@@ -62,6 +62,24 @@ import { queueRequest, counted } from "./queue";
 
 const TIMEOUT_MS = 20_000;
 
+/**
+ * One retry, for a request that timed out.
+ *
+ * ## Why a retry and not a longer timeout
+ *
+ * Andre's trace kept showing `operation timed out` on `/api/violations?limit=200`
+ * and `/api/servers`, while the same two endpoints answered this Mac in 0.07 and
+ * 0.6 seconds. A timeout on a bot that answers in under a second is not a slow
+ * endpoint, it is a socket that never got through -- a Tailscale route that was
+ * re-negotiating, a laptop that had just woken, a NAT mapping that had expired.
+ *
+ * Lengthening the timeout would make every one of those cases hang for longer and
+ * still fail. Retrying once, on a fresh connection, turns a stale socket into a
+ * request that simply works. Only a timeout is retried: a 500 or a 404 is an
+ * answer, and asking again would be asking twice for the same no.
+ */
+const RETRY_ON_TIMEOUT = 1;
+
 /** The Rust side: one command, called directly. */
 type Invoke = (cmd: string, args?: any) => Promise<any>;
 
@@ -140,9 +158,28 @@ export async function botFetch(
           headers,
           timeoutMs: TIMEOUT_MS,
         });
-      const reply = init.unqueued
-        ? await counted(() => call())
-        : await queueRequest(() => counted(() => call()));
+      const run = () =>
+        init.unqueued
+          ? counted(() => call())
+          : queueRequest(() => counted(() => call()));
+
+      let reply: any;
+      let attempt = 0;
+      for (;;) {
+        try {
+          reply = await run();
+          break;
+        } catch (e: any) {
+          const why = String(e?.message || e || "no answer");
+          const timedOut = /timed out|timeout/i.test(why);
+          if (timedOut && attempt < RETRY_ON_TIMEOUT) {
+            attempt += 1;
+            trace("probe", `${(init.method || "GET")} ${url} timed out, trying once more`);
+            continue;
+          }
+          throw e;
+        }
+      }
       status = Number(reply?.status ?? 0);
       ok = !!reply?.ok;
       text = String(reply?.body ?? "");
