@@ -51,6 +51,8 @@ import ScheduleScreen from "./components/ScheduleScreen";
 import ScheduleSettings from "./components/ScheduleSettings";
 import { dayKey } from "./lib/schedule";
 import { trace } from "./lib/trace";
+import { alarmStart, alarmStop } from "./lib/alarm";
+import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, discoverBot } from "./lib/bot";
 
 /**
  * How long the app waits, with the offer on screen and counting, before it
@@ -195,12 +197,35 @@ export default function App() {
    * answer — with a sentence that says which addresses were tried.
    */
   const [conn, setConn] = useState<ConnectionState | null>(null);
+  /**
+   * How the address in use was arrived at. Discovery is worth one badge of its
+   * own: "it moved and the app found it" is a different fact from "the address
+   * you typed is answering", and only one of those needs explaining.
+   */
+  const [foundVia, setFoundVia] = useState<"remembered" | "lan" | "tailscale" | null>(null);
   // Declared here rather than further down: the failover probe reads the
   // fallback address out of it, and a hook cannot be used before its own line.
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [failoverBusy, setFailoverBusy] = useState(false);
   const [failoverAttempt, setFailoverAttempt] = useState<{ n: number; of: number } | null>(null);
   const [emergencyOffer, setEmergencyOffer] = useState(false);
+  /**
+   * The alarm is a separate thing from the offer.
+   *
+   * The offer is "would you like Lite?"; the alarm is "nobody is looking at a
+   * 109-channel server". They usually arrive together, but the alarm is what
+   * has to be silenced, and silencing it is a person saying "I have seen this".
+   */
+  const [alarmAcknowledged, setAlarmAcknowledged] = useState(false);
+  /**
+   * True while this app is talking to BabbleBot Lite instead of Windows.
+   *
+   * It is not "offline" and it is not "connected to Babblebot" -- it is a third
+   * state with its own banner, because a screen showing empty lists while a
+   * 109-channel server is only half watched would be the most dangerous lie the
+   * app could tell.
+   */
+
   const [emergencyDeclined, setEmergencyDeclined] = useState(false);
   // One source of truth for where the bot is: the settings record.
   //
@@ -215,11 +240,23 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showContext, setShowContext] = useState(false);
   const [contextViolation, setContextViolation] = useState<any>(null);
+  // Declared here, above the theme effect, because the theme depends on it.
+  const [liteMode, setLiteMode] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem("sahara_theme") || "dark");
+  /**
+   * Lite wears its own skin.
+   *
+   * Not decoration. The worst way an emergency mode fails is somebody believing
+   * the normal bot is running, so the whole app turns amber and near-black the
+   * moment Lite takes over and stays that way until Windows answers again. The
+   * chosen theme is remembered separately and comes back untouched, so Lite never
+   * overwrites what Andre picked.
+   */
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("sahara_theme", theme);
-  }, [theme]);
+    const effective = liteMode ? "lite" : theme;
+    document.documentElement.setAttribute("data-theme", effective);
+    if (!liteMode) localStorage.setItem("sahara_theme", theme);
+  }, [theme, liteMode]);
 
   // Update check on launch. LOOKS only — it never downloads.
   //
@@ -321,10 +358,45 @@ export default function App() {
    * both addresses failed AND this Mac has a network AND Andre has not already
    * said no. The countdown is visible the whole time and cancellable.
    *
+   * It deliberately ignores sleep mode. The case it exists for is exactly the
+   * one where he is asleep: Windows dies at 11am, nobody is watching, and the
+   * server must not sit unmoderated until he wakes up. The alarm sounds, and if
+   * it goes unanswered the handover happens without him.
+   *
    * The handover itself is not implemented yet -- BabbleBot Lite is designed and
    * not built -- so reaching zero currently keeps trying rather than lying about
    * having started something.
    */
+  /**
+   * Sound the alarm while the bot is down and nobody has answered it.
+   *
+   * Separate from the countdown below because they end differently. The
+   * countdown ends in a handover; the alarm ends when a human presses
+   * acknowledge, or when the bot comes back by itself. Leaving the room must
+   * not silence it -- that is the whole point of it existing at night.
+   */
+  useEffect(() => {
+    if (!emergencyOffer || alarmAcknowledged) {
+      alarmStop();
+      return;
+    }
+    // Sleep mode does NOT silence this one.
+    //
+    // Sleep mode exists to stop a laptop nagging a person who is asleep. It does
+    // not mean "a 109-channel server being unmoderated is fine". This is the one
+    // sound that has to get through, which is the entire reason it exists.
+    alarmStart();
+    return () => alarmStop();
+  }, [emergencyOffer, alarmAcknowledged]);
+
+  // Coming back is the best possible answer, and it must stop the noise itself.
+  useEffect(() => {
+    if (connected) {
+      alarmStop();
+      setAlarmAcknowledged(false);
+    }
+  }, [connected]);
+
   useEffect(() => {
     if (!emergencyOffer) {
       setEmergencyCountdown(null);
@@ -336,10 +408,34 @@ export default function App() {
         if (n === null) return null;
         if (n <= 1) {
           clearInterval(id);
-          // Nothing to start yet. Recorded rather than pretended.
-          trace("error", "90s elapsed with no answer — BabbleBot Lite is not built, still retrying");
           setEmergencyCountdown(null);
-          void runFailover();
+          // Nobody is awake to press the button, so try the handover by itself.
+          // It goes through the same Rust command as the button, which means the
+          // same checks: Windows must be confirmed gone, and this Mac must have
+          // a network. If Lite cannot start, the alarm keeps sounding -- silence
+          // would be the one dishonest outcome.
+          void (async () => {
+            const r = await liteCommand("start");
+            if (r.running) {
+              alarmStop();
+              setAlarmAcknowledged(true);
+              // Point the whole app at Lite's own API. From here every screen
+              // either works against Lite or says plainly that it needs Windows,
+              // which is the point: the UI must never look like a full bot.
+              const url = await liteUrl();
+              setApiUrl(url);
+              setConnected(false);
+              setLiteMode(true);
+              // An idle Mac would sleep mid-shift and take Lite with it.
+              await keepAwake(true);
+              trace("chosen", "BabbleBot Lite took over automatically after 90s");
+              notify("BabbleBot Lite took over — Windows is not answering", "success");
+            } else {
+              trace("error", `auto handover did not start: ${r.error || "unknown"}`);
+              // Try again rather than sitting on a dead screen.
+              void runFailover();
+            }
+          })();
           return null;
         }
         return n - 1;
@@ -360,6 +456,22 @@ export default function App() {
       const fallback = settings.apiFallbackUrl || "";
       // One quick knock at each first: if either answers, there is nothing to
       // wait for and the wizard must not appear.
+      // Ask the network first. The configured addresses are a guess; discovery is
+      // an answer. This is what stops an IP that moved from looking like a bot
+      // that died.
+      const found = await discoverBot(lan, fallback);
+      if (found.found && found.url && found.url !== lan) {
+        setApiUrl(found.url);
+        // Quietly, because the alternative is a prompt in the middle of a bot
+        // outage, and the whole point of discovery is that nobody has to know
+        // the address. The badge below is what keeps it honest: it stays visible
+        // while the address in use is not the one that was saved.
+        if (found.via === "lan" || found.via === "tailscale") setFoundVia(found.via);
+        trace("chosen", `discovery found the bot via ${found.via} → ${found.url}`);
+      } else if (found.found) {
+        setFoundVia(found.via ?? null);
+      }
+
       const quick = await probeOnce(lan, fallback);
       setConn(quick);
       if (quick.status === "connected") {
@@ -398,6 +510,42 @@ export default function App() {
     try {
       const healthRes = await botFetch(apiUrl + "/api/health");
       if (!healthRes.ok) throw new Error("not ok");
+
+      // A 200 is not the same as a bot. The API answering while the Discord
+      // session is dead is exactly the half-alive state a controlled test has to
+      // be able to tell apart from "everything is fine": the machine is up, the
+      // port is open, and nobody is moderating. Read the body, not just the code.
+      let botOnline: boolean | null = null;
+      try {
+        const h = await healthRes.json();
+        botOnline = typeof h?.bot_online === "boolean" ? h.bot_online : null;
+      } catch {
+        botOnline = null;
+      }
+      if (botOnline === false) {
+        // The same judgement a failed probe makes, because it is the same
+        // situation: nobody is moderating. Raising the alarm here rather than only
+        // showing a red line is the difference between an operator noticing and
+        // nobody noticing until a member complains.
+        const halfAlive: ConnectionState = {
+          status: "unreachable",
+          network: "online",
+          results: [
+            {
+              kind: "lan",
+              url: apiUrl,
+              ok: false,
+              ms: 0,
+              error: "the API is answering but the bot is not connected to Discord",
+            },
+          ],
+        };
+        setConn(halfAlive);
+        setConnectionError(explain(halfAlive));
+        if (botIsDown(halfAlive) && !emergencyDeclined) setEmergencyOffer(true);
+        return;
+      }
+
       markConnected();
       setConnectionError("");
       const [msgRes, violRes, srvRes, statsRes] = await Promise.all([
@@ -531,6 +679,15 @@ export default function App() {
 
   const isAndre = userId === "264680643013771265";
   const [sleepMode, setSleepMode] = useState(false);
+  // Lite's own Discord connection, polled while Lite is in charge. Separate from
+  // `connected`, which is about Windows: this one says whether a server is
+  // actually being watched right now.
+  const [liteClient, setLiteClient] = useState<{
+    connected: boolean;
+    bot?: string;
+    guilds?: string[];
+    seen?: number;
+  } | null>(null);
   const [sleepSince, setSleepSince] = useState<string | null>(null);
   const [sleepMentions, setSleepMentions] = useState<import("./components/CatchUpBanner").AsleepMention[]>([]);
   const [showSleep, setShowSleep] = useState(false);
@@ -579,6 +736,34 @@ export default function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, [loadSleepState]);
   const [edWaits, setEdWaits] = useState<{ Mater?: number; "Royal Victoria"?: number; miu?: string }>({});
+  // Refresh Lite's copy from Windows in the background, from launch. The refresh
+  // that matters is the one that already happened before the outage started.
+  useEffect(() => {
+    if (!loggedIn || !settings.apiUrl) return;
+    void liteAutoSyncStart(settings.apiUrl, settings.apiFallbackUrl || undefined);
+  }, [loggedIn, settings.apiUrl, settings.apiFallbackUrl]);
+
+  // While Lite is in charge, ask it whether it is genuinely connected. A Lite
+  // that is running but not connected is the worst state to be in silently: the
+  // screen would look fine and the server would be unmoderated.
+  useEffect(() => {
+    if (!liteMode) {
+      setLiteClient(null);
+      return;
+    }
+    let alive = true;
+    const ask = async () => {
+      const st = await liteClientState();
+      if (alive) setLiteClient(st);
+    };
+    void ask();
+    const t = setInterval(ask, 5000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [liteMode]);
+
   // Sleep mode: shown before the Mac is closed. Posts to the bot so anything
   // missed overnight can be surfaced on wake.
   // (settings is declared above, next to the connection state, because the
@@ -1196,6 +1381,51 @@ export default function App() {
                   names the countdown, so nobody is surprised by a second bot
                   appearing.
                   Still never when this Mac has no network of its own. */}
+              {/* The alarm's own line: it says what the noise means and what
+                  stops it, because an alarm with no explanation gets muted at
+                  the system level and then protects nothing. */}
+              {emergencyOffer && !alarmAcknowledged && (
+                <div className="mt-3 rounded-xl border border-rose-500/50 bg-rose-500/10 p-3">
+                  <p className="text-sm text-rose-200 font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" /> Babblebot is not reachable — nobody is moderating
+                  </p>
+                  <p className="text-xs text-rose-100/80 mt-1">
+                    This alarm keeps sounding until you acknowledge it or the bot comes back.
+                    Acknowledging silences the sound; it does not start anything.
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        alarmStop();
+                        setAlarmAcknowledged(true);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-xs text-rose-100 hover:bg-rose-500/30"
+                    >
+                      Acknowledge — stop the noise
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const r = await liteCommand("start");
+                        if (r.running) {
+                          alarmStop();
+                          setAlarmAcknowledged(true);
+                          const url = await liteUrl();
+                          setApiUrl(url);
+                          setConnected(false);
+                          setLiteMode(true);
+                          await keepAwake(true);
+                          notify("BabbleBot Lite is running on this Mac", "success");
+                        } else {
+                          notify(r.error || "Could not start BabbleBot Lite", "error");
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-xs text-amber-100 hover:bg-amber-500/30"
+                    >
+                      Switch to BabbleBot Lite now
+                    </button>
+                  </div>
+                </div>
+              )}
               {emergencyCountdown !== null && emergencyOffer && (
                 <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
                   <p className="text-xs text-amber-100/80">
@@ -1658,6 +1888,50 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             Without this a stale subtree could survive a tab change and leave the
             server bar sitting over screens that have nothing to do with it. */}
         <div key={active}>
+        {/* Lite mode is a banner that never goes away while it is true, above
+            everything, on every screen. Not a toast and not a badge in a corner:
+            if this app is showing half a bot, the reason has to be the first
+            thing read on the screen, every time. */}
+        {liteMode && (
+          <div className="mb-4 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3">
+            <p className="text-sm text-amber-200 font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> BabbleBot Lite — Windows is not answering
+              <span className="ml-auto text-[10px] font-normal text-amber-300/70">
+                amber = emergency mode
+              </span>
+            </p>
+            <p className="text-xs mt-1">
+              {liteClient?.connected ? (
+                <span className="text-emerald-300 font-semibold">
+                  ● Connected to Discord as {liteClient.bot || "BabbleBot"}
+                  {liteClient.guilds?.length
+                    ? ` — watching ${liteClient.guilds.length} server${liteClient.guilds.length === 1 ? "" : "s"}`
+                    : ""}
+                  {typeof liteClient.seen === "number" && liteClient.seen > 0
+                    ? `, ${liteClient.seen} message${liteClient.seen === 1 ? "" : "s"} seen`
+                    : ""}
+                  .
+                </span>
+              ) : (
+                <span className="text-red-300 font-semibold">
+                  ● NOT connected to Discord
+                  {liteClient ? " — nothing is being watched" : " — asking Lite…"}
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-amber-100/80 mt-1">
+              Lite checks text only: invite links, banned phrases and troll watch. No image or video
+              checking, no music, no relay, no tickets, and nothing it sees is written to Windows.
+              Screens that need Windows say so instead of showing an empty list.
+            </p>
+            <button
+              onClick={() => void runFailover()}
+              className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700/60"
+            >
+              Try Windows again
+            </button>
+          </div>
+        )}
         {catchUp && (
           <div className="mb-4">
             <CatchUpBanner
@@ -1735,6 +2009,24 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                   }
                 >
                   {addressLabel[conn.via]}
+                </span>
+              )}
+              {/* Found, not typed. The app went looking for the bot because the
+                  saved address did not answer, and something answered. That is a
+                  fact the operator should not have to dig the trace log for — and
+                  the address is only in memory, so a restart puts it back. */}
+              {conn && conn.status === "connected" && foundVia && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-sky-500/15 text-sky-300"
+                  data-tip={
+                    "The app found the bot by itself on " +
+                    (foundVia === "lan" ? "your own network" : "Tailscale") +
+                    " — the address saved in Settings did not answer. Using " +
+                    conn.url +
+                    " for now; nothing has been overwritten."
+                  }
+                >
+                  Found on {foundVia === "lan" ? "LAN" : "Tailscale"}
                 </span>
               )}
             </div>
@@ -2154,6 +2446,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                   localStorage.setItem("sahara_tts", next ? "on" : "off");
                 }}
                 onOpenSetup={() => setShowSetup(true)}
+                conn={conn}
               />
             )}
           </motion.div>

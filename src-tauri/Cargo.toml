@@ -1,6 +1,6 @@
 [package]
 name = "sahara-dashboard"
-version = "0.12.51"
+version = "0.12.84"
 description = "Sahara Discord Bot Dashboard"
 authors = ["Andre Hoey"]
 edition = "2021"
@@ -25,3 +25,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+keyring = { version = "4.2.0", features = ["apple-native-keyring-store"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3.34"
+rusqlite = { version = "0.43.0", features = ["bundled"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-macos-permissions = "2.3.0"

@@ -15,14 +15,146 @@ import {
   Activity,
   ExternalLink,
   WifiOff,
+  KeyRound,
+  ChevronDown,
+  ChevronRight,
+  Radar,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
-import { looksLikeTailscale, networkState, type OfflineState } from "../lib/connection";
-import { pingBot } from "../lib/bot";
+import { looksLikeTailscale, networkState, type OfflineState, type ConnectionState } from "../lib/connection";
+import {
+  pingBot,
+  liteTokenStore,
+  liteTokenStatus,
+  liteTokenClear,
+  liteTokenSync,
+  liteRulesSync,
+  liteSyncState,
+  liteRulesSummary,
+  liteDbSnapshot,
+  liteDbStatus,
+  liteTickets,
+  liteTicketsMarkTransferred,
+  liteMergeReconcile,
+  type LiteTicket,
+} from "../lib/bot";
 import { trace, traceRead, traceWatch, traceClear, type TraceEvent } from "../lib/trace";
 import type { AppSettings } from "./SetupScreen";
 
-  function TracePanel() {
+  /**
+ * Refresh Lite's flag system from Windows.
+ *
+ * Shown in Settings, not in the outage screen, on purpose: the moment to press
+ * this is while Windows is HEALTHY. Once the power is out there is nothing left to
+ * sync from, and Lite is running on whatever snapshot it had. The age of that
+ * snapshot is the number that matters, so it is the number shown.
+ */
+function LiteRulesPanel({ apiUrl, fallbackUrl }: { apiUrl: string; fallbackUrl?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string>("");
+  const [syncedAt, setSyncedAt] = useState<string>("");
+  const [auto, setAuto] = useState<{ last_sync?: number; last_error?: string; interval_seconds?: number }>({});
+  const [rules, setRules] = useState<Awaited<ReturnType<typeof liteRulesSummary>>>({});
+
+  // Read the background timer's state so "last synced" is a fact, not a hope.
+  useEffect(() => {
+    let alive = true;
+    const ask = async () => {
+      const st = await liteSyncState();
+      if (alive) setAuto(st);
+      const rs = await liteRulesSummary();
+      if (alive) setRules(rs);
+    };
+    void ask();
+    const t = setInterval(ask, 30000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  const run = async () => {
+    setBusy(true);
+    setResult("");
+    const r = await liteRulesSync(apiUrl, fallbackUrl);
+    setBusy(false);
+    if (r.ok) {
+      setSyncedAt(new Date().toLocaleString());
+      // A count of zero is not a success worth reporting as one. If Windows has
+      // nothing stored, say that; if Lite could not read something it should have,
+      // say that too. The two look identical in a number and mean opposite things.
+      const warnings: string[] = (r as any).warnings || [];
+      setResult(
+        ((r as any).source === "live"
+          ? `Read live from ${r.served_by}. `
+          : `Synced ${Math.round((r.bytes || 0) / 1024 / 1024)} MB from ${r.served_by}. `) +
+          `${r.loaded?.servers ?? 0} servers, ${r.loaded?.channel_rules ?? 0} channel rules, ` +
+          `${r.loaded?.ticket_types ?? 0} ticket types.` +
+          (warnings.length ? `\n\n${warnings.join("\n")}` : "") +
+          // Which address served it, and why the others did not. A local address
+          // that has stopped working is a real fault with a real fix, and it is
+          // invisible unless it is named here.
+          ((r as any).addresses || [])
+            .filter(([u]: [string, string]) => !String(r.served_by || "").startsWith(u))
+            .map(([u, why]: [string, string]) => `\n${u}: ${why}`)
+            .join("")
+      );
+    } else {
+      setResult(`Could not sync: ${r.error || "no reason given"}`);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/40 p-3">
+      <p className="text-sm font-semibold text-slate-200">Lite&apos;s flag system</p>
+      <p className="text-xs text-slate-400 mt-1">
+        Lite uses a copy of the Windows rules taken at handover. Press this while Windows is
+        healthy so a stale copy can&apos;t flag messages Windows would have left alone.
+      </p>
+      <button
+        onClick={() => void run()}
+        disabled={busy}
+        className="mt-2 px-3 py-1.5 rounded-lg bg-emerald-600/80 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"
+      >
+        {busy ? "Syncing…" : "Sync flag system from Windows"}
+      </button>
+      {syncedAt && <p className="text-xs text-slate-500 mt-1">Last manual sync: {syncedAt}</p>}
+      <p className="text-xs mt-1">
+        {auto.last_sync ? (
+          <span className="text-slate-400">
+            Background refresh: every {Math.round((auto.interval_seconds || 1200) / 60)} min, last
+            worked {new Date(auto.last_sync).toLocaleTimeString()}
+          </span>
+        ) : (
+          <span className="text-slate-500">Background refresh: waiting for its first run</span>
+        )}
+        {auto.last_error && (
+          <span className="text-amber-300/90"> — last attempt failed: {auto.last_error}</span>
+        )}
+      </p>
+      {rules.channel_rules !== undefined && (
+        <p className="text-xs text-slate-500 mt-1">
+          Lite is enforcing: {rules.servers ?? 0} servers, {rules.channel_rules ?? 0} channel rules
+          {rules.by_preset
+            ? ` (${Object.entries(rules.by_preset)
+                .map(([k, v]) => `${v} ${k}`)
+                .join(", ")})`
+            : ""}
+          , {rules.ticket_types ?? 0} ticket types, profanity threshold{" "}
+          {rules.profanity_threshold ?? 2}
+          {rules.helpline ? ", helpline protected" : ""}.
+        </p>
+      )}
+      {result && (
+        <p className={`text-xs mt-1 ${result.startsWith("Could not") ? "text-red-300" : "text-emerald-300"}`}>
+          <span className="whitespace-pre-line">{result}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TracePanel() {
     const [events, setEvents] = useState<TraceEvent[]>(() => traceRead());
     useEffect(() => traceWatch(setEvents), []);
     return (
@@ -97,6 +229,8 @@ type Props = {
   ttsEnabled: boolean;
   onToggleTts: () => void;
   onOpenSetup: () => void;
+  /** Which road the app is on right now, for the connection card's one-liner. */
+  conn?: ConnectionState | null;
 };
 
 type UpdateState =
@@ -109,6 +243,250 @@ type UpdateState =
   | { status: "error"; message: string };
 
 const RELEASES = "https://github.com/Andrehoey505/sahara-dashboard/releases/latest";
+
+
+/**
+ * The emergency bot's token.
+ *
+ * Andre asked for a backup bot, and the hard constraint is that it shares
+ * Babblebot's token -- so this Mac has to hold that token in advance, because at
+ * 11am when the power is off there is nothing left to fetch it from.
+ *
+ * It goes into the macOS Keychain. The screen can store one and can say whether
+ * one is held; it can never display it again, because a token on screen ends up
+ * in a screenshot and a token in a settings file ends up in a backup.
+ */
+function LiteTokenPanel({ apiUrl, fallbackUrl }: { apiUrl: string; fallbackUrl: string }) {
+  const [present, setPresent] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [dbExists, setDbExists] = useState(false);
+  const [dbBytes, setDbBytes] = useState(0);
+  const [litePending, setLitePending] = useState<LiteTicket[]>([]);
+
+  useEffect(() => {
+    void liteTickets().then((all) => setLitePending(all.filter((t) => !t.transferred)));
+  }, []);
+
+  useEffect(() => {
+    void liteDbStatus().then((s) => {
+      setDbExists(!!s.exists);
+      setDbBytes(s.bytes || 0);
+    });
+  }, []);
+
+  useEffect(() => {
+    void liteTokenStatus().then((s) => {
+      setPresent(s.present);
+      // Show the real reason instead of a bare "not stored". A refused
+      // permission and an empty keychain are different problems.
+      if (!s.present && s.reason) setMsg(`Keychain says: ${s.reason} (service ${s.service || "?"})`);
+    });
+  }, []);
+
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    const r = await liteTokenStore(draft.trim());
+    setBusy(false);
+    if (r.ok) {
+      setDraft("");
+      setPresent(true);
+      setMsg("Saved to the Keychain. It cannot be read back — only replaced.");
+    } else {
+      setMsg(r.error || "Could not save it.");
+    }
+  };
+
+  return (
+    <Card
+      icon={KeyRound}
+      title="BabbleBot Lite token"
+      data-tip="The bot token the emergency bot needs"
+      blurb="Held in the macOS Keychain so the backup bot can start when the Windows machine is gone"
+      tone="text-amber-300"
+    >
+      <div className="flex items-center justify-between gap-3 py-2">
+        <span className="text-sm text-slate-200">
+          {present ? "A token is held on this Mac" : "No token held yet"}
+        </span>
+        <span className={"text-xs " + (present ? "text-emerald-300" : "text-rose-300")}>
+          {present ? "ready" : "backup bot cannot start"}
+        </span>
+      </div>
+
+      <p className="text-xs text-slate-400 mt-1">
+        This has to be done while the Windows machine is up, because there is nowhere else to get it
+        from later. Once saved it is never shown again.
+      </p>
+
+      <div className="flex gap-2 mt-3">
+        <input
+          type="password"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={present ? "Paste a new token to replace it" : "Paste the bot token"}
+          autoComplete="off"
+          spellCheck={false}
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-slate-900/70 border border-slate-700 text-xs text-slate-100 font-mono"
+        />
+        <button
+          onClick={() => void save()}
+          disabled={busy || draft.trim().length < 20}
+          className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-xs text-amber-100 hover:bg-amber-500/30 disabled:opacity-40"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        {!present && (
+          <button
+            onClick={async () => {
+              setBusy(true);
+              setMsg(null);
+              const r = await liteTokenSync();
+              setBusy(false);
+              if (r.ok) {
+                setPresent(true);
+                setMsg(r.message || "Synced.");
+              } else {
+                setMsg(r.error || "Nothing to sync.");
+              }
+            }}
+            disabled={busy}
+            className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-xs text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-40"
+            data-tip="Copy a token from another Keychain entry into this app's own"
+          >
+            Sync
+          </button>
+        )}
+        {present && (
+          <button
+            onClick={async () => {
+              await liteTokenClear();
+              setPresent(false);
+              setMsg("Removed from the Keychain.");
+            }}
+            className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60"
+          >
+            Forget
+          </button>
+        )}
+      </div>
+
+      {msg && <p className="text-xs text-slate-300 mt-2">{msg}</p>}
+
+      {/* Tickets Lite opened while Windows was away.
+          These exist nowhere else, so this is the one screen that has to be
+          unmissable and unlosable: it says how many are waiting, names them, and
+          only marks them transferred when Andre presses the button. */}
+      {litePending.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-amber-500/40">
+          <p className="text-sm text-amber-200 font-semibold">
+            {litePending.length} ticket{litePending.length === 1 ? "" : "s"} opened while Windows was down
+          </p>
+          <p className="text-xs text-amber-100/80 mt-1">
+            These are held on this Mac only. Windows does not know about them yet. They are not lost
+            — but they are not in the real database either until you hand them over.
+          </p>
+          <div className="mt-2 space-y-1">
+            {litePending.slice(0, 8).map((t) => (
+              <p key={t.id} className="text-[11px] text-slate-300 flex items-center gap-2">
+                <span className="px-1.5 py-0.5 rounded bg-slate-800/70 text-slate-400">{t.kind}</span>
+                <span className="truncate">{t.user_name}</span>
+                <span className="text-slate-500 truncate">{t.channel_name}</span>
+                <span className="text-slate-500 shrink-0">{new Date(t.opened_at).toLocaleString()}</span>
+              </p>
+            ))}
+          </div>
+          <button
+            onClick={async () => {
+              const ids = litePending.map((t) => t.id);
+              const r = await liteTicketsMarkTransferred(ids);
+              if (r.ok) {
+                setLitePending([]);
+                setMsg(`${r.marked} ticket${r.marked === 1 ? "" : "s"} marked as taken by Windows.`);
+              } else {
+                setMsg(r.error || "Could not mark them.");
+              }
+            }}
+            className="mt-2 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-xs text-amber-100 hover:bg-amber-500/30"
+          >
+            Hand these to Windows
+          </button>
+
+          {/* Checking is the honest half of handing over. The bot's API can read
+              a namespace but not write one, so this proves from Windows' own data
+              which records are already there and names the rest, instead of
+              claiming a merge that never happened. */}
+          <button
+            onClick={async () => {
+              setBusy(true);
+              const r = await liteMergeReconcile(apiUrl, fallbackUrl);
+              setBusy(false);
+              if (r.ok) {
+                const left = r.still_pending?.length || 0;
+                const handed = (r as any).handed_over ?? 0;
+                const handErr = (r as any).handover_error;
+                setMsg(
+                  `Checked against Windows: ${r.already_on_windows ?? 0} already there` +
+                    (handed ? `, ${handed} handed over` : "") +
+                    (handErr ? `\n${handErr}` : "") +
+                    (left
+                      ? `\n${left} still only on this Mac — ${r.still_pending
+                          ?.map((t) => `${t.kind} for ${t.user_name}`)
+                          .join(", ")}`
+                      : "\nNothing left behind.")
+                );
+              } else {
+                setMsg(r.error || "Could not check against Windows.");
+              }
+            }}
+            disabled={busy}
+            className="mt-2 ml-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700/60 disabled:opacity-40"
+          >
+            Check against Windows
+          </button>
+        </div>
+      )}
+
+      {/* The snapshot is what makes tickets and the troll list work in Lite at
+          all. It has to be taken while Windows is up, so it belongs next to the
+          token -- the two things that can only be captured in advance. */}
+      <div className="mt-4 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-slate-200">Copy of the Windows database</span>
+          <span className={"text-xs " + (dbExists ? "text-emerald-300" : "text-slate-500")}>
+            {dbExists ? `${(dbBytes / 1024 / 1024).toFixed(1)} MB held` : "not taken yet"}
+          </span>
+        </div>
+        <p className="text-xs text-slate-400 mt-1">
+          A read-only snapshot, taken while Windows is running. Lite uses it for tickets, the troll
+          list and channel rules. Anything that changes minute to minute — violations, mentions —
+          is not in it and never will be.
+        </p>
+        <button
+          onClick={async () => {
+            setBusy(true);
+            setMsg(null);
+            const r = await liteDbSnapshot(apiUrl, fallbackUrl);
+            setBusy(false);
+            if (r.ok) {
+              setDbExists(true);
+              setDbBytes(r.bytes || 0);
+              setMsg(`Copied ${((r.bytes || 0) / 1024 / 1024).toFixed(1)} MB just now.`);
+            } else {
+              setMsg(r.error || "Could not take the copy.");
+            }
+          }}
+          disabled={busy}
+          className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700/60 disabled:opacity-40"
+        >
+          {busy ? "Working…" : dbExists ? "Take a fresh copy" : "Take a copy now"}
+        </button>
+      </div>
+    </Card>
+  );
+}
 
 function Card({
   icon: Icon,
@@ -186,12 +564,32 @@ export default function SettingsScreen({
   ttsEnabled,
   onToggleTts,
   onOpenSetup,
+  conn,
 }: Props) {
   const [appVersion, setAppVersion] = useState("");
+  // The addresses are how you fix a connection, not something to read on a day
+  // when it is working. Two boxes and two Test buttons above the useful
+  // settings is clutter -- Andre's words: "it would just be ugly". So the card
+  // says which road it is on, and the boxes live behind one tap.
+  const [showAddresses, setShowAddresses] = useState(false);
   const [update, setUpdate] = useState<UpdateState>({ status: "idle" });
   const [pending, setPending] = useState<{ version: string; downloadAndInstall: (cb?: any) => Promise<void> } | null>(null);
   const [apiDraft, setApiDraft] = useState(apiUrl);
+  // Which address was just saved. The input already shows what was typed, so
+  // without this a successful save is indistinguishable from a save that did
+  // nothing at all -- which reads as "it won't save my local IP".
+  const [savedWhich, setSavedWhich] = useState<"api" | "fallback" | null>(null);
   const [fallbackDraft, setFallbackDraft] = useState(settings.apiFallbackUrl || "");
+
+  // A draft that drifts from the saved value is the other half of "it won't
+  // save": the box shows one address and the app uses another, forever.
+  useEffect(() => {
+    setApiDraft((d) => (d.trim() === apiUrl.trim() ? d : apiUrl));
+  }, [apiUrl]);
+  useEffect(() => {
+    const saved = settings.apiFallbackUrl || "";
+    setFallbackDraft((d) => (d.trim() === saved.trim() ? d : saved));
+  }, [settings.apiFallbackUrl]);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
   /** What this Mac's own network was when the last test ran. */
@@ -446,6 +844,57 @@ export default function SettingsScreen({
 
 
       <Card icon={Server} title="Babblebot connection" data-tip="Babblebot connection" blurb="Where the bot's API is listening" tone="text-sky-300">
+        {/* Which road the app is on, in one line. This is the whole card when
+            everything is working, because "which one is it using" is the only
+            question anyone asks while it is. */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-sm">
+            {conn?.status === "connected" ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span className="text-slate-200">Connected</span>
+                <span
+                  className={
+                    "text-[10px] px-1.5 py-0.5 rounded font-medium " +
+                    (conn.via === "lan"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-violet-500/15 text-violet-300")
+                  }
+                >
+                  {conn.via === "lan" ? "LAN" : "Tailscale"}
+                </span>
+              </>
+            ) : conn?.status === "probing" ? (
+              <>
+                <RefreshCw className="w-4 h-4 text-sky-300 animate-spin" />
+                <span className="text-slate-300">Looking for the bot…</span>
+              </>
+            ) : (
+              <>
+                <XCircle className="w-4 h-4 text-rose-400" />
+                <span className="text-rose-200">Not found</span>
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => setShowAddresses((v) => !v)}
+            className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5"
+            data-tip="The addresses the app tries, and where to change them"
+          >
+            {showAddresses ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            {showAddresses ? "Hide addresses" : "Addresses"}
+          </button>
+        </div>
+
+        {!showAddresses && (
+          <p className="mt-2 text-xs text-slate-500 flex items-start gap-1.5">
+            <Radar className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            Found by itself on your network, then by Tailscale. Nothing to set up unless it stops working.
+          </p>
+        )}
+
+        {showAddresses && (
+          <div className="mt-3">
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             value={apiDraft}
@@ -462,9 +911,15 @@ export default function SettingsScreen({
             {testing ? "Testing…" : "Test"}
           </button>
           <button
-            onClick={() => saveAddresses("api")}
+            onClick={() => {
+              saveAddresses("api");
+              setSavedWhich("api");
+              window.setTimeout(() => setSavedWhich(null), 2500);
+            }}
             className="px-3 py-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-sm text-indigo-200 hover:bg-indigo-500/30 transition-colors"
-           data-tip="Save these settings">Save</button>
+           data-tip="Save these settings">
+            {savedWhich === "api" ? "Saved" : "Save"}
+          </button>
         </div>
         <div className="mt-2 flex items-center gap-2 text-xs">
           {testResult === "ok" && (
@@ -574,6 +1029,8 @@ export default function SettingsScreen({
             )}
           </div>
         </div>
+          </div>
+        )}
         <button
           onClick={onOpenSetup}
           className="mt-4 text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5"
@@ -584,6 +1041,10 @@ export default function SettingsScreen({
       </Card>
 
       <TracePanel />
+
+      <LiteTokenPanel apiUrl={settings.apiUrl} fallbackUrl={settings.apiFallbackUrl || ""} />
+
+      <LiteRulesPanel apiUrl={settings.apiUrl} fallbackUrl={settings.apiFallbackUrl || ""} />
 
       <Card icon={Activity} title="Health features" data-tip="Health features" blurb="What appears in the Health section" tone="text-rose-300">
         <Row

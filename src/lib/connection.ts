@@ -111,13 +111,44 @@ export function addresses(lan: string, fallback?: string): { kind: AddressKind; 
 async function hit(url: string, timeoutMs: number): Promise<ProbeResult & { kind: AddressKind }> {
   const started = Date.now();
   const kind: AddressKind = "lan";
-  const r = await botFetch(url + "/api/health", { signal: AbortSignal.timeout(timeoutMs) });
+  // `unqueued`: a probe's timeout runs from its creation, so waiting behind the
+  // polling screens burns it and turns a 20ms LAN into "unreachable".
+  const r = await botFetch(url + "/api/health", {
+    signal: AbortSignal.timeout(timeoutMs),
+    unqueued: true,
+  });
   const ms = Date.now() - started;
   trace(
     "probe",
     `probe ${url} → ${r.status === 0 ? "no answer" : "HTTP " + r.status} in ${ms}ms`,
   );
-  if (r.ok) return { kind, url, ok: true, ms };
+  if (r.ok) {
+    // A 200 is not the same as a bot.
+    //
+    // `/api/health` is answered by the API process, which can be running while the
+    // Discord session is dead -- a half-alive state where the machine is up, the
+    // port is open, and nobody is moderating. Treating that as "connected" is the
+    // one thing a controlled test must never do, because the alarm would stay
+    // silent while the server was unprotected.
+    let botOnline: boolean | null = null;
+    try {
+      const h = await r.json();
+      botOnline = typeof h?.bot_online === "boolean" ? h.bot_online : null;
+    } catch {
+      botOnline = null;
+    }
+    if (botOnline === false) {
+      trace("probe", `probe ${url} → API up but bot_online false`);
+      return {
+        kind,
+        url,
+        ok: false,
+        ms,
+        error: "the API is answering but the bot is not connected to Discord",
+      };
+    }
+    return { kind, url, ok: true, ms };
+  }
   return {
     kind,
     url,
@@ -154,9 +185,25 @@ export async function probeOnce(lan: string, fallback?: string): Promise<Connect
   // won over a LAN address sitting right there. Whichever road answered first is
   // not the question. LAN first is: it is the same room, it cannot be metered,
   // and it does not depend on a VPN being up.
-  const probed = await Promise.all(
-    list.map(async (a) => ({ ...(await hit(a.url, QUICK_PROBE_MS)), kind: a.kind })),
-  );
+  // Knocked at ONE AFTER ANOTHER, not together.
+  //
+  // `botFetch` serialises through a single queue (see queue.ts), so a parallel
+  // Promise.all never actually raced: both probes entered the queue and ran
+  // sequentially anyway, while each still carried its own 3-second timeout
+  // counted from when it was created. The LAN probe then sat behind whatever the
+  // screens had queued, and by the time its turn came its timeout had already
+  // expired -- reported as "local network unreachable" while a plain curl on the
+  // same machine answered in 20ms. Tailscale, asked second, then got the free
+  // queue and won.
+  //
+  // Asking in order costs one timeout in the worst case and is honest: LAN is
+  // tried first, with its full timeout, on a queue that is empty of it.
+  const probed: Array<ProbeResult & { kind: AddressKind }> = [];
+  for (const a of list) {
+    probed.push({ ...(await hit(a.url, QUICK_PROBE_MS)), kind: a.kind });
+    // A local answer ends the search: it is the road we want.
+    if (probed[probed.length - 1].ok) break;
+  }
   const results = list.map((a) => probed.find((r) => r.kind === a.kind && r.url === a.url)!);
 
   // First address that answered, in the order the list is in -- which is LAN,

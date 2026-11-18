@@ -17,6 +17,70 @@
   [data-theme="dark"] body { @apply bg-slate-950 text-slate-100; }
   [data-theme="midnight"] body { @apply bg-indigo-950 text-indigo-100; }
 
+  /* ===========================================================
+     LITE THEME
+     ===========================================================
+     BabbleBot Lite gets a look of its own, and not for decoration: the single
+     worst failure mode of an emergency mode is a person believing the normal bot
+     is running. A different skin is a fact you can see from across the room.
+
+     Amber and near-black, like hazard tape. It is deliberately not pretty and
+     deliberately not restful: this screen means something is wrong and the Mac is
+     holding the line until Windows comes back.
+
+     Scoped to [data-theme="lite"] so it can be swapped in and out by the same
+     theme mechanism everything else already uses. */
+  [data-theme="lite"] body {
+    background-color: #120c02;
+    color: #fde9c8;
+  }
+
+  [data-theme="lite"] .glass {
+    background: rgba(41, 25, 3, 0.78);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+
+  /* The app shell's own surface, so a screen that forgets to be amber is not a
+     white hole in a dark room. */
+  [data-theme="lite"] .bg-slate-950,
+  [data-theme="lite"] .bg-slate-950\/80,
+  [data-theme="lite"] .bg-slate-950\/95 {
+    background-color: #120c02 !important;
+  }
+
+  [data-theme="lite"] .bg-slate-900,
+  [data-theme="lite"] .bg-slate-900\/80 {
+    background-color: #1c1204 !important;
+  }
+
+  [data-theme="lite"] .bg-slate-800\/40,
+  [data-theme="lite"] .bg-slate-800\/60,
+  [data-theme="lite"] .bg-slate-800\/70 {
+    background-color: rgba(69, 44, 6, 0.55) !important;
+  }
+
+  [data-theme="lite"] .border-slate-700,
+  [data-theme="lite"] .border-slate-800 {
+    border-color: rgba(245, 158, 11, 0.28) !important;
+  }
+
+  /* Text: warm, not the cold slate the normal app uses. */
+  [data-theme="lite"] .text-slate-100,
+  [data-theme="lite"] .text-slate-200 { color: #fde9c8 !important; }
+  [data-theme="lite"] .text-slate-300 { color: #f3d9a8 !important; }
+  [data-theme="lite"] .text-slate-400 { color: #d9b978 !important; }
+  [data-theme="lite"] .text-slate-500 { color: #b99a5c !important; }
+
+  /* Indigo is the normal app's accent. In Lite it must never appear, or the
+     emergency mode looks like the ordinary one. */
+  [data-theme="lite"] .text-indigo-200,
+  [data-theme="lite"] .text-indigo-300 { color: #fcd34d !important; }
+  [data-theme="lite"] .bg-indigo-500\/20,
+  [data-theme="lite"] .bg-indigo-500\/30 { background-color: rgba(245, 158, 11, 0.18) !important; }
+  [data-theme="lite"] .border-indigo-500\/40 { border-color: rgba(245, 158, 11, 0.45) !important; }
+  [data-theme="lite"] .from-indigo-500 { --tw-gradient-from: #b45309 !important; }
+  [data-theme="lite"] .to-violet-600 { --tw-gradient-to: #78350f !important; }
+
   [data-theme="midnight"] .glass {
     background: rgba(30, 27, 75, 0.65);
     border-color: rgba(129, 140, 248, 0.18);
