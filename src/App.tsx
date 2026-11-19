@@ -59,6 +59,19 @@ import { liteCommand, liteUrl, keepAwake, liteClientState, liteAutoSyncStart, li
  * cancel; short enough that an outage does not mean standing around.
  */
 const HANDOVER_SECONDS = 90;
+
+/**
+ * How long after a launch the app will not declare an outage.
+ *
+ * A relaunch is not an outage. On an update the app comes back while Windows is
+ * still busy restarting, and the first few probes fail for reasons that have
+ * nothing to do with the bot being gone. Without this the app sounded the alarm
+ * and started the 90-second handover countdown on every single update -- taking
+ * over with BabbleBot Lite on the strength of a few seconds of silence.
+ *
+ * This is a delay, not a verdict: past it, everything behaves exactly as before.
+ */
+const LAUNCH_GRACE_MS = 120_000;
 import { probeOnce, waitForBot, explain, addressLabel, botIsDown, type ConnectionState } from "./lib/connection";
 import MentionsScreen from "./components/MentionsScreen";
 import MembersScreen from "./components/MembersScreen";
@@ -205,13 +218,41 @@ export default function App() {
   const [everConnected, setEverConnected] = useState<boolean>(
     () => localStorage.getItem("sahara_ever_connected") === "1",
   );
+  /**
+   * When the bot was last confirmed reachable, across launches.
+   *
+   * `everConnected` above answers "has this app ever worked"; this answers "was
+   * it working a moment ago", which is the question a launch needs. The bot can
+   * be down when the app starts, and that is exactly when the app must not
+   * mistake its own restart for the bot dying.
+   */
+  const markBotSeen = useCallback(() => {
+    try {
+      localStorage.setItem("sahara_last_bot_seen", String(Date.now()));
+    } catch {
+      // A browser that refuses storage is no reason to stop working.
+    }
+  }, []);
+  /** True while the app is still too new to tell an outage from a relaunch. */
+  const withinLaunchGrace = useCallback(() => {
+    let last = 0;
+    try {
+      last = Number(localStorage.getItem("sahara_last_bot_seen") || 0);
+    } catch {
+      last = 0;
+    }
+    if (!last) return false; // never seen it: a real first run, decide as before
+    return Date.now() - last < LAUNCH_GRACE_MS;
+  }, []);
+
   const markConnected = useCallback(() => {
     setConnected(true);
+    markBotSeen();
     setEverConnected((was) => {
       if (!was) localStorage.setItem("sahara_ever_connected", "1");
       return true;
     });
-  }, []);
+  }, [markBotSeen]);
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState("");
   /**
@@ -510,6 +551,13 @@ export default function App() {
 
   const runFailover = useCallback(async (force = false) => {
     if (failoverInFlight.current) return;
+    // A launch is not an outage. If the bot was answering a moment ago, this
+    // failure is the app's own restart talking -- report it, but do not raise
+    // the alarm or start the handover countdown on it.
+    if (!force && withinLaunchGrace()) {
+      trace("probe", "still inside the launch grace window — not treating this as an outage");
+      return;
+    }
     // A deliberate "Try again" is a new attempt, so it is allowed through the
     // once-per-outage guard. Without this, the one button on the outage screen
     // did nothing at all: the guard saw that a probe had already run and
@@ -708,12 +756,16 @@ export default function App() {
       // the patient probe is. Letting it rewrite the error line every five
       // seconds put "Cannot reach bot API at ..." on a screen that had already
       // stopped pretending to try.
+      // A relaunch is not an outage: while the grace window is open, a failed
+      // poll only reports, it does not decide.
+      const grace = withinLaunchGrace();
       if (conn?.status === "unreachable") {
         // ...but it is still the most frequent proof that the bot is gone, and
         // the offer must exist even if the patient probe never got to run.
-        if (!emergencyDeclined) setEmergencyOffer(true);
+        if (!emergencyDeclined && !grace) setEmergencyOffer(true);
         return;
       }
+      if (grace) return;
       // Once per outage, not once every five seconds. Six patient probes of two
       // addresses, each up to two minutes, fired every poll would mean the
       // countdown never gets to finish and the screen never settles. The
