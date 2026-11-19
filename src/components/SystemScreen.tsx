@@ -380,13 +380,40 @@ export default function SystemScreen({ apiUrl, notify }: Props) {
               sub={
                 hottest
                   ? hottest.label
-                  : "no sensor readings — needs LibreHardwareMonitor on that machine"
+                  : "no sensor readings — Windows gives none until LibreHardwareMonitor is running on that machine, then reopen this screen"
               }
               values={series("temp")}
               tone={(hottest?.celsius ?? 0) > 85 ? "text-rose-300" : "text-amber-300"}
               stale={stale}
             />
           </div>
+
+          {(info?.temps?.length ?? 0) > 0 && (
+            <div className="glass rounded-xl p-4">
+              <p className="text-[11px] text-slate-500 mb-2">
+                Every reading
+                {info?.temps && info.temps.length > 1 ? " — the hottest is the one above" : ""}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(info?.temps ?? [])
+                  .slice()
+                  .sort((a, b) => b.celsius - a.celsius)
+                  .map((t, i) => (
+                    <span
+                      key={i}
+                      className={
+                        "text-xs px-2 py-1 rounded-lg " +
+                        (t.celsius > 85
+                          ? "bg-rose-500/15 text-rose-300"
+                          : "bg-slate-700/40 text-slate-300")
+                      }
+                    >
+                      {t.label} · {t.celsius.toFixed(0)}°C
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div className="glass rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
