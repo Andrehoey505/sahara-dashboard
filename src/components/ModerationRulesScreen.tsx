@@ -46,9 +46,13 @@ type ChannelRule = {
   links?: string | null;
   profanity?: string | null;
   spam?: string | null;
-  // nsfw_text is deliberately absent: the bot stores it but has no detector behind
-  // it, and a switch that saves a value nothing reads is a lie told by a settings
-  // screen. It goes back on the day there is something for it to switch.
+  // nsfw_text is here and honest. The bot stores it and nothing reads it yet --
+  // there is no sexual-language detector in the bot. Hiding the switch was the
+  // wrong call: it made the decision invisible instead of making it, and a
+  // setting you cannot see is one nobody ever gets round to. It is shown, saved,
+  // and labelled as not doing anything yet (see PENDING in SWITCHES), so what it
+  // should do is a question Andre can answer rather than one he never hears.
+  nsfw_text?: string | null;
   nsfw_images?: string | null;
   nsfw_videos?: string | null;
   sensitivity?: string | null;
@@ -116,6 +120,8 @@ const SWITCHES: {
   key: keyof ChannelRule;
   label: string;
   help: string;
+  /** Saved and sent, but nothing on the bot reads it yet. Said, not hidden. */
+  pending?: boolean;
   options: { value: string; label: string }[];
 }[] = [
   {
@@ -146,6 +152,19 @@ const SWITCHES: {
       { value: "off", label: "Not checked" },
       { value: "flag", label: "Flag for review" },
       { value: "delete", label: "Delete" },
+    ],
+  },
+  {
+    key: "nsfw_text",
+    label: "NSFW text",
+    help:
+      "Sexual language in messages. The bot saves this but nothing reads it yet — " +
+      "there is no sexual-language detector behind it, so choosing anything here " +
+      "changes nothing until one exists.",
+    pending: true,
+    options: [
+      { value: "off", label: "Not checked" },
+      { value: "flag", label: "Flag for review" },
     ],
   },
   {
@@ -187,6 +206,7 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "allow",
     profanity: "off",
     spam: "off",
+    nsfw_text: "off",
     nsfw_images: "off",
     nsfw_videos: "off",
     sensitivity: "normal",
@@ -204,6 +224,7 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "allow",
     profanity: "off",
     spam: "flag",
+    nsfw_text: "off",
     nsfw_images: "off",
     nsfw_videos: "off",
     sensitivity: "normal",
@@ -212,6 +233,7 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "allow",
     profanity: "off",
     spam: "flag",
+    nsfw_text: "flag",
     nsfw_images: "spoiler",
     nsfw_videos: "spoiler",
     sensitivity: "normal",
@@ -220,6 +242,7 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "flag",
     profanity: "flag",
     spam: "flag",
+    nsfw_text: "flag",
     nsfw_images: "flag",
     nsfw_videos: "flag",
     sensitivity: "normal",
@@ -228,6 +251,7 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
     links: "flag",
     profanity: "always",
     spam: "delete",
+    nsfw_text: "flag",
     nsfw_images: "flag",
     nsfw_videos: "flag",
     sensitivity: "high",
@@ -631,12 +655,21 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
                                 ))}
                               </select>
                               {changed && <span className="text-[10px] text-amber-400/80">was {stock}</span>}
+                              {sw.pending && (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 border border-slate-600/60"
+                                  data-tip={sw.help}
+                                >
+                                  saved, not enforced yet
+                                </span>
+                              )}
                             </div>
                           );
                         })}
                         <p className="text-[11px] text-slate-600 pt-1">
-                          NSFW text is not checked — the bot has no detector for it yet, so there is
-                          no switch for it here.
+                          NSFW text is shown so the setting exists, but nothing on the bot reads it
+                          yet — there is no sexual-language detector behind it. It is saved either
+                          way, so whatever you pick here is already there when one arrives.
                         </p>
                       </div>
                     </motion.div>
