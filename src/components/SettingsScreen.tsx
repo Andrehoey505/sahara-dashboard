@@ -133,6 +133,17 @@ function LiteRulesPanel({ apiUrl, fallbackUrl }: { apiUrl: string; fallbackUrl?:
           <span className="text-amber-300/90"> — last attempt failed: {auto.last_error}</span>
         )}
       </p>
+      {/*
+        A last-sync time that came off the disk is this run's memory being empty,
+        not a fresh refresh. Saying "worked 3 minutes ago" over a copy taken
+        yesterday is the one way this panel could be confidently wrong.
+      */}
+      {(auto as { from_disk?: boolean }).from_disk && (
+        <p className="text-xs text-slate-500 mt-1">
+          That time is from the saved copy, not a refresh this session — Lite has not reached
+          Windows since it started.
+        </p>
+      )}
       {rules.channel_rules !== undefined && (
         <p className="text-xs text-slate-500 mt-1">
           Lite is enforcing: {rules.servers ?? 0} servers, {rules.channel_rules ?? 0} channel rules

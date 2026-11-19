@@ -1072,6 +1072,10 @@ impl LiveRules {
     }
 }
 
+/// Kept for the tests below, which ask the plain question: did the rules arrive.
+/// The caller in production uses the explained form, because when the rules do
+/// NOT arrive the reason is what a person needs to see.
+#[cfg(test)]
 async fn fetch_live_rules(client: &reqwest::Client, urls: &[String]) -> Option<(String, LiveRules)> {
     let (hit, _why) = fetch_live_rules_explained(client, urls).await;
     hit
@@ -1491,6 +1495,18 @@ pub async fn lite_merge_reconcile(
         "still_pending": still_pending,
         "checked_at": now_ms(),
     })
+}
+
+/// What Lite is running with, for the screen.
+#[tauri::command]
+pub fn lite_rules_summary() -> serde_json::Value {
+    rules_summary()
+}
+
+/// When Lite last refreshed, for the screen.
+#[tauri::command]
+pub fn lite_sync_state() -> serde_json::Value {
+    sync_state()
 }
 
 /// What Lite is actually running with, so a stale copy is visible rather than

@@ -5,8 +5,6 @@ mod discovery;
 mod lite_rules;
 mod lite_server;
 
-use tauri::Manager;
-
 #[derive(Serialize)]
 struct BotStatus {
     pid: Option<u32>,
@@ -946,6 +944,11 @@ pub fn run() {
             lite_server::lite_tickets,
             lite_server::lite_tickets_mark_transferred,
             lite_server::lite_verify_message,
+            // What Lite is actually enforcing, and when it last refreshed. Built
+            // and never called until now: the two questions the Lite screen most
+            // needs answered were the two it had no way to ask.
+            lite_server::lite_rules_summary,
+            lite_server::lite_sync_state,
             read_mod_log,
             bot_status,
             open_external,
