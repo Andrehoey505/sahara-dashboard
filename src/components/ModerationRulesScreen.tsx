@@ -195,10 +195,15 @@ const PRESET_DEFAULTS: Record<Preset, Partial<ChannelRule>> = {
   // nothing at all, while Quiet keeps the record so a moderator can review it
   // afterwards. The difference from Spoiler is that nothing here is a rule
   // somebody could break -- spoilered or not is fine.
+  //
+  // Spam stays on, and it must stay on: this table has to match the bot's
+  // PRESET_DEFAULTS exactly, because the bot refuses a switch value it does not
+  // recognise. Quiet with spam off was also the wrong idea -- spam is not
+  // content, and a channel being flooded with nobody told is absent, not quiet.
   quiet: {
     links: "allow",
     profanity: "off",
-    spam: "off",
+    spam: "flag",
     nsfw_images: "off",
     nsfw_videos: "off",
     sensitivity: "normal",
@@ -379,7 +384,17 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
           setRules(byId);
         }
       } else {
-        notify(data.error || `That did not save (${res.status})`, "error");
+        // Say which channel it was about. "Unknown preset 'quiet'" on its own is
+        // a message about a rule, not about the thing the operator pressed -- and
+        // this is exactly the failure that went unnoticed for weeks: the app
+        // offered Quiet, the bot refused it, and the refusal named no channel.
+        const refused = data.error || `That did not save (${res.status})`;
+        notify(
+          payload.rules.length === 1
+            ? `Could not save this channel — ${refused}`
+            : `Could not save the rules — ${refused}`,
+          "error",
+        );
       }
     } catch {
       notify("Connection failed — is the bot running?", "error");
