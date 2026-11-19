@@ -151,7 +151,6 @@ export const screenArea: Record<string, AreaKey> = {
   trolls: "moderation",
   audit: "moderation",
   music: "media",
-  spotify: "media",
   settings: "settings",
 };
 

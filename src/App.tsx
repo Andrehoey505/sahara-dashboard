@@ -7,7 +7,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Music,
-  Music2,
   Trophy,
   Smile,
   FileText,
@@ -70,7 +69,6 @@ import LockScreen from "./components/LockScreen";
 import MusicScreen from "./components/MusicScreen";
 import TrollWatch from "./components/TrollWatch";
 import CatchUpBanner from "./components/CatchUpBanner";
-import SpotifyScreen from "./components/SpotifyScreen";
 import ActivitiesScreen from "./components/ActivitiesScreen";
 import ReactionRoles from "./components/ReactionRoles";
 import TicketScreen from "./components/TicketScreen";
@@ -86,7 +84,6 @@ import SystemScreen from "./components/SystemScreen";
 import ConfigScreen from "./components/ConfigScreen";
 import MessageMedia, { type Attachment, type Embed } from "./components/MessageMedia";
 import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers";
-import { handleCallback, loadToken } from "./lib/spotify";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
 import { formatDateTime, formatShort, formatClock, formatTitle } from "./lib/time";
 import { botFetch } from "./lib/bot";
@@ -138,8 +135,6 @@ const SERVER_SCOPED = [
 ];
 
 export default function App() {
-  // Finish the Spotify handshake if we came back from the authorise screen.
-  const [spotifyReady, setSpotifyReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
@@ -905,35 +900,9 @@ export default function App() {
     primeVoices();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      let spotifyError = "";
-      try {
-        if (window.location.search.includes("code=")) {
-          const current = loadSettings();
-          if (!current.spotifyClientId) {
-            spotifyError = "Spotify returned a code, but no Client ID is saved.";
-          } else {
-            await handleCallback(current.spotifyClientId, current.spotifyRedirectUri);
-            // Land on the Spotify screen so the result is visible.
-            setActive("spotify");
-          }
-        }
-      } catch (e: any) {
-        // Surface it rather than only logging — this is the one place a silent
-        // failure leaves the user staring at a screen that never changes.
-        spotifyError = e?.message || "Spotify connection failed";
-        console.warn("Spotify callback failed", e);
-      } finally {
-        if (spotifyError) {
-          try {
-            sessionStorage.setItem("sahara_spotify_error", spotifyError);
-          } catch {}
-        }
-        setSpotifyReady(true);
-      }
-    })();
-  }, []);
+  // The Spotify player used to hold the whole app behind a "spotifyReady" gate
+  // while it finished an OAuth handshake. The player is gone (the bot's own music
+  // commands cover it), so nothing may block the first paint any more.
   const [showSetup, setShowSetup] = useState(false);
   /**
    * Set when someone stuck on the setup screen asks for a later version.
@@ -1410,10 +1379,6 @@ export default function App() {
   );
   const filteredViolations = violations.filter((v) => violationFilter === "all" || v.status === violationFilter);
 
-  if (!spotifyReady) {
-    return <div className="min-h-screen bg-slate-950" />;
-  }
-
   if (locked) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -1888,7 +1853,6 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
       group: "Media",
       items: [
         { id: "music", label: "Music", icon: Music },
-        { id: "spotify", label: "Spotify", icon: Music2 },
       ],
     },
     {
@@ -2768,7 +2732,6 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
             {active === "database" && <DatabaseScreen apiUrl={apiUrl} notify={notify} />}
             {active === "storage" && <StorageScreen apiUrl={apiUrl} notify={notify} />}
             {active === "system" && <SystemScreen apiUrl={apiUrl} notify={notify} />}
-            {active === "spotify" && <SpotifyScreen settings={settings} notify={notify} />}
             {active === "activities" && <ActivitiesScreen apiUrl={apiUrl} notify={notify} />}
             {active === "reactionroles" && (
               <ReactionRoles

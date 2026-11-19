@@ -17,7 +17,6 @@ export const SCREENS = [
   "trolls",
   "audit",
   "music",
-  "spotify",
   "activities",
   "migraine",
   "armcare",

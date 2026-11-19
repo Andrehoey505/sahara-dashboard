@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Server,
-  Music,
   Volume2,
   Settings2,
   RefreshCw,
@@ -1113,21 +1112,6 @@ export default function SettingsScreen({
             </button>
           ))}
         </div>
-      </Card>
-
-      <Card icon={Music} title="Spotify" data-tip="Spotify" blurb="Optional — control your own music here" tone="text-emerald-300">
-        <Row label="Client ID" hint={settings.spotifyClientId ? "Saved" : "Not set"}>
-          <span className="text-xs font-mono text-slate-500">
-            {settings.spotifyClientId ? settings.spotifyClientId.slice(0, 8) + "…" : "—"}
-          </span>
-        </Row>
-        <button
-          onClick={onOpenSetup}
-          className="mt-3 text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5"
-        
-            data-tip="Change the Spotify credentials">
-          <Settings2 className="w-3.5 h-3.5" /> Change Spotify credentials
-        </button>
       </Card>
 
       <Card icon={Bell} title="About" data-tip="About" tone="text-slate-300">

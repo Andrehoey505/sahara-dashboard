@@ -2,15 +2,12 @@ import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Server,
-  Eye,
-  EyeOff,
   CheckCircle2,
   XCircle,
   Plug,
   X,
   ChevronLeft,
   ChevronRight,
-  Music,
   Volume2,
   Sparkles,
   ArrowRight,
@@ -29,9 +26,6 @@ export type AppSettings = {
    * and it is the lifeline on the day the LAN is gone.
    */
   apiFallbackUrl?: string;
-  spotifyClientId: string;
-  spotifyClientSecret: string;
-  spotifyRedirectUri: string;
   ttsEdDrop: boolean;
   edWaitsEnabled: boolean;
   ttsNewMember: boolean;
@@ -42,9 +36,6 @@ export type AppSettings = {
 export const DEFAULT_SETTINGS: AppSettings = {
   apiUrl: "http://192.168.1.128:8080",
   apiFallbackUrl: "",
-  spotifyClientId: "",
-  spotifyClientSecret: "",
-  spotifyRedirectUri: "http://127.0.0.1:5173/callback",
   ttsEdDrop: true,
   edWaitsEnabled: true,
   ttsNewMember: false,
@@ -79,12 +70,11 @@ type Props = {
   firstRun?: boolean;
 };
 
-type StepId = "welcome" | "bot" | "spotify" | "voice" | "about" | "done";
+type StepId = "welcome" | "bot" | "voice" | "about" | "done";
 
 const STEPS: { id: StepId; title: string; blurb: string; icon: typeof Server }[] = [
   { id: "welcome", title: "Welcome", blurb: "Two minutes to get Sahara talking to Babblebot", icon: Sparkles },
   { id: "bot", title: "Babblebot", blurb: "Where the bot's API is listening", icon: Server },
-  { id: "spotify", title: "Spotify", blurb: "Optional — control your own music here", icon: Music },
   { id: "voice", title: "Announcements", blurb: "Which spoken alerts you actually want", icon: Volume2 },
   { id: "about", title: "About", blurb: "Version and updates", icon: RefreshCw },
   { id: "done", title: "Ready", blurb: "You're set up", icon: CheckCircle2 },
@@ -97,7 +87,6 @@ const label = "block text-sm font-medium text-slate-300 mb-2";
 export default function SetupScreen({ initial, onSave, onClose, firstRun = false }: Props) {
   const [draft, setDraft] = useState<AppSettings>(initial);
   const [stepIndex, setStepIndex] = useState(firstRun ? 0 : 1);
-  const [showSecret, setShowSecret] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
   const [appVersion, setAppVersion] = useState("");
@@ -351,78 +340,6 @@ export default function SetupScreen({ initial, onSave, onClose, firstRun = false
                       <XCircle className="w-4 h-4" /> Couldn&apos;t reach that address
                     </p>
                   )}
-                </div>
-              )}
-
-              {step.id === "spotify" && (
-                <div className="space-y-4">
-                  <p className="text-sm text-slate-400 leading-relaxed max-w-[65ch]">
-                    Optional. Create an app at{" "}
-                    <a
-                      href="https://developer.spotify.com/dashboard"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2"
-                    >
-                      developer.spotify.com
-                    </a>{" "}
-                    and paste the credentials here. Needs an active Premium account.
-                  </p>
-
-                  <div>
-                    <label htmlFor="spClientId" className={label}>
-                      Client ID
-                    </label>
-                    <input
-                      id="spClientId"
-                      value={draft.spotifyClientId}
-                      onChange={(e) => set("spotifyClientId", e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                      className={field}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="spSecret" className={label}>
-                      Client secret
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="spSecret"
-                        type={showSecret ? "text" : "password"}
-                        value={draft.spotifyClientSecret}
-                        onChange={(e) => set("spotifyClientSecret", e.target.value)}
-                        autoComplete="off"
-                        spellCheck={false}
-                        className={field + " pr-11"}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSecret((v) => !v)}
-                        aria-label={showSecret ? "Hide client secret" : "Show client secret"}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 transition-colors"
-                       data-tip="Show or hide what you typed">
-                        {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label htmlFor="spRedirect" className={label}>
-                      Redirect URI
-                    </label>
-                    <input
-                      id="spRedirect"
-                      value={draft.spotifyRedirectUri}
-                      onChange={(e) => set("spotifyRedirectUri", e.target.value)}
-                      spellCheck={false}
-                      className={field}
-                    />
-                    <p className="text-xs text-slate-500 mt-2 max-w-[65ch]">
-                      Must match exactly what you entered in the Spotify dashboard.
-                    </p>
-                  </div>
                 </div>
               )}
 
