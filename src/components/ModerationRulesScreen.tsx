@@ -80,7 +80,7 @@ const PRESETS: {
     icon: EyeOff,
     tone: "text-slate-400",
     explain:
-      "The bot ignores this channel completely. Nothing is checked, nothing is flagged, nothing is deleted.",
+      "The bot ignores this channel completely. Nothing is checked and nothing is flagged.",
   },
   {
     id: "quiet",
@@ -96,7 +96,7 @@ const PRESETS: {
     icon: Eye,
     tone: "text-sky-300",
     explain:
-      "NSFW content is allowed here, but it must be spoilered. Unspoilered images and videos are flagged for review — nothing is deleted automatically.",
+      "NSFW content is allowed here, but it must be spoilered. Unspoilered images and videos are flagged for a moderator — nothing is deleted automatically.",
   },
   {
     id: "normal",
@@ -131,7 +131,7 @@ const SWITCHES: {
     options: [
       { value: "allow", label: "Allowed" },
       { value: "flag", label: "Flag for review" },
-      { value: "delete", label: "Delete" },
+      { value: "delete", label: "Flag as urgent" },
     ],
   },
   {
@@ -151,7 +151,7 @@ const SWITCHES: {
     options: [
       { value: "off", label: "Not checked" },
       { value: "flag", label: "Flag for review" },
-      { value: "delete", label: "Delete" },
+      { value: "delete", label: "Flag as urgent" },
     ],
   },
   {
@@ -175,7 +175,7 @@ const SWITCHES: {
       { value: "off", label: "Allowed, not checked" },
       { value: "spoiler", label: "Allowed if spoilered" },
       { value: "flag", label: "Flag for review" },
-      { value: "delete", label: "Delete" },
+      { value: "delete", label: "Flag as urgent" },
     ],
   },
   {
@@ -439,6 +439,16 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
 
   return (
     <div className="space-y-4">
+      {/* The single rule that governs every switch below it. It used to be
+          untrue: seven violation types deleted with nobody there. Nothing
+          deletes on its own now, so the screen can say so. */}
+      <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3">
+        <p className="text-xs text-indigo-200">
+          <span className="font-semibold">Nothing is deleted without a moderator.</span>{" "}
+          Every rule here decides what gets <em>flagged</em>. The bot never acts on its
+          own — a moderator approves, deletes or dismisses each one in the flag queue.
+        </p>
+      </div>
       <div className="flex items-center gap-3 flex-wrap">
         <Shield className="w-5 h-5 text-indigo-300" />
         <h2 className="text-lg font-semibold">Moderation Rules</h2>
@@ -620,8 +630,8 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
                           </div>
                           <p className="text-[11px] text-slate-500 mt-1.5">
                             An age-restricted channel is one where NSFW is allowed, so nothing is
-                            flagged or deleted for being NSFW here. Discord's own flag reads false on
-                            every channel in every server, so set it here if it matters.
+                            flagged for being NSFW here. Discord's own flag reads false on every
+                            channel in every server, so set it here if it matters.
                           </p>
                         </div>
 

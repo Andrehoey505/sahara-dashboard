@@ -1294,6 +1294,59 @@ export default function App() {
   // One shared formatter, so a moment reads the same on every screen.
   const fmtTime = (ts: string) => formatDateTime(ts) || ts;
 
+  /**
+   * Carry out a moderator's decision on a flag.
+   *
+   * `delete` and the member actions go to the bot's HITL route, which records the
+   * decision the same way the bot's own poller reads it -- so a decision made
+   * here and one made anywhere else take the identical path, and nothing acts
+   * outside that poller.
+   *
+   * Approve/Deny stay as they were: they are the moderator's note on the flag,
+   * and they still record it. The difference now is that "delete the message"
+   * is a real button that really deletes, rather than a note saying it should.
+   */
+  const decideFlag = async (msg: any, action: string) => {
+    if (!msg?.hitl_id) {
+      notify("That flag has no decision id — reload and try again", "error");
+      return;
+    }
+    if (action === "delete_message" && !window.confirm("Delete the flagged message? That cannot be undone.")) return;
+    if ((action === "ban" || action === "kick") && !window.confirm(`${action === "ban" ? "Ban" : "Kick"} ${msg.user}? This takes effect immediately.`)) return;
+    try {
+      const res = await botFetch(apiUrl + "/api/hitl/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_id: msg.hitl_id,
+          action,
+          member_id: msg.user_id || msg.author_id || "",
+          guild_id: msg.guild_id || "",
+          channel_id: msg.channel_id || "",
+          message_id: msg.message_id || "",
+          reason: msg.words?.length ? `flagged: ${msg.words.join(", ")}` : "decided in the dashboard",
+          issued_by: "dashboard",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        notify(data.error || `That did not work (${res.status})`, "error");
+        return;
+      }
+      // Say what was queued, not that it is done: the bot carries it out on its
+      // next poll, and claiming a deletion before it happens is how the channel
+      // and the queue drift apart.
+      notify(
+        action === "delete_message"
+          ? "Delete queued — the bot will remove it within a few seconds"
+          : `${action} queued for ${msg.user}`,
+        "success",
+      );
+    } catch (e: any) {
+      notify("Connection failed — is the bot running?", "error");
+    }
+  };
+
   const handleContextAction = async (action: any, msg: any) => {
     setContextMenu(null);
     if (action === "approve" || action === "deny" || action === "undo") {
@@ -2050,6 +2103,7 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
+                <button onClick={() => { decideFlag(contextViolation, "delete_message"); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30" data-tip="Delete the flagged message — the bot removes it">Delete msg</button>
                 <button onClick={() => { handleContextAction("approve", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-sm hover:bg-emerald-500/30" data-tip="Approve — action the member as suggested">Approve</button>
                 <button onClick={() => { handleContextAction("deny", contextViolation); setContextViolation(null); }} className="flex-1 py-2 rounded-lg bg-rose-500/20 text-rose-300 text-sm hover:bg-rose-500/30" data-tip="Deny — leave the member alone">Deny</button>
               </div>
@@ -2671,6 +2725,11 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                     <button onClick={() => { setContextViolation(v); }} className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 text-xs hover:bg-slate-600/50 transition" data-tip="See the flagged message in context">View Context</button>
                     {v.status === "pending" && (
                       <>
+                        {/* The one a moderator actually reaches for. Nothing
+                            deletes on its own any more, so without this button
+                            the message stays up until someone opens Discord. */}
+                        <button onClick={() => decideFlag(v, "delete_message")} className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-300 text-xs hover:bg-rose-500/20 transition" data-tip="Delete the flagged message — the bot removes it, no member action">Delete msg</button>
+                        <button onClick={() => decideFlag(v, "timeout")} className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-300 text-xs hover:bg-amber-500/20 transition" data-tip="Time them out and leave the message">Timeout</button>
                         <button onClick={() => handleContextAction("approve", v)} className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-300 text-xs hover:bg-emerald-500/20 transition" data-tip="Approve — action the member as suggested">Approve</button>
                         <button onClick={() => handleContextAction("deny", v)} className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-300 text-xs hover:bg-rose-500/20 transition" data-tip="Deny — leave the member alone">Deny</button>
                       </>
