@@ -1462,7 +1462,10 @@ pub async fn lite_merge_reconcile(
                         }
                     }
                     let _ = write_tickets(&again);
-                    list = again;
+                    // The cleared pending list is what the caller is shown. The
+                    // local `list` was reassigned here and never read again --
+                    // harmless, but it reads like the answer depends on it, and
+                    // anybody tidying this would keep it for that reason.
                     still_pending.clear();
                 }
                 lite_event(
