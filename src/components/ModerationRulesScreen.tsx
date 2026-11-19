@@ -120,7 +120,7 @@ const SWITCHES: {
   key: keyof ChannelRule;
   label: string;
   help: string;
-  /** Saved and sent, but nothing on the bot reads it yet. Said, not hidden. */
+  /** Works, but needs something else before it can fire. Said, not hidden. */
   pending?: boolean;
   options: { value: string; label: string }[];
 }[] = [
@@ -158,9 +158,9 @@ const SWITCHES: {
     key: "nsfw_text",
     label: "NSFW text",
     help:
-      "Sexual language in messages. The bot saves this but nothing reads it yet — " +
-      "there is no sexual-language detector behind it, so choosing anything here " +
-      "changes nothing until one exists.",
+      "Sexual language, checked against this server's own word list. It does nothing " +
+      "until that list has words in it — set them below. Whole words only: 'mess' " +
+      "will not match 'message'.",
     pending: true,
     options: [
       { value: "off", label: "Not checked" },
@@ -660,16 +660,17 @@ export default function ModerationRulesScreen({ apiUrl, notify, servers, selecte
                                   className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 border border-slate-600/60"
                                   data-tip={sw.help}
                                 >
-                                  saved, not enforced yet
+                                  needs a word list
                                 </span>
                               )}
                             </div>
                           );
                         })}
                         <p className="text-[11px] text-slate-600 pt-1">
-                          NSFW text is shown so the setting exists, but nothing on the bot reads it
-                          yet — there is no sexual-language detector behind it. It is saved either
-                          way, so whatever you pick here is already there when one arrives.
+                          NSFW text checks against this server&apos;s own word list. It flags
+                          nothing until that list has something in it — one shared list would be
+                          wrong in every server at once, because the same words are ordinary in
+                          one and explicit in another.
                         </p>
                       </div>
                     </motion.div>
