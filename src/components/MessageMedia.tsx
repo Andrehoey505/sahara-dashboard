@@ -82,11 +82,26 @@ const isGone = (a: Attachment) => a.media_available === false || !srcFor(a);
  * is the least useful part. `networkState === NETWORK_NO_SOURCE` with an empty
  * duration means the bytes never arrived; an error with a duration means they
  * arrived and could not be decoded. That distinction is the whole message.
+ *
+ * Which one it is comes from the element itself, not from a guess: see
+ * videoNetworkState below. The bot's media proxy also refuses anything over
+ * 25 MB, and a video that big fails exactly like a codec problem unless the
+ * size is checked first -- so it is.
  */
-const videoFailedAs = (a: Attachment) =>
-  "Could not play it. " +
-  (a.filename ? a.filename + " — " : "") +
-  "if the file opens from the download link it is a format this app cannot decode; if it does not, the bot could not fetch it.";
+const videoFailedAs = (a: Attachment, why?: "size" | "no-source" | "decode") => {
+  const name = a.filename ? a.filename + " — " : "";
+  if (why === "size") {
+    return (
+      "Too big to play here. " + name +
+      (a.size ? `it is ${Math.round(a.size / (1024 * 1024))} MB and the bot only serves files up to 25 MB. ` : "") +
+      "Open it on Discord instead."
+    );
+  }
+  if (why === "no-source") {
+    return "Could not fetch it. " + name + "the bot could not get the file from Discord — it may have expired. Open it on Discord instead.";
+  }
+  return "Could not play it. " + name + "the file arrived but this app cannot decode that format. Open it on Discord instead.";
+};
 
 /** What kind of thing it is, for a label when it cannot be shown. */
 const kindOf = (a: Attachment) =>
@@ -189,6 +204,8 @@ export default function MessageMedia({
   const [lightbox, setLightbox] = useState<{ src: string; video: boolean } | null>(null);
   /** Index of the video whose player reported a failure, if any. */
   const [failed, setFailed] = useState<number | null>(null);
+  /** Which of the two failures it was: bytes never arrived, or they would not decode. */
+  const [failWhy, setFailWhy] = useState<"size" | "no-source" | "decode">("decode");
 
   // The bot returns proxy_url as a path on itself ("/api/media?url=…"), which is the
   // right thing for it to return — it does not know what host the app reached it on.
@@ -252,7 +269,19 @@ export default function MessageMedia({
                   src={srcFor(a)}
                   controls
                   preload="metadata"
-                  onError={() => setFailed(i)}
+                  onError={(e) => {
+                    setFailed(i);
+                    // NETWORK_NO_SOURCE means the bytes never arrived; anything
+                    // else is the file arriving and failing to decode. That is
+                    // the difference between "the bot could not fetch it" and
+                    // "this app cannot play it", and the element already knows.
+                    setFailWhy(
+                      (e.currentTarget as HTMLVideoElement).networkState ===
+                        HTMLMediaElement.NETWORK_NO_SOURCE
+                        ? "no-source"
+                        : "decode",
+                    );
+                  }}
                   className="rounded-xl border border-slate-700/70 max-h-[220px]"
                 />
                 <button
@@ -269,7 +298,10 @@ export default function MessageMedia({
                 {failed === i && (
                   <p className="mt-1 text-[10px] text-rose-300 flex items-center gap-1.5">
                     <ImageOff className="w-3 h-3" />
-                    {videoFailedAs(a)}
+                    {videoFailedAs(
+                      a,
+                      a.size && a.size > 25 * 1024 * 1024 ? "size" : failWhy,
+                    )}
                   </p>
                 )}
               </div>
