@@ -864,6 +864,12 @@ export default function SettingsScreen({
                 >
                   {conn.via === "lan" ? "LAN" : "Tailscale"}
                 </span>
+                {/* The address actually in use. Discovery can choose one the
+                    saved settings do not mention, and "which one is it on" is a
+                    question the card should answer without opening the panel. */}
+                {conn.url && (
+                  <span className="text-xs font-mono text-slate-500">{conn.url}</span>
+                )}
               </>
             ) : conn?.status === "probing" ? (
               <>
@@ -890,7 +896,12 @@ export default function SettingsScreen({
         {!showAddresses && (
           <p className="mt-2 text-xs text-slate-500 flex items-start gap-1.5">
             <Radar className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            Found by itself on your network, then by Tailscale. Nothing to set up unless it stops working.
+            {conn?.status === "connected"
+              ? "Found by itself on your network, then by Tailscale. Nothing to set up unless it stops working."
+              : /* Not connected: the addresses are the only thing that can be wrong,
+                   so pointing at a collapsed panel instead of opening it is the
+                   difference between "it's broken" and "here's the box". */
+                "Not connected — open Addresses below to check or change where the app is looking."}
           </p>
         )}
 

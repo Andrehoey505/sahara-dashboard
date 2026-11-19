@@ -85,7 +85,7 @@ import ConfigScreen from "./components/ConfigScreen";
 import MessageMedia, { type Attachment, type Embed } from "./components/MessageMedia";
 import { loadActiveServer, saveActiveServer, resolveActive } from "./lib/servers";
 import { playCue, speak as speakText, primeVoices } from "./lib/audio";
-import { formatDateTime, formatShort, formatClock, formatTitle } from "./lib/time";
+import { formatDateTime, formatShort, formatClock, formatTitle, formatAgo } from "./lib/time";
 import { botFetch } from "./lib/bot";
 
 // Screens whose content belongs to one server. Everything else must not show a
@@ -229,6 +229,15 @@ export default function App() {
    * you typed is answering", and only one of those needs explaining.
    */
   const [foundVia, setFoundVia] = useState<"remembered" | "lan" | "tailscale" | null>(null);
+  /**
+   * When discovery last ran, as an ISO string.
+   *
+   * The "Found on LAN" badge used to be a claim with no date on it: a discovery
+   * that ran three days ago looked identical to one that ran a minute ago, and
+   * the address it chose lives only in memory. A stale flag is worse than none,
+   * so the age is shown beside it.
+   */
+  const [discoveredAt, setDiscoveredAt] = useState<string | null>(null);
   // Declared here rather than further down: the failover probe reads the
   // fallback address out of it, and a hook cannot be used before its own line.
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
@@ -519,6 +528,10 @@ export default function App() {
       // an answer. This is what stops an IP that moved from looking like a bot
       // that died.
       const found = await discoverBot(lan, fallback);
+      // Recorded whatever the answer: "it looked and found nothing" is as much
+      // a fact as "it looked and found the bot", and a stale nothing is a stale
+      // flag too.
+      setDiscoveredAt(new Date().toISOString());
       if (found.found && found.url && found.url !== lan) {
         setApiUrl(found.url);
         // Quietly, because the alternative is a prompt in the middle of a bot
@@ -2351,6 +2364,24 @@ const NAV: { group: string; items: { id: string; label: string; icon: typeof Lay
                   }
                 >
                   Found on {foundVia === "lan" ? "LAN" : "Tailscale"}
+                </span>
+              )}
+              {/* How long ago discovery last ran and what it chose. Without this
+                  the badge above is a claim with no date on it, and a discovery
+                  that ran three days ago looks the same as one that ran a minute
+                  ago — which is exactly the stale flag this app is not allowed to
+                  show. A tooltip only: the top bar is already busy. */}
+              {conn && conn.status === "connected" && (
+                <span
+                  className="text-[10px] text-slate-600 font-mono"
+                  data-tip={
+                    discoveredAt
+                      ? "Discovery last ran " + formatAgo(discoveredAt) +
+                        (foundVia ? " and chose " + foundVia : " and found nothing new")
+                      : "Discovery has not run this session — the saved address answered"
+                  }
+                >
+                  {discoveredAt ? formatAgo(discoveredAt) : "saved"}
                 </span>
               )}
             </div>
