@@ -93,6 +93,12 @@ fn state() -> &'static Mutex<LiteState> {
 }
 
 /// Record who we are, for the screen to name.
+/// Read the live state the Lite screen shows, for the app.
+#[tauri::command]
+pub fn lite_live_state() -> serde_json::Value {
+    lite_client_state()
+}
+
 /// Read the live state the Lite screen shows: whether the Discord socket is up,
 /// who we are, and which guilds are being watched.
 pub fn lite_client_state() -> serde_json::Value {
@@ -108,7 +114,19 @@ pub fn lite_client_state() -> serde_json::Value {
     })
 }
 
-/// Expose the text check so the app can prove it works without a live server.
+/// Judge one piece of text with the real ported rules, for the app.
+///
+/// The whole point is that it runs the SAME `judge` the live path runs, with the
+/// same rule table, so a clean result here is evidence about the real checker and
+/// not about a copy of it.
+#[tauri::command]
+pub fn lite_text_check(content: String) -> serde_json::Value {
+    serde_json::json!({
+        "breach": lite_text_breach(&content),
+        "checked": content.chars().count(),
+    })
+}
+
 /// Judge one piece of text with the real ported rules, for the app to prove the
 /// checks work without waiting for a live breach.
 pub fn lite_text_breach(content: &str) -> Option<String> {
@@ -161,13 +179,6 @@ pub fn lite_reset() {
             since: now_ms(),
             ..Default::default()
         };
-    }
-}
-
-/// Called by the Discord side as things happen. Kept tiny on purpose.
-pub fn lite_update(patch: LiteState) {
-    if let Ok(mut s) = state().lock() {
-        *s = patch;
     }
 }
 

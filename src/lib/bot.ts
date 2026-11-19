@@ -578,6 +578,43 @@ export async function liteSetLiveRoad(url?: string | null): Promise<void> {
   }
 }
 
+/** Who Lite is logged in as, and what it is watching. */
+export interface LiteLiveState {
+  connected?: boolean;
+  bot?: string | null;
+  guilds?: string[];
+  seen?: number;
+}
+
+export async function liteLiveState(): Promise<LiteLiveState | null> {
+  const invoke = await rustInvoke();
+  if (!invoke) return null;
+  try {
+    return (await invoke("lite_live_state")) as LiteLiveState;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run the real ported checker over one line and report what it would flag.
+ *
+ * This is the closest thing to a test the app has: it calls the same `judge` the
+ * live path calls, with the same rule table, so a clean answer here is evidence
+ * about the checker rather than about a copy of it.
+ */
+export async function liteTextCheck(
+  content: string,
+): Promise<{ breach: string | null; checked: number } | null> {
+  const invoke = await rustInvoke();
+  if (!invoke) return null;
+  try {
+    return (await invoke("lite_text_check", { content })) as { breach: string | null; checked: number };
+  } catch {
+    return null;
+  }
+}
+
 /** When Lite last refreshed itself, and why it failed if it did. */
 export async function liteSyncState(): Promise<{
   last_sync?: number;

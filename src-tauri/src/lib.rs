@@ -949,6 +949,11 @@ pub fn run() {
             // needs answered were the two it had no way to ask.
             lite_server::lite_rules_summary,
             lite_server::lite_sync_state,
+            // Who Lite is logged in as, and which servers it is watching.
+            lite_server::lite_live_state,
+            // Run the real checker over one line of text, so the app can prove
+            // the rules work without waiting for a live breach.
+            lite_server::lite_text_check,
             read_mod_log,
             bot_status,
             open_external,

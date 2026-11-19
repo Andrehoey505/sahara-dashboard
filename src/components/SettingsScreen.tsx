@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Radar,
+  FlaskConical,
 } from "lucide-react";
 import { motionTokens } from "../lib/design";
 import { looksLikeTailscale, networkState, type OfflineState, type ConnectionState } from "../lib/connection";
@@ -30,6 +31,8 @@ import {
   liteRulesSync,
   liteSyncState,
   liteRulesSummary,
+  liteLiveState,
+  liteTextCheck,
   liteDbSnapshot,
   liteDbStatus,
   liteTickets,
@@ -163,6 +166,143 @@ function LiteRulesPanel({ apiUrl, fallbackUrl }: { apiUrl: string; fallbackUrl?:
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Prove the checker works without waiting for a real breach.
+ *
+ * Lite enforces a ported copy of the Windows rules. The one thing nobody could
+ * show before now is that the copy actually behaves -- the only evidence was a
+ * real message getting flagged, which means a real member had to be the test.
+ * This runs the SAME `judge` the live path runs, over lines typed here.
+ *
+ * A clean answer is only worth something if the checker can also say no, so the
+ * examples include one that should pass untouched: a bot that flags "my throat is
+ * sore" is not protecting anyone.
+ */
+function CheckerProbe() {
+  const SAMPLES: { label: string; text: string }[] = [
+    { label: "Someone shouting", text: "THIS IS THE WORST THING I HAVE EVER SEEN" },
+    { label: "Repeated invite", text: "join discord.gg/example discord.gg/example discord.gg/example" },
+    { label: "Harmless (should pass)", text: "my throat is sore and I am going to bed" },
+  ];
+  const [text, setText] = useState(SAMPLES[0].text);
+  const [result, setResult] = useState<{ breach: string | null; checked: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await liteTextCheck(text);
+    // null means the Rust side isn't there at all. Saying "clean" over that would
+    // be the exact lie this panel exists to avoid.
+    setUnavailable(r === null);
+    setResult(r);
+    setBusy(false);
+  };
+
+  return (
+    <Card icon={FlaskConical} title="Test the checker">
+      <p className="text-xs text-slate-400">
+        Runs the same rule engine Lite uses, over one line of text. Worth pressing once after an
+        update to prove the ported copy behaves the way Windows does.
+      </p>
+      <div className="flex flex-wrap gap-1 mt-2">
+        {SAMPLES.map((smp) => (
+          <button
+            key={smp.label}
+            onClick={() => {
+              setText(smp.text);
+              setResult(null);
+            }}
+            className="px-2 py-1 rounded-lg bg-slate-800/60 border border-slate-700 text-[11px] text-slate-300 hover:border-indigo-500"
+          >
+            {smp.label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setResult(null);
+        }}
+        rows={2}
+        className="mt-2 w-full rounded-lg bg-slate-800/60 border border-slate-700 px-2 py-1.5 text-[12px] focus:outline-none focus:border-indigo-500"
+      />
+      <button
+        onClick={() => void run()}
+        disabled={busy || !text.trim()}
+        className="mt-2 px-3 py-1.5 rounded-lg bg-indigo-600/80 text-xs text-white hover:bg-indigo-600 disabled:opacity-50"
+      >
+        {busy ? "Checking…" : "Run it"}
+      </button>
+      {unavailable && (
+        <p className="text-xs text-amber-300/90 mt-2">
+          The app&apos;s own side isn&apos;t answering, so nothing was checked. That is not a clean
+          result.
+        </p>
+      )}
+      {result && !unavailable && (
+        <p className={`text-xs mt-2 ${result.breach ? "text-amber-300" : "text-emerald-300"}`}>
+          {result.breach
+            ? `Would flag: ${result.breach}`
+            : `Nothing flagged — ${result.checked} character(s) checked, no rule matched.`}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Lite's own view: who it is logged in as and what it is watching.
+ *
+ * Separate from anything read over HTTP on purpose. If this answers and the
+ * connection log does not, the socket is what is broken, not the app.
+ */
+function LiteLivePanel() {
+  const [live, setLive] = useState<Awaited<ReturnType<typeof liteLiveState>>>(null);
+  const [asked, setAsked] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const r = await liteLiveState();
+      if (!alive) return;
+      setLive(r);
+      setAsked(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <Card icon={Activity} title="What Lite is connected as">
+      {!asked ? (
+        <p className="text-xs text-slate-500">Reading…</p>
+      ) : !live ? (
+        <p className="text-xs text-slate-500">
+          The app&apos;s own side isn&apos;t answering, so this is unknown rather than empty.
+        </p>
+      ) : (
+        <div className="text-xs text-slate-400 space-y-1">
+          <p>
+            <span className={live.connected ? "text-emerald-300" : "text-amber-300"}>
+              {live.connected ? "Discord socket is up" : "Discord socket is down"}
+            </span>
+            {live.bot ? ` as ${live.bot}` : ""}
+          </p>
+          <p>
+            Watching {live.guilds?.length ?? 0} server(s)
+            {live.guilds?.length ? `: ${live.guilds.join(", ")}` : ""}
+          </p>
+          <p>{live.seen ?? 0} message(s) seen this run.</p>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -1063,6 +1203,8 @@ export default function SettingsScreen({
         </button>
       </Card>
 
+      <LiteLivePanel />
+      <CheckerProbe />
       <TracePanel />
 
       <LiteTokenPanel apiUrl={settings.apiUrl} fallbackUrl={settings.apiFallbackUrl || ""} />
