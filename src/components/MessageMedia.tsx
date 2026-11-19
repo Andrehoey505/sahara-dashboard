@@ -74,6 +74,20 @@ const srcFor = (a: Attachment) => a.proxy_url || a.url || "";
 /** The bot says this one is gone. Render the fact, never a broken player. */
 const isGone = (a: Attachment) => a.media_available === false || !srcFor(a);
 
+/**
+ * Why a video did not play.
+ *
+ * The <video> element reports the same generic failure for a 404, a refused
+ * connection and a codec this webview cannot decode, so the element's own error
+ * is the least useful part. `networkState === NETWORK_NO_SOURCE` with an empty
+ * duration means the bytes never arrived; an error with a duration means they
+ * arrived and could not be decoded. That distinction is the whole message.
+ */
+const videoFailedAs = (a: Attachment) =>
+  "Could not play it. " +
+  (a.filename ? a.filename + " — " : "") +
+  "if the file opens from the download link it is a format this app cannot decode; if it does not, the bot could not fetch it.";
+
 /** What kind of thing it is, for a label when it cannot be shown. */
 const kindOf = (a: Attachment) =>
   isImage(a) ? "Image" : isVideo(a) ? "Video" : isAudio(a) ? "Audio" : "File";
@@ -173,6 +187,8 @@ export default function MessageMedia({
   // The lightbox takes a video as readily as a picture: a flagged clip is the
   // thing a moderator most needs to watch, and a 220px strip is not watching it.
   const [lightbox, setLightbox] = useState<{ src: string; video: boolean } | null>(null);
+  /** Index of the video whose player reported a failure, if any. */
+  const [failed, setFailed] = useState<number | null>(null);
 
   // The bot returns proxy_url as a path on itself ("/api/media?url=…"), which is the
   // right thing for it to return — it does not know what host the app reached it on.
@@ -236,6 +252,7 @@ export default function MessageMedia({
                   src={srcFor(a)}
                   controls
                   preload="metadata"
+                  onError={() => setFailed(i)}
                   className="rounded-xl border border-slate-700/70 max-h-[220px]"
                 />
                 <button
@@ -245,6 +262,16 @@ export default function MessageMedia({
                 >
                   Full size
                 </button>
+                {/* A player that never starts has two very different causes and
+                    the screen used to show neither: the file could not be fetched
+                    at all, or it arrived and the format cannot be played here.
+                    Both look identical -- a black rectangle. Say which. */}
+                {failed === i && (
+                  <p className="mt-1 text-[10px] text-rose-300 flex items-center gap-1.5">
+                    <ImageOff className="w-3 h-3" />
+                    {videoFailedAs(a)}
+                  </p>
+                )}
               </div>
             ) : isAudio(a) ? (
               <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700">

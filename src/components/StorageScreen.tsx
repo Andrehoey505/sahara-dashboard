@@ -40,7 +40,23 @@ import { botFetch } from "../lib/bot";
  * decides, and a cleanup button is still a button a human presses.
  */
 
-type Tier = "always-kept" | "flagged" | "expired";
+/**
+ * The bot's own four tiers, in its words.
+ *
+ * This screen used to speak in two names -- "flagged" and "expired" -- that the
+ * bot does not use, so its answer was read as a guess: an unrecognised tier fell
+ * through to `expired`, which is the tier with the bulk delete button on it.
+ * That is a screen offering to delete something it does not understand.
+ *
+ * `attached` is the important one. It is what a violation card points at: the
+ * picture a decision depends on. The bot never offers it for deletion and neither
+ * does this screen, because deleting it is how a pending violation loses its
+ * evidence.
+ */
+type Tier = "attached" | "always-kept" | "flagged" | "expired";
+
+/** Anything the bot says that this screen does not know is treated as kept. */
+const KNOWN_TIERS: Tier[] = ["attached", "always-kept", "flagged", "expired"];
 
 type Item = {
   /** What to send back to the API when this one is deleted. */
@@ -74,12 +90,19 @@ type Props = {
   notify: (msg: string, type?: string) => void;
 };
 
-const TIER_ORDER: Tier[] = ["flagged", "expired", "always-kept"];
+const TIER_ORDER: Tier[] = ["attached", "flagged", "expired", "always-kept"];
 
 const TIER_META: Record<
   Tier,
   { label: string; blurb: string; tone: string; canDelete: boolean }
 > = {
+  attached: {
+    label: "Evidence — kept",
+    blurb:
+      "Attachments a violation card points at. They are what a decision rests on, so they are never deleted from here.",
+    tone: "text-rose-300",
+    canDelete: false,
+  },
   flagged: {
     label: "Waiting for you",
     blurb:
@@ -167,9 +190,9 @@ export default function StorageScreen({ apiUrl, notify }: Props) {
         list.map((raw: any, i: number) => ({
           id: String(raw.id ?? raw.path ?? raw.name ?? i),
           name: String(raw.name ?? raw.path ?? "(unnamed)"),
-          tier: (["always-kept", "flagged", "expired"].includes(raw.tier)
-            ? raw.tier
-            : "expired") as Tier,
+          // Unknown means kept. The old fallback was `expired`, which put
+          // anything the bot had not named in front of the bulk delete button.
+          tier: (KNOWN_TIERS.includes(raw.tier) ? raw.tier : "always-kept") as Tier,
           bytes: Number(raw.bytes ?? raw.size) || 0,
           oldest: raw.oldest || raw.created_at || raw.mtime,
           count: raw.count,
@@ -190,7 +213,12 @@ export default function StorageScreen({ apiUrl, notify }: Props) {
   }, [load]);
 
   const groups = useMemo(() => {
-    const out: Record<Tier, Item[]> = { flagged: [], expired: [], "always-kept": [] };
+    const out: Record<Tier, Item[]> = {
+      attached: [],
+      flagged: [],
+      expired: [],
+      "always-kept": [],
+    };
     for (const it of items) out[it.tier].push(it);
     return out;
   }, [items]);
