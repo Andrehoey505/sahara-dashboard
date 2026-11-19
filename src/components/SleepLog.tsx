@@ -50,7 +50,12 @@ export default function SleepLog({ open, onClose, apiUrl }: Props) {
     setNights(null);
     setError("");
     botFetch(apiUrl.replace(/\/$/, "") + "/api/sleep-log")
-      .then((r) => r.json())
+      .then((r) => {
+        // Otherwise a failure reads as "no nights logged yet", which is a claim
+        // about his sleep rather than about the connection.
+        if (!r.ok) throw new Error(`the bot answered ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         setNights(Array.isArray(d?.nights) ? d.nights : []);
         setHint(d?.hint || "");

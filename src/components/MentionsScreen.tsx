@@ -44,7 +44,13 @@ export default function MentionsScreen({ open, onClose, apiUrl, inline = false }
   const load = React.useCallback(() => {
     setError("");
     botFetch(base + "/api/mentions")
-      .then((r) => r.json())
+      .then(async (r) => {
+        // A 500 is not an empty list. Read without checking, a broken bot showed
+        // "no mentions" -- which reads as good news and is the one wrong answer
+        // this screen can give.
+        if (!r.ok) throw new Error(`the bot answered ${r.status}`);
+        return r.json();
+      })
       .then((d) => setMentions(Array.isArray(d?.mentions) ? d.mentions : []))
       .catch(() => setError("Couldn't reach Babblebot for the list."));
   }, [base]);
@@ -67,7 +73,10 @@ export default function MentionsScreen({ open, onClose, apiUrl, inline = false }
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ until }),
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`the bot answered ${r.status}`);
+        return r.json();
+      })
       .then(() => setMentions([]))
       .catch(() => setError("Couldn't clear the list — nothing was removed."))
       .finally(() => setClearing(false));

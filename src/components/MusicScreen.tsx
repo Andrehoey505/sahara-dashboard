@@ -124,6 +124,9 @@ export default function MusicScreen({ apiUrl, notify, userId, servers, selectedS
   const loadPlaylists = useCallback(async () => {
     try {
       const res = await botFetch(apiUrl + "/api/playlists");
+      // A failure here used to come back as [], which the screen drew as "no
+      // playlists" -- a claim about his music rather than about the connection.
+      if (!res.ok) throw new Error(`the bot answered ${res.status}`);
       const data = await res.json().catch(() => []);
       setPlaylists(Array.isArray(data) ? data : []);
     } catch {
